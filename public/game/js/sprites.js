@@ -8,7 +8,8 @@
 // ============================================================
 const Sprites = (() => {
   const DEFS = {
-    andrey:       { file: 'image/andrey.png',       w: 48,  h: 56  },
+    // portrait: [верх, низ] — какая вертикальная полоса спрайта идёт в иконку диалога
+    andrey:       { file: 'image/andrey.png',       w: 48,  h: 56, portrait: [0.14, 0.95] },
     burmaldenets: { file: 'image/burmaldenets.png', w: 44,  h: 52  },
     boss:         { file: 'image/boss.png',         w: 76,  h: 92  },
     checkushka:   { file: 'image/checkushka.png',   w: 24,  h: 32  },
@@ -197,7 +198,7 @@ const Sprites = (() => {
         store[key] = {
           img: ok ? img : null,
           fallback: FALLBACKS[key] ? FALLBACKS[key]() : null,
-          w: def.w, h: def.h, bg: !!def.bg,
+          w: def.w, h: def.h, bg: !!def.bg, pr: def.portrait || null,
         };
         resolve();
       };
@@ -258,10 +259,14 @@ const Sprites = (() => {
       }
       if (x1 > x0 && y1 > y0) { bx = x0; by = y0; bw = x1 - x0 + 1; bh = y1 - y0 + 1; }
     } catch (e) { /* tainted canvas — используем весь кадр */ }
-    const hh = Math.max(1, Math.round(bh * 0.66));   // голова и плечи
+    // вертикальная полоса портрета: персональная (pr) или верхние ~2/3 (голова и плечи)
+    const band = s.pr || [0, 0.66];
+    const py0 = by + Math.round(bh * band[0]);
+    const py1 = Math.min(by + bh, by + Math.round(bh * band[1]));
+    const hh = Math.max(1, py1 - py0);
     const sc = Math.min(canvas.width / bw, canvas.height / hh);
     const dw = bw * sc, dh = hh * sc;
-    x.drawImage(src, bx, by, bw, hh, (canvas.width - dw) / 2, (canvas.height - dh) / 2, dw, dh);
+    x.drawImage(src, bx, py0, bw, hh, (canvas.width - dw) / 2, (canvas.height - dh) / 2, dw, dh);
   }
 
   return { load, get, draw, portrait, isReady: () => loaded };
