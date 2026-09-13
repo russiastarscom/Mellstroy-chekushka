@@ -871,7 +871,7 @@ const Sprites = (() => {
     ctx.restore();
   }
 
-  // Портрет для диалогов (верхняя часть спрайта)
+  // Портрет для диалогов: контент по альфе -> верхние ~2/3 -> вписать без искажений
   function portrait(key, canvas) {
     const s = store[key];
     const x = canvas.getContext('2d');
@@ -880,8 +880,30 @@ const Sprites = (() => {
     if (!s) return;
     const src = s.img || s.fallback;
     if (!src) return;
-    const sw = src.width, sh = Math.max(1, src.height * 0.5);
-    x.drawImage(src, 0, 0, sw, sh, 0, 0, canvas.width, canvas.height);
+    let bx = 0, by = 0, bw = src.width, bh = src.height;
+    try {
+      const t = document.createElement('canvas');
+      t.width = src.width; t.height = src.height;
+      const tx = t.getContext('2d');
+      tx.drawImage(src, 0, 0);
+      const d = tx.getImageData(0, 0, t.width, t.height).data;
+      let x0 = t.width, y0 = t.height, x1 = -1, y1 = -1;
+      for (let yy = 0; yy < t.height; yy++) {
+        for (let xx = 0; xx < t.width; xx++) {
+          if (d[(yy * t.width + xx) * 4 + 3] > 24) {
+            if (xx < x0) x0 = xx;
+            if (xx > x1) x1 = xx;
+            if (yy < y0) y0 = yy;
+            if (yy > y1) y1 = yy;
+          }
+        }
+      }
+      if (x1 > x0 && y1 > y0) { bx = x0; by = y0; bw = x1 - x0 + 1; bh = y1 - y0 + 1; }
+    } catch (e) { /* tainted canvas — используем весь кадр */ }
+    const hh = Math.max(1, Math.round(bh * 0.66));   // голова и плечи
+    const sc = Math.min(canvas.width / bw, canvas.height / hh);
+    const dw = bw * sc, dh = hh * sc;
+    x.drawImage(src, bx, by, bw, hh, (canvas.width - dw) / 2, (canvas.height - dh) / 2, dw, dh);
   }
 
   return { load, get, draw, portrait, isReady: () => loaded };
