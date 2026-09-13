@@ -22,16 +22,15 @@ const Game = (() => {
   }
 
   // ---------- полный экран (Fullscreen API) ----------
+  // Тап по экрану только ОТКРЫВАЕТ полный экран — и всё.
+  // Обратно не выключаем: выйти можно штатными средствами браузера (Esc).
   function isFullscreen() { return !!document.fullscreenElement; }
-  function toggleFullscreen() {
+  function enterFullscreen() {
     try {
-      if (isFullscreen()) {
-        document.exitFullscreen ? document.exitFullscreen().catch(() => {}) : null;
-      } else {
-        const el = document.documentElement;
-        const fn = el.requestFullscreen || el.webkitRequestFullscreen;
-        if (fn) { const p = fn.call(el); if (p && p.catch) p.catch(() => {}); }
-      }
+      if (isFullscreen()) return; // уже во весь экран — ничего не делаем
+      const el = document.documentElement;
+      const fn = el.requestFullscreen || el.webkitRequestFullscreen;
+      if (fn) { const p = fn.call(el); if (p && p.catch) p.catch(() => {}); }
     } catch (e) { /* игнор — некоторые окружения запрещают фуллскрин */ }
   }
 
@@ -416,7 +415,7 @@ const Game = (() => {
   const callbacks = {
     onPlay() {
       // автофуллскрин по жесту пользователя (если окружение разрешает)
-      if (!isFullscreen()) toggleFullscreen();
+      enterFullscreen();
       const firstUndone = LEVELS.findIndex((_, i) => i < LEVELS.length - 1 && !progress.done[i]);
       startLevel(firstUndone === -1 ? 0 : firstUndone);
     },
@@ -444,13 +443,13 @@ const Game = (() => {
         }
       }
       if (e.code === 'KeyP' || e.code === 'Escape') togglePause();
-      if (e.code === 'KeyF' && !e.repeat) toggleFullscreen();
+      if (e.code === 'KeyF' && !e.repeat) enterFullscreen();
     });
 
-    // тап/клик по самому экрану игры — включить/выключить полный экран
+    // тап/клик по экрану игры — ТОЛЬКО открыть полный экран (без выключения)
     canvas.addEventListener('pointerup', (e) => {
       if (e.pointerType === 'mouse' && e.button !== 0) return;
-      toggleFullscreen();
+      enterFullscreen();
     });
     document.addEventListener('keyup', (e) => {
       if (e.code === 'ArrowLeft' || e.code === 'KeyA') input.left = false;
