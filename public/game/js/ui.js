@@ -18,13 +18,17 @@ const UI = (() => {
   }
 
   // ---------- HUD ----------
-  function setHud({ hp, bottles, levelName }) {
+  function setHud({ hp, bottles, levelName, hats }) {
     if (hp !== undefined) {
       const hearts = $('hud-hearts').children;
       for (let i = 0; i < hearts.length; i++) hearts[i].classList.toggle('empty', i >= hp);
     }
     if (bottles !== undefined) $('hud-bottles-count').textContent = bottles;
     if (levelName !== undefined) $('hud-level').textContent = levelName;
+    if (hats !== undefined) {
+      $('hud-plush-count').textContent = hats;
+      $('hud-plush').classList.toggle('hidden', hats <= 0);
+    }
   }
 
   // ---------- Диалоги (внизу экрана) ----------

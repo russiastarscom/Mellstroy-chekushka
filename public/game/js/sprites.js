@@ -15,6 +15,7 @@ const Sprites = (() => {
     factory:      { file: 'image/factory.png',      w: 176, h: 140 },
     tomahawk:     { file: 'image/tomahawk.png',     w: 20,  h: 20  },
     heart:        { file: 'image/heart.png',        w: 26,  h: 24  },
+    plush:        { file: 'image/plush.png',        w: 36,  h: 32  },
     bg_fields:    { file: 'image/bg_fields.png',    bg: true },
     bg_city:      { file: 'image/bg_city.png',      bg: true },
     bg_district:  { file: 'image/bg_district.png',  bg: true },
@@ -169,9 +170,23 @@ const Sprites = (() => {
     return c;
   }
 
+  // ---------- ЗАГЛУШКА: Плюшка (снаряд) ----------
+  function fbPlush() {
+    const [c, x] = mkCanvas(36, 32);
+    x.fillStyle = '#e8a0b4';
+    x.beginPath();
+    x.ellipse(18, 19, 15, 12, 0, 0, 7); x.fill();
+    x.beginPath();
+    x.ellipse(18, 10, 8, 8, 0, 0, 7); x.fill();
+    x.fillStyle = '#c97f95';
+    x.beginPath();
+    x.ellipse(18, 13, 5, 6, 0, 0, 7); x.fill();
+    return c;
+  }
+
   const FALLBACKS = {
     andrey: fbAndrey, burmaldenets: fbEnemy, boss: fbBoss, checkushka: fbBottle,
-    factory: fbFactory, tomahawk: fbTomahawk, heart: fbHeart,
+    factory: fbFactory, tomahawk: fbTomahawk, heart: fbHeart, plush: fbPlush,
   };
 
   // ---------- Загрузка ----------

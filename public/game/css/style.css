@@ -47,6 +47,8 @@ html, body {
 #hud-hearts .heart.empty { color: #3a3a52; }
 #hud-bottles { display: flex; align-items: center; gap: 6px; color: var(--accent); font-weight: bold; }
 #hud-bottle-icon { width: 1.2em; height: 1.6em; object-fit: contain; image-rendering: pixelated; }
+#hud-plush { display: flex; align-items: center; gap: 6px; color: #ffb3c6; font-weight: bold; margin-left: 4px; }
+#hud-plush-icon { width: 1.4em; height: 1.25em; object-fit: contain; image-rendering: pixelated; }
 #hud-level { margin-left: auto; color: var(--muted); }
 #btn-pause {
   pointer-events: auto; margin-left: 8px;
@@ -249,6 +251,7 @@ html, body {
 #touch-left { left: 3%; }
 #touch-right { left: calc(3% + 14.5vmin); }
 #touch-jump { right: 3%; width: 16vmin; height: 16vmin; }
+#touch-shoot { right: calc(3% + 17.5vmin); background: rgba(255,170,200,.16); }
 
 /* ---------- Поворот ---------- */
 #rotate-hint {

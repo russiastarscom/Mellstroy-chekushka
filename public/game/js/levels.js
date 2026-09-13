@@ -10,7 +10,7 @@ const TILE = 40;          // размер тайла
 function buildLevel(def) {
   const w = def.width;
   const grid = Array.from({ length: ROWS }, () => Array(w).fill('.'));
-  const spawns = { enemies: [], bottles: [], hearts: [], tomahawks: [] };
+  const spawns = { enemies: [], bottles: [], hearts: [], tomahawks: [], plushes: [] };
 
   // земля (2 ряда внизу)
   (def.ground || []).forEach(([c0, c1]) => {
@@ -36,6 +36,8 @@ function buildLevel(def) {
   (def.bottles?.singles || []).forEach(([c, r]) => spawns.bottles.push({ c, r }));
   // сердечки
   (def.hearts || []).forEach(([c, r]) => spawns.hearts.push({ c, r }));
+  // плюшки (боеприпас для стрельбы по боссу)
+  (def.plushes || []).forEach(([c, r]) => spawns.plushes.push({ c, r }));
   // враги: [тип, колонка] — спавн на землю (ряд 10), либо [тип, колонка, ряд] — на платформу
   (def.enemies || []).forEach(([type, c, r]) => spawns.enemies.push({ type, c, r: (r === undefined) ? 10 : r }));
   if (def.boss) spawns.enemies.push({ type: 'boss', c: def.boss.col, r: 9 });
@@ -192,16 +194,21 @@ const LEVELS = [
       singles: [],
     },
     hearts: [[21, 5], [47, 5]],
+    plushes: [[32, 10], [57, 10], [72, 10]],   // горы плюшек — боеприпас против вождя
     enemies: [['e', 12], ['e', 25], ['e', 33], ['t', 48], ['t', 21, 7],
               ['e', 55], ['e', 68, 7], ['t', 91]],
     boss: { col: 75 },
     spawn: { c: 2 }, factory: { c: 94 },
     factoryLocked: true,
+    hints: [
+      { c: 30, text: 'Плюшки! Подбирай — стреляй по вождю (X)' },
+    ],
     dialogue: {
       intro: [
         { who: 'boss', text: 'Стой, чужак! Это МОЙ завод! Вся мировая чекушка — теперь добро племени! Понял? Слыхал, б***?!' },
         { who: 'andrey', text: 'Чекушка принадлежит народу. А я и есть народ. Уважаемый. Требую представительскую.' },
         { who: 'boss', text: 'Х*Й ТЕБЕ, А НЕ ЧЕКУШКА! У-у-у-у! ЗА АТАКУ, БРАТЬЯ!' },
+        { who: 'andrey', text: 'А, ну и ладно. Зато у вас тут плюшевые горы валяются... Ну держись, вождь — сейчас я тебя плюшками закидаю, б***.' },
       ],
       outro: null, // особый финал после босса — DIALOGUES.outroAfterBoss
     },

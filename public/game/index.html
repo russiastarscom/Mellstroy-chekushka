@@ -63,6 +63,8 @@ html, body {
 #hud-hearts .heart.empty { color: #3a3a52; }
 #hud-bottles { display: flex; align-items: center; gap: 6px; color: var(--accent); font-weight: bold; }
 #hud-bottle-icon { width: 1.2em; height: 1.6em; object-fit: contain; image-rendering: pixelated; }
+#hud-plush { display: flex; align-items: center; gap: 6px; color: #ffb3c6; font-weight: bold; margin-left: 4px; }
+#hud-plush-icon { width: 1.4em; height: 1.25em; object-fit: contain; image-rendering: pixelated; }
 #hud-level { margin-left: auto; color: var(--muted); }
 #btn-pause {
   pointer-events: auto; margin-left: 8px;
@@ -265,6 +267,7 @@ html, body {
 #touch-left { left: 3%; }
 #touch-right { left: calc(3% + 14.5vmin); }
 #touch-jump { right: 3%; width: 16vmin; height: 16vmin; }
+#touch-shoot { right: calc(3% + 17.5vmin); background: rgba(255,170,200,.16); }
 
 /* ---------- Поворот ---------- */
 #rotate-hint {
@@ -291,6 +294,7 @@ html, body {
   <div id="hud" class="hidden">
     <div id="hud-hearts"><span class="heart">♥</span><span class="heart">♥</span><span class="heart">♥</span></div>
     <div id="hud-bottles"><img id="hud-bottle-icon" alt=""><span id="hud-bottles-count">0</span></div>
+    <div id="hud-plush" class="hidden"><img id="hud-plush-icon" alt=""><span id="hud-plush-count">0</span></div>
     <div id="hud-level"></div>
     <button id="btn-pause" aria-label="Пауза">❚❚</button>
   </div>
@@ -376,6 +380,7 @@ html, body {
       <div class="ctrl-row"><span class="keys">← → / A D</span><span>идти</span></div>
       <div class="ctrl-row"><span class="keys">ПРОБЕЛ / W / ↑</span><span>прыжок</span></div>
       <div class="ctrl-row"><span class="keys">↓ + прыжок</span><span>спрыгнуть с платформы</span></div>
+      <div class="ctrl-row"><span class="keys">X / кнопка ✸</span><span>бросить плюшку</span></div>
       <div class="ctrl-row"><span class="keys">P / ESC</span><span>пауза</span></div>
       <div class="ctrl-row"><span class="keys">Прыжок на голову</span><span>давить бурмалденцев</span></div>
       <div class="ctrl-row"><span class="keys">Телефон</span><span>кнопки на экране</span></div>
@@ -457,6 +462,7 @@ html, body {
       <button id="touch-right" aria-label="Вправо">▶</button>
     </div>
     <div class="touch-right">
+      <button id="touch-shoot" aria-label="Бросить плюшку">✸</button>
       <button id="touch-jump" aria-label="Прыжок">▲</button>
     </div>
   </div>
@@ -651,6 +657,7 @@ const Sprites = (() => {
     factory:      { file: 'image/factory.png',      w: 176, h: 140 },
     tomahawk:     { file: 'image/tomahawk.png',     w: 20,  h: 20  },
     heart:        { file: 'image/heart.png',        w: 26,  h: 24  },
+    plush:        { file: 'image/plush.png',        w: 36,  h: 32  },
     bg_fields:    { file: 'image/bg_fields.png',    bg: true },
     bg_city:      { file: 'image/bg_city.png',      bg: true },
     bg_district:  { file: 'image/bg_district.png',  bg: true },
@@ -805,9 +812,23 @@ const Sprites = (() => {
     return c;
   }
 
+  // ---------- ЗАГЛУШКА: Плюшка (снаряд) ----------
+  function fbPlush() {
+    const [c, x] = mkCanvas(36, 32);
+    x.fillStyle = '#e8a0b4';
+    x.beginPath();
+    x.ellipse(18, 19, 15, 12, 0, 0, 7); x.fill();
+    x.beginPath();
+    x.ellipse(18, 10, 8, 8, 0, 0, 7); x.fill();
+    x.fillStyle = '#c97f95';
+    x.beginPath();
+    x.ellipse(18, 13, 5, 6, 0, 0, 7); x.fill();
+    return c;
+  }
+
   const FALLBACKS = {
     andrey: fbAndrey, burmaldenets: fbEnemy, boss: fbBoss, checkushka: fbBottle,
-    factory: fbFactory, tomahawk: fbTomahawk, heart: fbHeart,
+    factory: fbFactory, tomahawk: fbTomahawk, heart: fbHeart, plush: fbPlush,
   };
 
   // ---------- Загрузка ----------
@@ -880,7 +901,7 @@ const TILE = 40;          // размер тайла
 function buildLevel(def) {
   const w = def.width;
   const grid = Array.from({ length: ROWS }, () => Array(w).fill('.'));
-  const spawns = { enemies: [], bottles: [], hearts: [], tomahawks: [] };
+  const spawns = { enemies: [], bottles: [], hearts: [], tomahawks: [], plushes: [] };
 
   // земля (2 ряда внизу)
   (def.ground || []).forEach(([c0, c1]) => {
@@ -906,6 +927,8 @@ function buildLevel(def) {
   (def.bottles?.singles || []).forEach(([c, r]) => spawns.bottles.push({ c, r }));
   // сердечки
   (def.hearts || []).forEach(([c, r]) => spawns.hearts.push({ c, r }));
+  // плюшки (боеприпас для стрельбы по боссу)
+  (def.plushes || []).forEach(([c, r]) => spawns.plushes.push({ c, r }));
   // враги: [тип, колонка] — спавн на землю (ряд 10), либо [тип, колонка, ряд] — на платформу
   (def.enemies || []).forEach(([type, c, r]) => spawns.enemies.push({ type, c, r: (r === undefined) ? 10 : r }));
   if (def.boss) spawns.enemies.push({ type: 'boss', c: def.boss.col, r: 9 });
@@ -1062,16 +1085,21 @@ const LEVELS = [
       singles: [],
     },
     hearts: [[21, 5], [47, 5]],
+    plushes: [[32, 10], [57, 10], [72, 10]],   // горы плюшек — боеприпас против вождя
     enemies: [['e', 12], ['e', 25], ['e', 33], ['t', 48], ['t', 21, 7],
               ['e', 55], ['e', 68, 7], ['t', 91]],
     boss: { col: 75 },
     spawn: { c: 2 }, factory: { c: 94 },
     factoryLocked: true,
+    hints: [
+      { c: 30, text: 'Плюшки! Подбирай — стреляй по вождю (X)' },
+    ],
     dialogue: {
       intro: [
         { who: 'boss', text: 'Стой, чужак! Это МОЙ завод! Вся мировая чекушка — теперь добро племени! Понял? Слыхал, б***?!' },
         { who: 'andrey', text: 'Чекушка принадлежит народу. А я и есть народ. Уважаемый. Требую представительскую.' },
         { who: 'boss', text: 'Х*Й ТЕБЕ, А НЕ ЧЕКУШКА! У-у-у-у! ЗА АТАКУ, БРАТЬЯ!' },
+        { who: 'andrey', text: 'А, ну и ладно. Зато у вас тут плюшевые горы валяются... Ну держись, вождь — сейчас я тебя плюшками закидаю, б***.' },
       ],
       outro: null, // особый финал после босса — DIALOGUES.outroAfterBoss
     },
@@ -1447,6 +1475,21 @@ class Boss {
     }
   }
 
+  // Плюшкой киднули — урон без инвулна (каждая плюшка считается)
+  hitByHat(game) {
+    this.hp--;
+    this.hurtFlash = 0.4;
+    game.shake = 0.3;
+    game.spawnStars(this.x + this.w / 2, this.y + 10);
+    Audio8.sfx.bossHit();
+    if (this.hp <= 0) {
+      this.dead = true;
+      Audio8.sfx.bossDie();
+      game.shake = 0.6;
+      game.onBossDead();
+    }
+  }
+
   draw(ctx, camX, t) {
     // телеграф рывка — мигает
     let flash = false;
@@ -1493,6 +1536,52 @@ class HeartPickup {
   draw(ctx, camX) {
     const bob = Math.sin(this.t * 2.6) * 4;
     Sprites.draw(ctx, 'heart', this.c * TILE + 7 - camX, this.r * TILE + 8 + bob, 26, 24);
+  }
+}
+
+// Гора плюшек — подбор даёт боеприпас (3 плюшки)
+class PlushPickup {
+  constructor(c, r) { this.c = c; this.r = r; this.t = Math.random() * 6; this.taken = false; }
+  rect() { return { x: this.c * TILE + 2, y: this.r * TILE + 8, w: 36, h: 32 }; }
+  update(dt) { this.t += dt; }
+  draw(ctx, camX) {
+    const bob = Math.sin(this.t * 2.8) * 5;
+    const x = this.c * TILE + 2 - camX, y = this.r * TILE + 8 + bob;
+    // светящийся ореол, чтобы бросалась в глаза
+    const pulse = 0.3 + Math.sin(this.t * 4) * 0.15;
+    ctx.fillStyle = `rgba(255,170,200,${pulse})`;
+    ctx.beginPath(); ctx.ellipse(x + 18, y + 18, 24, 20, 0, 0, 7); ctx.fill();
+    Sprites.draw(ctx, 'plush', x, y, 36, 32);
+  }
+}
+
+// Летящая плюшка — снаряд игрока. Лёгкая дуга, крутится, бьёт врагов и босса.
+class HatShot {
+  constructor(x, y, dir) {
+    this.w = 30; this.h = 26;
+    this.x = x; this.y = y;
+    this.vx = dir * 470; this.vy = -140;
+    this.rot = 0; this.dead = false;
+    this.life = 2.0;
+  }
+  update(dt, level, game) {
+    this.vy += 280 * dt;              // мягкая дуга — дальний бросок
+    this.x += this.vx * dt;
+    this.y += this.vy * dt;
+    this.rot += dt * 16;
+    this.life -= dt;
+    const c = Math.floor((this.x + this.w / 2) / TILE), r = Math.floor((this.y + this.h / 2) / TILE);
+    if (isSolid(level, c, r)) { this.dead = true; game.spawnDust(this.x + this.w / 2, this.y + this.h / 2, 4); }
+    if (this.life <= 0 || this.y > ROWS * TILE + 40) this.dead = true;
+  }
+  draw(ctx, camX) {
+    ctx.save();
+    ctx.translate(this.x + this.w / 2 - camX, this.y + this.h / 2);
+    ctx.rotate(this.rot);
+    const spr = Sprites.get('plush');
+    const src = spr && (spr.img || spr.fallback);
+    if (src) { ctx.imageSmoothingEnabled = false; ctx.drawImage(src, -18, -16, 36, 32); }
+    ctx.restore();
   }
 }
 
@@ -1568,13 +1657,17 @@ const UI = (() => {
   }
 
   // ---------- HUD ----------
-  function setHud({ hp, bottles, levelName }) {
+  function setHud({ hp, bottles, levelName, hats }) {
     if (hp !== undefined) {
       const hearts = $('hud-hearts').children;
       for (let i = 0; i < hearts.length; i++) hearts[i].classList.toggle('empty', i >= hp);
     }
     if (bottles !== undefined) $('hud-bottles-count').textContent = bottles;
     if (levelName !== undefined) $('hud-level').textContent = levelName;
+    if (hats !== undefined) {
+      $('hud-plush-count').textContent = hats;
+      $('hud-plush').classList.toggle('hidden', hats <= 0);
+    }
   }
 
   // ---------- Диалоги (внизу экрана) ----------
@@ -1849,14 +1942,15 @@ const Game = (() => {
   let level = null, levelIndex = 0;
   let player = null;
   let enemies = [], tomahawks = [], bottles = [], hearts = [], particles = [];
+  let plushes = [], hatShots = [];
   let factory = null;
   let cam = 0, shake = 0;
   let bottlesGot = 0, kills = 0;
   let tGlobal = 0, lastT = 0;
   let bossRef = null;
-  let hudCache = { hp: -1, bottles: -1 };
+  let hudCache = { hp: -1, bottles: -1, hats: -1 };
 
-  const input = { left: false, right: false, down: false, jumpHeld: false, jumpPressed: false };
+  const input = { left: false, right: false, down: false, jumpHeld: false, jumpPressed: false, shootPressed: false };
 
   // API для сущностей (передаётся вместо this)
   const api = {
@@ -1902,6 +1996,7 @@ const Game = (() => {
     // карта
     level = buildLevel(def);
     enemies = []; tomahawks = []; bottles = []; hearts = []; particles = [];
+    plushes = []; hatShots = [];
     bossRef = null;
     level.spawns.enemies.forEach(({ type, c, r }) => {
       if (type === 'e') enemies.push(new Walker(c, r));
@@ -1910,22 +2005,24 @@ const Game = (() => {
     });
     level.spawns.bottles.forEach(({ c, r }) => bottles.push(new Bottle(c, r)));
     level.spawns.hearts.forEach(({ c, r }) => hearts.push(new HeartPickup(c, r)));
+    (level.spawns.plushes || []).forEach(({ c, r }) => plushes.push(new PlushPickup(c, r)));
     factory = new FactoryExit(level.factoryC, !!def.factoryLocked);
     player = new Player(level.spawnC);
     player.hp = CONFIG.PLAYER_HP;
+    player.ammo = 0; player.shootCd = 0;   // боезапас плюшек
     bottlesGot = 0;
     kills = 0;
     cam = 0; shake = 0;
     camY = VIEW_H - VIEW_H / ZOOM; // сразу «прижата к полу»
-    hudCache = { hp: -1, bottles: -1 };
+    hudCache = { hp: -1, bottles: -1, hats: -1 };
     // сброс ввода — чтобы залипшая клавиша/кнопка не тянула Андрея после рестарта
     input.left = false; input.right = false; input.down = false;
-    input.jumpHeld = false; input.jumpPressed = false;
+    input.jumpHeld = false; input.jumpPressed = false; input.shootPressed = false;
 
     state = 'playing';
     frozen = true; // пока идёт вступительный диалог
     UI.showScreen(null);
-    UI.setHud({ levelName: def.name, hp: player.hp, bottles: 0 });
+    UI.setHud({ levelName: def.name, hp: player.hp, bottles: 0, hats: 0 });
     Audio8.startMusic();
 
     UI.dialogue(def.dialogue?.intro).then(() => { frozen = false; });
@@ -2008,6 +2105,22 @@ const Game = (() => {
 
     player.update(dt, input, level, api);
 
+    // ---------- плюшки: бросок ----------
+    if (player.shootCd > 0) player.shootCd -= dt;
+    if (input.shootPressed) {
+      input.shootPressed = false;
+      if (player.ammo > 0 && player.shootCd <= 0) {
+        player.ammo--;
+        player.shootCd = 0.45;
+        const dir = player.dir || 1;
+        const hx = dir > 0 ? player.x + player.w - 4 : player.x - 26;
+        hatShots.push(new HatShot(hx, player.y + 2, dir));
+        Audio8.sfx.throw();
+      } else if (player.ammo <= 0) {
+        Audio8.sfx.locked(); // пусто — щёлкаем
+      }
+    }
+
     enemies.forEach((e) => e.update(dt, level, api));
     tomahawks.forEach((t) => t.update(dt, level, api));
     tomahawks = tomahawks.filter((t) => !t.dead);
@@ -2052,6 +2165,34 @@ const Game = (() => {
     });
     hearts = hearts.filter((h) => !h.taken);
 
+    // плюшки — подбор боеприпаса
+    plushes.forEach((p) => {
+      p.update(dt);
+      if (!p.taken && overlaps(player, p.rect())) {
+        p.taken = true;
+        player.ammo = Math.min(9, player.ammo + 3);
+        Audio8.sfx.heart();
+        for (let i = 0; i < 6; i++) particles.push(mkParticle(p.c * TILE + 20, p.r * TILE + 20, 'sparkle'));
+      }
+    });
+    plushes = plushes.filter((p) => !p.taken);
+
+    // летящие плюшки — столкновения
+    hatShots.forEach((s) => s.update(dt, level, api));
+    hatShots.forEach((s) => {
+      if (s.dead) return;
+      for (const e of enemies) {
+        if (e.dead) continue;
+        if (overlaps(s, e)) {
+          s.dead = true;
+          if (e instanceof Boss) e.hitByHat(api);
+          else e.stomp(api);
+          break;
+        }
+      }
+    });
+    hatShots = hatShots.filter((s) => !s.dead);
+
     // завод — выход (триггер = всё здание)
     factory.update(dt, player);
     if (!factory.locked && overlaps(player, factory.doorRect())) { finishLevel(); return; }
@@ -2068,9 +2209,9 @@ const Game = (() => {
     camY += (ty - camY) * Math.min(1, dt * 7);
 
     // HUD
-    if (hudCache.hp !== player.hp || hudCache.bottles !== bottlesGot) {
-      hudCache = { hp: player.hp, bottles: bottlesGot };
-      UI.setHud({ hp: player.hp, bottles: bottlesGot });
+    if (hudCache.hp !== player.hp || hudCache.bottles !== bottlesGot || hudCache.hats !== player.ammo) {
+      hudCache = { hp: player.hp, bottles: bottlesGot, hats: player.ammo };
+      UI.setHud({ hp: player.hp, bottles: bottlesGot, hats: player.ammo });
     }
 
     input.jumpPressed = false;
@@ -2187,9 +2328,11 @@ const Game = (() => {
 
     bottles.forEach((b) => b.draw(ctx, cam));
     hearts.forEach((h) => h.draw(ctx, cam));
+    plushes.forEach((p) => p.draw(ctx, cam));
     factory.draw(ctx, cam);
     enemies.forEach((e) => e.draw(ctx, cam, tGlobal));
     tomahawks.forEach((t) => t.draw(ctx, cam));
+    hatShots.forEach((s) => s.draw(ctx, cam));
     if (player) player.draw(ctx, cam);
 
     // частицы
@@ -2262,6 +2405,7 @@ const Game = (() => {
         if ((e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW') && !e.repeat) {
           input.jumpHeld = true; input.jumpPressed = true;
         }
+        if (e.code === 'KeyX' && !e.repeat) input.shootPressed = true; // бросить плюшку
       }
       if (e.code === 'KeyP' || e.code === 'Escape') togglePause();
       if (e.code === 'KeyF' && !e.repeat) enterFullscreen();
@@ -2294,6 +2438,7 @@ const Game = (() => {
     bindHold('touch-left', () => input.left = true, () => input.left = false);
     bindHold('touch-right', () => input.right = true, () => input.right = false);
     bindHold('touch-jump', () => { input.jumpHeld = true; input.jumpPressed = true; }, () => input.jumpHeld = false);
+    bindHold('touch-shoot', () => { input.shootPressed = true; }, () => {});
 
     // пауза при уходе со вкладки
     document.addEventListener('visibilitychange', () => {
@@ -2328,6 +2473,13 @@ const Game = (() => {
     bi.src = 'image/checkushka.png';
     bi.onerror = () => { bi.style.visibility = 'hidden'; };
     bi.onload = () => { bi.style.visibility = ''; };
+    // иконка плюшки в HUD
+    const pi = document.getElementById('hud-plush-icon');
+    if (pi) {
+      pi.src = 'image/plush.png';
+      pi.onerror = () => { pi.style.visibility = 'hidden'; };
+      pi.onload = () => { pi.style.visibility = ''; };
+    }
     UI.init(callbacks);
     bindInput();
     registerSW();
@@ -2339,6 +2491,9 @@ const Game = (() => {
       get player() { return player; },
       get enemies() { return enemies; },
       get factory() { return factory; },
+      get plushes() { return plushes; },
+      get hatShots() { return hatShots; },
+      get boss() { return bossRef; },
     };
     requestAnimationFrame((t) => { lastT = t; requestAnimationFrame(loop); });
   }

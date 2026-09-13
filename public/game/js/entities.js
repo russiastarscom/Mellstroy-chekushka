@@ -356,6 +356,21 @@ class Boss {
     }
   }
 
+  // Плюшкой киднули — урон без инвулна (каждая плюшка считается)
+  hitByHat(game) {
+    this.hp--;
+    this.hurtFlash = 0.4;
+    game.shake = 0.3;
+    game.spawnStars(this.x + this.w / 2, this.y + 10);
+    Audio8.sfx.bossHit();
+    if (this.hp <= 0) {
+      this.dead = true;
+      Audio8.sfx.bossDie();
+      game.shake = 0.6;
+      game.onBossDead();
+    }
+  }
+
   draw(ctx, camX, t) {
     // телеграф рывка — мигает
     let flash = false;
@@ -402,6 +417,52 @@ class HeartPickup {
   draw(ctx, camX) {
     const bob = Math.sin(this.t * 2.6) * 4;
     Sprites.draw(ctx, 'heart', this.c * TILE + 7 - camX, this.r * TILE + 8 + bob, 26, 24);
+  }
+}
+
+// Гора плюшек — подбор даёт боеприпас (3 плюшки)
+class PlushPickup {
+  constructor(c, r) { this.c = c; this.r = r; this.t = Math.random() * 6; this.taken = false; }
+  rect() { return { x: this.c * TILE + 2, y: this.r * TILE + 8, w: 36, h: 32 }; }
+  update(dt) { this.t += dt; }
+  draw(ctx, camX) {
+    const bob = Math.sin(this.t * 2.8) * 5;
+    const x = this.c * TILE + 2 - camX, y = this.r * TILE + 8 + bob;
+    // светящийся ореол, чтобы бросалась в глаза
+    const pulse = 0.3 + Math.sin(this.t * 4) * 0.15;
+    ctx.fillStyle = `rgba(255,170,200,${pulse})`;
+    ctx.beginPath(); ctx.ellipse(x + 18, y + 18, 24, 20, 0, 0, 7); ctx.fill();
+    Sprites.draw(ctx, 'plush', x, y, 36, 32);
+  }
+}
+
+// Летящая плюшка — снаряд игрока. Лёгкая дуга, крутится, бьёт врагов и босса.
+class HatShot {
+  constructor(x, y, dir) {
+    this.w = 30; this.h = 26;
+    this.x = x; this.y = y;
+    this.vx = dir * 470; this.vy = -140;
+    this.rot = 0; this.dead = false;
+    this.life = 2.0;
+  }
+  update(dt, level, game) {
+    this.vy += 280 * dt;              // мягкая дуга — дальний бросок
+    this.x += this.vx * dt;
+    this.y += this.vy * dt;
+    this.rot += dt * 16;
+    this.life -= dt;
+    const c = Math.floor((this.x + this.w / 2) / TILE), r = Math.floor((this.y + this.h / 2) / TILE);
+    if (isSolid(level, c, r)) { this.dead = true; game.spawnDust(this.x + this.w / 2, this.y + this.h / 2, 4); }
+    if (this.life <= 0 || this.y > ROWS * TILE + 40) this.dead = true;
+  }
+  draw(ctx, camX) {
+    ctx.save();
+    ctx.translate(this.x + this.w / 2 - camX, this.y + this.h / 2);
+    ctx.rotate(this.rot);
+    const spr = Sprites.get('plush');
+    const src = spr && (spr.img || spr.fallback);
+    if (src) { ctx.imageSmoothingEnabled = false; ctx.drawImage(src, -18, -16, 36, 32); }
+    ctx.restore();
   }
 }
 
