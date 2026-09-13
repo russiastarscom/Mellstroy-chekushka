@@ -198,12 +198,14 @@ class Walker {
     this.vy = Math.min(this.vy + CONFIG.GRAVITY * dt, 900);
     moveEntity(this, level, dt);
     if (this.hitWall) this.flip();
-    // не падать с края
+    // не падать с края и не ходить в шипы
     if (this.onGround) {
       const frontX = this.vx > 0 ? this.x + this.w + 3 : this.x - 3;
       const fc = Math.floor(frontX / TILE);
       const fr = Math.floor((this.y + this.h + 8) / TILE);
       if (!isSolid(level, fc, fr) && !isPlat(level, fc, fr)) this.flip();
+      const br = Math.floor((this.y + this.h - 6) / TILE);
+      if (isSpike(level, fc, br)) this.flip();
     }
     this.walkT += dt * 5;
   }
@@ -295,7 +297,7 @@ class Boss {
     this.y = 8 * TILE;
     this.vx = -70; this.vy = 0;
     this.dir = -1;
-    this.hp = 5; this.maxHp = 5;
+    this.hp = 6; this.maxHp = 6;
     this.dead = false;
     this.invuln = 0;
     this.chargeT = 5;

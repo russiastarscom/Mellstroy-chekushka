@@ -447,13 +447,10 @@ const Game = (() => {
       if (e.code === 'KeyF' && !e.repeat) toggleFullscreen();
     });
 
-    // кнопка фуллскрина в HUD
-    document.getElementById('btn-fullscreen').addEventListener('click', (e) => {
-      e.stopPropagation();
+    // тап/клик по самому экрану игры — включить/выключить полный экран
+    canvas.addEventListener('pointerup', (e) => {
+      if (e.pointerType === 'mouse' && e.button !== 0) return;
       toggleFullscreen();
-    });
-    document.addEventListener('fullscreenchange', () => {
-      document.getElementById('btn-fullscreen').textContent = isFullscreen() ? '⤡' : '⛶';
     });
     document.addEventListener('keyup', (e) => {
       if (e.code === 'ArrowLeft' || e.code === 'KeyA') input.left = false;
@@ -514,7 +511,7 @@ const Game = (() => {
     UI.init(callbacks);
     bindInput();
     registerSW();
-    UI.showScreen('menu');
+    UI.showScreen('gate'); // сначала 18+
     state = 'menu';
     // отладочный хук (можно дёргать из консоли)
     window.GameDebug = {

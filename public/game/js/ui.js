@@ -5,7 +5,7 @@ const UI = (() => {
   const $ = (id) => document.getElementById(id);
   const cb = {}; // колбэки от Game
 
-  const SCREENS = ['menu', 'levels', 'controls', 'pause', 'gameover', 'complete', 'ending', 'indev'];
+  const SCREENS = ['gate', 'menu', 'levels', 'controls', 'pause', 'gameover', 'complete', 'ending', 'indev', 'tooyoung'];
   let currentScreen = 'menu';
 
   // ---------- экраны ----------
@@ -198,6 +198,11 @@ const UI = (() => {
     Object.assign(cb, callbacks);
 
     $('btn-play').addEventListener('click', () => { Audio8.resume(); Audio8.sfx.click(); cb.onPlay(); });
+
+    // 18+ гейт
+    $('btn-gate-yes').addEventListener('click', () => { Audio8.resume(); Audio8.sfx.click(); showScreen('menu'); });
+    $('btn-gate-no').addEventListener('click', () => { Audio8.resume(); Audio8.sfx.click(); showScreen('tooyoung'); });
+    $('btn-tooyoung-back').addEventListener('click', () => { Audio8.sfx.click(); showScreen('gate'); });
     $('btn-levels').addEventListener('click', () => { Audio8.resume(); Audio8.sfx.click(); buildLevelsGrid(cb.getProgress()); showScreen('levels'); });
     $('btn-levels-back').addEventListener('click', () => { Audio8.sfx.click(); showScreen('menu'); });
     $('btn-controls').addEventListener('click', () => { Audio8.sfx.click(); showScreen('controls'); });

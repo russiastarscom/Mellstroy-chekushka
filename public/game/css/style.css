@@ -55,14 +55,23 @@ html, body {
   width: 1.9em; height: 1.9em; font-size: 1em;
   cursor: pointer; font-family: inherit;
 }
-#btn-fullscreen {
-  pointer-events: auto;
-  background: rgba(0,0,0,.45); color: var(--text);
-  border: 2px solid #ffffff33; border-radius: 8px;
-  width: 1.9em; height: 1.9em; font-size: 1em;
-  cursor: pointer; font-family: inherit;
+
+/* ---------- 18+ гейт ---------- */
+#screen-gate {
+  background:
+    repeating-linear-gradient(-45deg, rgba(255,210,63,.05) 0 28px, transparent 28px 56px),
+    radial-gradient(ellipse at center, rgba(30,12,16,.88) 0%, rgba(5,5,12,.97) 100%);
 }
-#btn-fullscreen:active { background: rgba(255,255,255,.2); }
+.gate-inner { display: flex; flex-direction: column; align-items: center; gap: 2.4vmin; text-align: center; max-width: 92%; }
+.gate-badge {
+  width: clamp(110px, 22vmin, 190px); height: auto;
+  filter: drop-shadow(0 6px 0 rgba(0,0,0,.7));
+  animation: gatePulse 1.7s ease-in-out infinite;
+}
+@keyframes gatePulse {
+  0%, 100% { transform: scale(1) rotate(-2deg); }
+  50% { transform: scale(1.06) rotate(2deg); }
+}
 
 /* ---------- Экраны ---------- */
 .screen {
