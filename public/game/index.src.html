@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Мелстрой: Мировая Чекушка — треш-платформер 18+</title>
+<meta name="description" content="18+. Треш-платформер: Андрей идёт отбивать заводы мировой чекушки у бурмалденцев. Мат и чёрный юмор.">
+<meta name="theme-color" content="#0d0d1a">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Чекушка">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="image/icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="image/icon-192.png">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="stage">
+  <canvas id="game" width="960" height="540"></canvas>
+
+  <!-- HUD -->
+  <div id="hud" class="hidden">
+    <div id="hud-hearts"><span class="heart">♥</span><span class="heart">♥</span><span class="heart">♥</span></div>
+    <div id="hud-bottles"><img id="hud-bottle-icon" alt=""><span id="hud-bottles-count">0</span></div>
+    <div id="hud-level"></div>
+    <button id="btn-pause" aria-label="Пауза">❚❚</button>
+  </div>
+
+  <!-- Диалог -->
+  <div id="dialogue" class="hidden">
+    <div id="dialogue-portrait"><canvas id="portrait-canvas" width="96" height="96"></canvas></div>
+    <div id="dialogue-body">
+      <div id="dialogue-name"></div>
+      <div id="dialogue-text"></div>
+      <button id="dialogue-next">Далее ▶</button>
+    </div>
+  </div>
+
+  <!-- 18+ гейт -->
+  <div id="screen-gate" class="screen hidden">
+    <div class="gate-inner">
+      <svg class="gate-badge" viewBox="0 0 200 200" aria-hidden="true">
+        <circle cx="100" cy="100" r="94" fill="#ff4757"/>
+        <circle cx="100" cy="100" r="94" fill="none" stroke="#000" stroke-width="7"/>
+        <circle cx="100" cy="100" r="76" fill="none" stroke="#fff" stroke-width="5" stroke-dasharray="11 8"/>
+        <g opacity="0.28" fill="#ffffff">
+          <rect x="93" y="30" width="14" height="11" rx="3"/>
+          <rect x="96" y="41" width="8" height="19" rx="4"/>
+          <path d="M82 62 h36 l7 24 v76 a11 11 0 0 1 -11 11 h-28 a11 11 0 0 1 -11 -11 v-76 z"/>
+        </g>
+        <text x="100" y="126" text-anchor="middle" font-family="Arial Black, Arial, sans-serif" font-size="62" font-weight="900" fill="#fff" stroke="#000" stroke-width="2">18+</text>
+      </svg>
+      <h2 class="screen-title danger">ВНИМАНИЕ! ТОЛЬКО ДЛЯ ВЗРОСЛЫХ</h2>
+      <p class="screen-text">Игра предназначена для лиц старше 18 лет:<br>внутри мат, чёрный юмор и неправдоподобно много мировой чекушки.<br>Если тебе меньше 18 — закрой вкладку и иди пей компот.</p>
+      <div class="menu-buttons">
+        <button id="btn-gate-yes" class="big-btn">МНЕ 18+, ПОГНАЛИ ▶</button>
+        <button id="btn-gate-no" class="big-btn small">МНЕ МЕНЬШЕ 18</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Мало лет -->
+  <div id="screen-tooyoung" class="screen hidden">
+    <div class="ending-inner">
+      <svg class="gate-badge" viewBox="0 0 200 200" aria-hidden="true">
+        <circle cx="100" cy="100" r="94" fill="#2c2c4e"/>
+        <circle cx="100" cy="100" r="94" fill="none" stroke="#000" stroke-width="7"/>
+        <circle cx="100" cy="100" r="76" fill="none" stroke="#ff4757" stroke-width="9"/>
+        <line x1="44" y1="156" x2="156" y2="44" stroke="#ff4757" stroke-width="12" stroke-linecap="round"/>
+        <text x="100" y="126" text-anchor="middle" font-family="Arial Black, Arial, sans-serif" font-size="62" font-weight="900" fill="#9aa0b4">18+</text>
+      </svg>
+      <div class="ending-title small">ЧУТЬ-ЧУТЬ РАНО</div>
+      <p class="screen-text">Андрей сказал: «Расти, пей компот, учи уроки.<br>Мировая чекушка и мат подождут, пока тебе стукнет 18.»</p>
+      <button id="btn-tooyoung-back" class="big-btn small">ЛАДНО, Я ВРУ — МНЕ 18+</button>
+    </div>
+  </div>
+
+  <!-- Главное меню -->
+  <div id="screen-menu" class="screen hidden">
+    <div class="menu-inner">
+      <div id="menu-title">
+        <div class="title-top">МЕЛСТРОЙ</div>
+        <div class="title-bottom">МИРОВАЯ ЧЕКУШКА</div>
+        <div class="title-sub">треш-платформер 18+ • спаси заводы</div>
+      </div>
+      <div class="menu-buttons">
+        <button id="btn-play" class="big-btn">▶ ИГРАТЬ</button>
+        <button id="btn-levels" class="big-btn">КАРТЫ</button>
+        <button id="btn-sound" class="big-btn small">ЗВУК: ВКЛ</button>
+        <button id="btn-controls" class="big-btn small">УПРАВЛЕНИЕ</button>
+      </div>
+      <div class="menu-footer">Фанатская треш-игра 18+: мат, чёрный юмор.<br>Все совпадения с вашей бутылкой случайны.</div>
+    </div>
+  </div>
+
+  <!-- Выбор уровня -->
+  <div id="screen-levels" class="screen hidden">
+    <h2 class="screen-title">ВЫБОР КАРТЫ</h2>
+    <div id="levels-grid"></div>
+    <button id="btn-levels-back" class="big-btn small">← НАЗАД</button>
+  </div>
+
+  <!-- Управление -->
+  <div id="screen-controls" class="screen hidden">
+    <h2 class="screen-title">УПРАВЛЕНИЕ</h2>
+    <div class="controls-list">
+      <div class="ctrl-row"><span class="keys">← → / A D</span><span>идти</span></div>
+      <div class="ctrl-row"><span class="keys">ПРОБЕЛ / W / ↑</span><span>прыжок</span></div>
+      <div class="ctrl-row"><span class="keys">↓ + прыжок</span><span>спрыгнуть с платформы</span></div>
+      <div class="ctrl-row"><span class="keys">P / ESC</span><span>пауза</span></div>
+      <div class="ctrl-row"><span class="keys">Прыжок на голову</span><span>давить бурмалденцев</span></div>
+      <div class="ctrl-row"><span class="keys">Телефон</span><span>кнопки на экране</span></div>
+    </div>
+    <button id="btn-controls-back" class="big-btn small">← НАЗАД</button>
+  </div>
+
+  <!-- Пауза -->
+  <div id="screen-pause" class="screen hidden">
+    <h2 class="screen-title">ПАУЗА</h2>
+    <div class="menu-buttons">
+      <button id="btn-resume" class="big-btn">ПРОДОЛЖИТЬ</button>
+      <button id="btn-restart" class="big-btn small">ЗАНОВО</button>
+      <button id="btn-pause-sound" class="big-btn small">ЗВУК: ВКЛ</button>
+      <button id="btn-pause-menu" class="big-btn small">В МЕНЮ</button>
+    </div>
+  </div>
+
+  <!-- Провал -->
+  <div id="screen-gameover" class="screen hidden">
+    <h2 class="screen-title danger">ЧЕКУШКИ НЕ БУДЕТ...</h2>
+    <p class="screen-text">Андрей пал смертью храбрых.<br>Бурмалденцы празднуют. Это нельзя так оставлять.</p>
+    <div class="menu-buttons">
+      <button id="btn-retry" class="big-btn">ЕЩЁ РАЗ!</button>
+      <button id="btn-gameover-menu" class="big-btn small">В МЕНЮ</button>
+    </div>
+  </div>
+
+  <!-- Уровень пройден -->
+  <div id="screen-complete" class="screen hidden">
+    <h2 class="screen-title success">КАРТА ЗАЧИЩЕНА!</h2>
+    <p id="complete-text" class="screen-text"></p>
+    <div class="menu-buttons">
+      <button id="btn-next" class="big-btn">ДАЛЬШЕ →</button>
+      <button id="btn-complete-menu" class="big-btn small">В МЕНЮ</button>
+    </div>
+  </div>
+
+  <!-- Катсцена (вступление) -->
+  <div id="screen-cutscene" class="screen hidden">
+    <div id="cutscene-bg"></div>
+    <div id="cutscene-content">
+      <div id="cutscene-portrait"></div>
+      <div id="cutscene-text-wrap">
+        <div id="cutscene-name"></div>
+        <div id="cutscene-text"></div>
+      </div>
+    </div>
+    <div id="cutscene-buttons">
+      <button id="btn-cutscene-next" class="big-btn small">ДАЛЬШЕ ▶</button>
+      <button id="btn-cutscene-skip" class="big-btn small ghost">ПРОПУСТИТЬ ✕</button>
+    </div>
+  </div>
+
+  <!-- Финал -->
+  <div id="screen-ending" class="screen hidden">
+    <div class="ending-inner">
+      <div class="ending-title">ПРОДОЛЖЕНИЕ<br>СЛЕДУЕТ...</div>
+      <p class="screen-text">Андрей отбил заводы «Мировая чекушка», но бурмалденцы<br>ушли в закат с последней партией «Двойной чекушки»...</p>
+      <div class="ending-subscribe">ПОДПИШИСЬ НА НАШИ СОЦСЕТИ,<br>ЧТОБЫ БЫТЬ В КУРСЕ!</div>
+      <div id="socials"></div>
+      <button id="btn-ending-menu" class="big-btn small">В МЕНЮ</button>
+    </div>
+  </div>
+
+  <!-- В разработке -->
+  <div id="screen-indev" class="screen hidden">
+    <div class="ending-inner">
+      <div class="ending-title small">🚧 В РАЗРАБОТКЕ 🚧</div>
+      <p class="screen-text">Бурмалденцы ещё строят эту карту.<br>Андрей взял с них слово, что чекушка тут будет.<br><br>А пока — иди отбивай первые заводы!</p>
+      <button id="btn-indev-menu" class="big-btn small">В МЕНЮ</button>
+    </div>
+  </div>
+
+  <!-- Тач-контролы -->
+  <div id="touch" class="hidden">
+    <div class="touch-left">
+      <button id="touch-left" aria-label="Влево">◀</button>
+      <button id="touch-right" aria-label="Вправо">▶</button>
+    </div>
+    <div class="touch-right">
+      <button id="touch-jump" aria-label="Прыжок">▲</button>
+    </div>
+  </div>
+
+  <!-- Поворот экрана -->
+  <div id="rotate-hint" class="hidden">
+    <div>↻</div>
+    <p>Поверни телефон горизонтально,<br>чтобы спасать чекушку</p>
+  </div>
+</div>
+
+<script src="js/config.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/sprites.js"></script>
+<script src="js/levels.js"></script>
+<script src="js/entities.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>

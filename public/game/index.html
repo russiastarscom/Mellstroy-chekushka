@@ -13,7 +13,275 @@
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="image/icon-192.png" type="image/png">
 <link rel="apple-touch-icon" href="image/icon-192.png">
-<link rel="stylesheet" href="css/style.css">
+<style>
+/* Мелстрой: Мировая Чекушка — стили */
+:root {
+  --bg: #0d0d1a;
+  --panel: #16162a;
+  --accent: #ffd23f;
+  --accent2: #ff4757;
+  --green: #2ed573;
+  --text: #f5f6fa;
+  --muted: #9aa0b4;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body {
+  height: 100%;
+  background: #05050c;
+  font-family: 'Pixelify Sans', 'Trebuchet MS', 'Segoe UI', Arial, sans-serif;
+  color: var(--text);
+  overflow: hidden;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+#stage {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh; /* мобильные браузеры: учитываем адресную строку */
+  background: var(--bg);
+  overflow: hidden;
+}
+#game { position: absolute; inset: 0; width: 100%; height: 100%; image-rendering: pixelated; }
+
+.hidden { display: none !important; }
+
+/* ---------- HUD ---------- */
+#hud {
+  position: absolute; top: 0; left: 0; right: 0;
+  display: flex; align-items: center; gap: 14px;
+  padding: 8px 14px;
+  font-size: clamp(14px, 2.2vmin, 22px);
+  text-shadow: 2px 2px 0 #000;
+  pointer-events: none;
+  z-index: 5;
+}
+#hud-hearts { letter-spacing: 2px; font-size: 1.25em; }
+#hud-hearts .heart { color: var(--accent2); }
+#hud-hearts .heart.empty { color: #3a3a52; }
+#hud-bottles { display: flex; align-items: center; gap: 6px; color: var(--accent); font-weight: bold; }
+#hud-bottle-icon { width: 1.2em; height: 1.6em; object-fit: contain; image-rendering: pixelated; }
+#hud-level { margin-left: auto; color: var(--muted); }
+#btn-pause {
+  pointer-events: auto; margin-left: 8px;
+  background: rgba(0,0,0,.45); color: var(--text);
+  border: 2px solid #ffffff33; border-radius: 8px;
+  width: 1.9em; height: 1.9em; font-size: 1em;
+  cursor: pointer; font-family: inherit;
+}
+
+/* ---------- 18+ гейт ---------- */
+#screen-gate {
+  background:
+    repeating-linear-gradient(-45deg, rgba(255,210,63,.05) 0 28px, transparent 28px 56px),
+    radial-gradient(ellipse at center, rgba(30,12,16,.88) 0%, rgba(5,5,12,.97) 100%);
+}
+.gate-inner { display: flex; flex-direction: column; align-items: center; gap: 2.4vmin; text-align: center; max-width: 92%; }
+.gate-badge {
+  width: clamp(110px, 22vmin, 190px); height: auto;
+  filter: drop-shadow(0 6px 0 rgba(0,0,0,.7));
+  animation: gatePulse 1.7s ease-in-out infinite;
+}
+@keyframes gatePulse {
+  0%, 100% { transform: scale(1) rotate(-2deg); }
+  50% { transform: scale(1.06) rotate(2deg); }
+}
+
+/* ---------- Экраны ---------- */
+.screen {
+  position: absolute; inset: 0; z-index: 20;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  text-align: center;
+  background: radial-gradient(ellipse at center, rgba(13,13,26,.82) 0%, rgba(5,5,12,.96) 100%);
+  padding: 3vmin;
+}
+.screen-title {
+  font-size: clamp(22px, 5.2vmin, 44px);
+  letter-spacing: 2px;
+  margin-bottom: 2vmin;
+  text-shadow: 3px 3px 0 #000;
+}
+.screen-title.danger { color: var(--accent2); }
+.screen-title.success { color: var(--green); }
+.screen-text { font-size: clamp(13px, 2.4vmin, 20px); line-height: 1.5; color: #d8dbe8; margin-bottom: 2vmin; }
+
+/* ---------- Меню ---------- */
+#screen-menu {
+  background:
+    radial-gradient(ellipse at 50% 110%, rgba(255, 210, 63, .14), transparent 60%),
+    linear-gradient(160deg, #12122b 0%, #0d0d1a 55%, #1c0f14 100%);
+}
+.menu-inner { display: flex; flex-direction: column; align-items: center; gap: 2.6vmin; max-width: 90%; }
+.title-top {
+  font-size: clamp(40px, 10vmin, 92px);
+  font-weight: bold; letter-spacing: 4px;
+  color: var(--accent);
+  text-shadow: 0 0 24px rgba(255,210,63,.35), 5px 5px 0 #7a2d00, 8px 8px 0 #000;
+}
+.title-bottom {
+  font-size: clamp(20px, 4.6vmin, 40px);
+  font-weight: bold; letter-spacing: 8px;
+  color: var(--text);
+  text-shadow: 4px 4px 0 #000;
+}
+.title-sub { margin-top: 1vmin; font-size: clamp(12px, 2vmin, 18px); color: var(--muted); letter-spacing: 2px; }
+.menu-buttons { display: flex; flex-direction: column; gap: 1.6vmin; align-items: center; }
+.big-btn {
+  font-family: inherit;
+  font-size: clamp(15px, 2.8vmin, 24px);
+  font-weight: bold; letter-spacing: 2px;
+  color: #1a1200;
+  background: linear-gradient(180deg, #ffe27a, var(--accent));
+  border: 3px solid #000; border-radius: 10px;
+  padding: 1.6vmin 4.5vmin;
+  cursor: pointer;
+  box-shadow: 0 5px 0 #8a5a00, 0 5px 0 3px #00000055;
+  transition: transform .06s, box-shadow .06s;
+  min-height: 44px;
+}
+.big-btn:active { transform: translateY(4px); box-shadow: 0 1px 0 #8a5a00; }
+.big-btn.small { background: linear-gradient(180deg, #2c2c4e, #20203a); color: var(--text); box-shadow: 0 4px 0 #000; border-color: #000; font-size: clamp(12px, 2.2vmin, 18px); }
+.big-btn.small:active { box-shadow: 0 1px 0 #000; }
+.big-btn.ghost { background: transparent; color: var(--muted); border-color: #ffffff22; box-shadow: none; }
+.menu-footer { font-size: clamp(10px, 1.7vmin, 14px); color: #6a6f85; }
+
+/* ---------- Выбор уровня ---------- */
+#levels-grid {
+  display: grid; grid-template-columns: repeat(3, 1fr);
+  gap: 2vmin; margin-bottom: 2.6vmin;
+  width: min(78vmin, 640px);
+}
+.level-card {
+  font-family: inherit;
+  background: var(--panel);
+  border: 3px solid #2c2c4e; border-radius: 12px;
+  color: var(--text);
+  padding: 1.8vmin 1vmin;
+  cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; gap: .6vmin;
+  transition: border-color .1s, transform .06s;
+  min-height: 44px;
+}
+.level-card:not(.locked):hover { border-color: var(--accent); }
+.level-card:not(.locked):active { transform: scale(.97); }
+.level-card .num { font-size: clamp(16px, 3vmin, 26px); font-weight: bold; color: var(--accent); }
+.level-card .name { font-size: clamp(10px, 1.8vmin, 15px); color: var(--muted); }
+.level-card.locked { opacity: .45; cursor: not-allowed; filter: grayscale(.6); }
+.level-card .state { font-size: clamp(12px, 2.2vmin, 18px); }
+
+/* ---------- Управление (инфо) ---------- */
+.controls-list { display: flex; flex-direction: column; gap: 1.2vmin; margin-bottom: 2.4vmin; }
+.ctrl-row { display: flex; gap: 3vmin; justify-content: space-between; font-size: clamp(12px, 2.2vmin, 18px); }
+.ctrl-row .keys { color: var(--accent); font-weight: bold; }
+.ctrl-row span:last-child { color: var(--muted); }
+
+/* ---------- Диалог ---------- */
+#dialogue {
+  position: absolute; left: 50%; bottom: 4%;
+  transform: translateX(-50%);
+  width: min(88%, 760px);
+  display: flex; gap: 12px; align-items: flex-end;
+  background: rgba(10, 10, 22, .93);
+  border: 3px solid var(--accent);
+  border-radius: 14px;
+  padding: 12px 16px;
+  z-index: 15;
+  box-shadow: 0 0 30px rgba(0,0,0,.6);
+}
+#dialogue-portrait canvas { width: 72px; height: 72px; image-rendering: pixelated; border: 2px solid #ffffff2a; border-radius: 8px; background: #000; }
+#dialogue-body { flex: 1; text-align: left; }
+#dialogue-name { color: var(--accent); font-weight: bold; font-size: clamp(13px, 2.2vmin, 18px); margin-bottom: 4px; }
+#dialogue-text { font-size: clamp(13px, 2.3vmin, 19px); line-height: 1.45; min-height: 3em; }
+#dialogue-next {
+  font-family: inherit; float: right; margin-top: 6px;
+  background: var(--accent); border: 2px solid #000; border-radius: 8px;
+  font-weight: bold; font-size: clamp(11px, 1.9vmin, 15px);
+  padding: 5px 14px; cursor: pointer; color: #1a1200; min-height: 32px;
+}
+
+/* ---------- Катсцена ---------- */
+#screen-cutscene { padding: 0; background: #000; }
+#cutscene-bg {
+  position: absolute; inset: 0;
+  background-size: cover; background-position: center;
+  filter: brightness(.55) saturate(.9);
+}
+#cutscene-content {
+  position: relative; z-index: 2;
+  display: flex; align-items: center; gap: 3vmin;
+  width: min(86%, 820px);
+  background: rgba(8, 8, 18, .88);
+  border: 3px solid var(--accent);
+  border-radius: 16px;
+  padding: 2.4vmin 3vmin;
+}
+#cutscene-portrait {
+  width: clamp(64px, 14vmin, 120px); height: clamp(64px, 14vmin, 120px);
+  background: #000; border: 3px solid #ffffff2a; border-radius: 10px;
+  background-size: contain; background-repeat: no-repeat; background-position: center;
+  image-rendering: pixelated;
+  flex-shrink: 0;
+}
+#cutscene-name { color: var(--accent); font-weight: bold; font-size: clamp(15px, 2.8vmin, 24px); margin-bottom: 8px; }
+#cutscene-text { font-size: clamp(14px, 2.6vmin, 22px); line-height: 1.5; }
+#cutscene-buttons { position: relative; z-index: 2; display: flex; gap: 2vmin; margin-top: 2.4vmin; }
+
+/* ---------- Финал / в разработке ---------- */
+.ending-inner { display: flex; flex-direction: column; align-items: center; gap: 2.2vmin; max-width: 92%; }
+.ending-title {
+  font-size: clamp(28px, 6.4vmin, 56px); font-weight: bold; line-height: 1.15;
+  color: var(--accent); letter-spacing: 3px;
+  text-shadow: 4px 4px 0 #000;
+}
+.ending-title.small { font-size: clamp(22px, 4.8vmin, 40px); }
+.ending-subscribe { color: var(--green); font-weight: bold; font-size: clamp(14px, 2.8vmin, 24px); letter-spacing: 1px; text-shadow: 2px 2px 0 #000; }
+#socials { display: flex; gap: 1.6vmin; flex-wrap: wrap; justify-content: center; }
+.social-btn {
+  font-family: inherit; font-size: clamp(12px, 2.2vmin, 18px); font-weight: bold;
+  padding: 1.4vmin 3vmin; border-radius: 10px; cursor: pointer;
+  border: 2px solid #000; color: #fff; text-decoration: none; min-height: 44px;
+  display: inline-flex; align-items: center;
+}
+.social-btn.tg { background: #279fd9; }
+.social-btn.yt { background: #e62117; }
+.social-btn.tt { background: #23232b; }
+
+/* ---------- Тач ---------- */
+#touch { position: absolute; inset: 0; z-index: 10; pointer-events: none; }
+#touch button {
+  pointer-events: auto;
+  position: absolute; bottom: 4%;
+  width: 13vmin; height: 13vmin; min-width: 56px; min-height: 56px;
+  border-radius: 50%;
+  border: 3px solid #ffffff30;
+  background: rgba(255,255,255,.09);
+  color: #ffffffcc; font-size: 5vmin;
+  font-family: inherit;
+  touch-action: none;
+}
+#touch button:active { background: rgba(255,255,255,.25); }
+#touch-left { left: 3%; }
+#touch-right { left: calc(3% + 14.5vmin); }
+#touch-jump { right: 3%; width: 16vmin; height: 16vmin; }
+
+/* ---------- Поворот ---------- */
+#rotate-hint {
+  position: fixed; inset: 0; z-index: 100;
+  background: #05050cf2;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2vmin;
+  font-size: clamp(16px, 4vmin, 26px); color: var(--text); text-align: center;
+}
+#rotate-hint div { font-size: 12vmin; color: var(--accent); }
+@media (orientation: landscape) { #rotate-hint:not(.force) { display: none !important; } }
+
+/* Скроллбар для грида уровней при узком экране */
+@media (max-width: 560px) {
+  #levels-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+</style>
 </head>
 <body>
 <div id="stage">
@@ -200,12 +468,1872 @@
   </div>
 </div>
 
-<script src="js/config.js"></script>
-<script src="js/audio.js"></script>
-<script src="js/sprites.js"></script>
-<script src="js/levels.js"></script>
-<script src="js/entities.js"></script>
-<script src="js/ui.js"></script>
-<script src="js/main.js"></script>
+<script>
+// ============================================================
+// МЕЛСТРОЙ: МИРОВАЯ ЧЕКУШКА — конфиг
+// ============================================================
+// Впиши сюда свои ссылки на соцсети — они появятся на финальном
+// экране «Подпишись»:
+const CONFIG = {
+  version: '1.0',
+
+  SOCIALS: [
+    { name: 'Telegram',  class: 'tg', url: '#' },   // ← вставь ссылку
+    { name: 'YouTube',   class: 'yt', url: '#' },   // ← вставь ссылку
+    { name: 'TikTok',    class: 'tt', url: '#' },   // ← вставь ссылку
+  ],
+
+  // Имена (для диалогов)
+  NAMES: {
+    andrey:  'Андрей',
+    enemy:   'Бурмалденец',
+    boss:    'Вождь Бурмалденов',
+    radio:   'Срочные новости',
+  },
+
+  // Геймплей
+  PLAYER_HP: 3,
+  GRAVITY: 2300,
+  MOVE_SPEED: 285,
+  JUMP_VEL: -800,
+};
+
+</script>
+<script>
+// ============================================================
+// 8-битный звук на WebAudio (без внешних файлов)
+// ============================================================
+const Audio8 = (() => {
+  let ctx = null;
+  let master = null;
+  let musicGain = null;
+  let enabled = true;
+  let musicTimer = null;
+  let step = 0;
+
+  function ensure() {
+    if (ctx) return true;
+    try {
+      ctx = new (window.AudioContext || window.webkitAudioContext)();
+      master = ctx.createGain();
+      master.gain.value = 0.5;
+      master.connect(ctx.destination);
+      musicGain = ctx.createGain();
+      musicGain.gain.value = 0.16;
+      musicGain.connect(master);
+    } catch (e) { ctx = null; return false; }
+    return true;
+  }
+
+  function resume() {
+    if (ensure() && ctx.state === 'suspended') ctx.resume();
+  }
+
+  // Один тон со скольжением частоты
+  function tone(freq, dur, type = 'square', vol = 0.18, slideTo = null, dest = null) {
+    if (!enabled || !ensure()) return;
+    const t0 = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const g = ctx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, t0);
+    if (slideTo) osc.frequency.exponentialRampToValueAtTime(Math.max(30, slideTo), t0 + dur);
+    g.gain.setValueAtTime(vol, t0);
+    g.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
+    osc.connect(g); g.connect(dest || master);
+    osc.start(t0); osc.stop(t0 + dur + 0.02);
+  }
+
+  // Шум (для томагавка/взрыва)
+  function noise(dur = 0.2, vol = 0.2) {
+    if (!enabled || !ensure()) return;
+    const len = Math.floor(ctx.sampleRate * dur);
+    const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    const g = ctx.createGain();
+    g.gain.value = vol;
+    src.connect(g); g.connect(master);
+    src.start();
+  }
+
+  function seq(notes, type = 'square', vol = 0.15) {
+    let t = 0;
+    for (const [freq, dur] of notes) {
+      setTimeout(() => tone(freq, dur, type, vol), t * 1000);
+      t += dur * 0.9;
+    }
+  }
+
+  const sfx = {
+    jump:   () => tone(300, 0.14, 'square', 0.14, 620),
+    coin:   () => seq([[988, 0.07], [1319, 0.12]], 'square', 0.13),
+    stomp:  () => { tone(220, 0.12, 'square', 0.2, 70); noise(0.08, 0.12); },
+    hurt:   () => tone(190, 0.28, 'sawtooth', 0.22, 55),
+    heart:  () => seq([[523, 0.08], [659, 0.08], [784, 0.14]], 'triangle', 0.16),
+    throw:  () => tone(700, 0.12, 'sawtooth', 0.08, 250),
+    click:  () => tone(740, 0.05, 'square', 0.1),
+    bossHit:() => { tone(140, 0.2, 'square', 0.24, 60); noise(0.15, 0.2); },
+    bossDie:() => { noise(0.5, 0.3); seq([[196, 0.15], [147, 0.15], [98, 0.3]], 'sawtooth', 0.2); },
+    win:    () => seq([[523, 0.12], [659, 0.12], [784, 0.12], [1047, 0.25], [784, 0.1], [1047, 0.4]], 'square', 0.16),
+    lose:   () => seq([[392, 0.2], [330, 0.2], [262, 0.2], [196, 0.4]], 'sawtooth', 0.16),
+    locked: () => tone(160, 0.15, 'square', 0.12, 120),
+  };
+
+  // ---------- Музыка: простой чиптюн-луп ----------
+  // Бас + изредка мелодия. Играется пока state === playing.
+  const BASS = [110, 110, 131, 110, 98, 98, 147, 131]; // A2, C3, G2, D3...
+  const MELODY = [
+    [440, 494, 523, 494], [440, 392, 330, 392],
+    [349, 392, 440, 392], [523, 494, 440, 392],
+  ];
+  const STEP_MS = 165; // ~восточный темп
+
+  function musicTick() {
+    if (!enabled || !ctx) return;
+    const s = step % 8;
+    // бас
+    tone(BASS[s], 0.14, 'triangle', 0.5, null, musicGain);
+    // хэт
+    if (s % 2 === 0) {
+      const len = Math.floor(ctx.sampleRate * 0.03);
+      const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+      const d = buf.getChannelData(0);
+      for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+      const src = ctx.createBufferSource(); src.buffer = buf;
+      const g = ctx.createGain(); g.gain.value = 0.10;
+      src.connect(g); g.connect(musicGain); src.start();
+    }
+    // мелодия (каждый второй такт)
+    if (step % 16 >= 8) {
+      const m = MELODY[Math.floor(step / 16) % MELODY.length];
+      tone(m[step % 4], 0.16, 'square', 0.22, null, musicGain);
+    }
+    step++;
+  }
+
+  function startMusic() {
+    if (!ensure()) return;
+    stopMusic();
+    step = 0;
+    musicTimer = setInterval(musicTick, STEP_MS);
+  }
+  function stopMusic() {
+    if (musicTimer) { clearInterval(musicTimer); musicTimer = null; }
+  }
+
+  function setEnabled(v) {
+    enabled = v;
+    if (!enabled) stopMusic();
+  }
+
+  return { sfx, resume, startMusic, stopMusic, setEnabled, isEnabled: () => enabled };
+})();
+
+</script>
+<script>
+// ============================================================
+// Загрузчик спрайтов из папки image/
+// Файл есть  → используется он (замена «на лету» при следующей загрузке)
+// Файла нет  → рисуется встроенная пиксельная заглушка
+// Просто закинь свои PNG с этими именами в папку image/:
+//   andrey.png burmaldenets.png boss.png checkushka.png factory.png
+//   tomahawk.png heart.png bg_fields.png bg_city.png bg_district.png bg_plant.png
+// ============================================================
+const Sprites = (() => {
+  const DEFS = {
+    andrey:       { file: 'image/andrey.png',       w: 48,  h: 56  },
+    burmaldenets: { file: 'image/burmaldenets.png', w: 44,  h: 52  },
+    boss:         { file: 'image/boss.png',         w: 76,  h: 92  },
+    checkushka:   { file: 'image/checkushka.png',   w: 24,  h: 32  },
+    factory:      { file: 'image/factory.png',      w: 176, h: 140 },
+    tomahawk:     { file: 'image/tomahawk.png',     w: 20,  h: 20  },
+    heart:        { file: 'image/heart.png',        w: 26,  h: 24  },
+    bg_fields:    { file: 'image/bg_fields.png',    bg: true },
+    bg_city:      { file: 'image/bg_city.png',      bg: true },
+    bg_district:  { file: 'image/bg_district.png',  bg: true },
+    bg_plant:     { file: 'image/bg_plant.png',     bg: true },
+  };
+
+  const store = {}; // key -> {img, fallback, w, h}
+  let loaded = false;
+
+  // ---------- вспомогалки для пиксель-арта ----------
+  function mkCanvas(w, h) {
+    const c = document.createElement('canvas');
+    c.width = w; c.height = h;
+    const x = c.getContext('2d');
+    x.imageSmoothingEnabled = false;
+    return [c, x];
+  }
+  function px(x, gx, gy, gw, gh, color, s = 4) {
+    x.fillStyle = color;
+    x.fillRect(gx * s, gy * s, gw * s, gh * s);
+  }
+
+  // ---------- ЗАГЛУШКА: Андрей ----------
+  function fbAndrey() {
+    const [c, x] = mkCanvas(48, 56);
+    const S = 4, W = 12, H = 14;
+    px(x, 3, 0, 6, 2, '#2b2118', S);              // волосы
+    px(x, 3, 2, 6, 3, '#e8b287', S);              // лицо
+    px(x, 7, 3, 1, 1, '#1a1a1a', S);              // глаз
+    px(x, 4, 4, 5, 1, '#a4795a', S);              // щетина
+    px(x, 2, 5, 8, 6, '#1d1d24', S);              // худи
+    px(x, 6, 5, 1, 6, '#3a3a46', S);              // молния
+    px(x, 1, 6, 1, 4, '#1d1d24', S);              // рука Л
+    px(x, 10, 6, 1, 4, '#1d1d24', S);             // рука П
+    px(x, 1, 9, 1, 1, '#e8b287', S);              // кисть
+    px(x, 10, 9, 1, 1, '#e8b287', S);
+    px(x, 3, 11, 3, 2, '#23232e', S);             // штаны
+    px(x, 6, 11, 3, 2, '#23232e', S);
+    px(x, 2, 13, 3, 1, '#e8e8e8', S);             // кроссы
+    px(x, 7, 13, 3, 1, '#e8e8e8', S);
+    return c;
+  }
+
+  // ---------- ЗАГЛУШКА: Бурмалденец ----------
+  function fbEnemy() {
+    const [c, x] = mkCanvas(44, 52);
+    const S = 4, W = 11, H = 13;
+    px(x, 4, 0, 1, 1, '#e63946', S);              // перья
+    px(x, 6, 0, 1, 1, '#ffd23f', S);
+    px(x, 5, 1, 1, 1, '#e63946', S);
+    px(x, 3, 2, 5, 1, '#c1272d', S);              // повязка
+    px(x, 3, 3, 5, 2, '#c68642', S);              // лицо
+    px(x, 6, 3, 1, 1, '#1a1a1a', S);              // злой глаз
+    px(x, 3, 5, 5, 4, '#a9714b', S);              // торс
+    px(x, 2, 5, 1, 3, '#c68642', S);              // руки
+    px(x, 8, 5, 1, 3, '#c68642', S);
+    px(x, 3, 9, 5, 1, '#8b5a2b', S);              // набедренная
+    px(x, 3, 10, 2, 2, '#c68642', S);             // ноги
+    px(x, 6, 10, 2, 2, '#c68642', S);
+    px(x, 2, 12, 2, 1, '#5d4037', S);             // мокасины
+    px(x, 7, 12, 2, 1, '#5d4037', S);
+    px(x, 9, 3, 1, 5, '#795548', S);              // томагавк ручка
+    px(x, 8, 2, 3, 2, '#9e9e9e', S);              // камень
+    return c;
+  }
+
+  // ---------- ЗАГЛУШКА: Вождь ----------
+  function fbBoss() {
+    const [c, x] = mkCanvas(76, 92);
+    const S = 4, W = 19, H = 23;
+    for (let i = 0; i < 5; i++) px(x, 5 + i, 0, 1, 2, i % 2 ? '#ffd23f' : '#e63946', S); // корона перьев
+    px(x, 4, 2, 11, 3, '#e6b422', S);             // шапка вождя
+    px(x, 5, 5, 9, 3, '#c68642', S);              // лицо
+    px(x, 7, 6, 1, 1, '#1a1a1a', S);              // глаза
+    px(x, 11, 6, 1, 1, '#1a1a1a', S);
+    px(x, 7, 7, 5, 1, '#7a4a2b', S);              // рот-крик
+    px(x, 4, 8, 11, 7, '#a9714b', S);             // торс-гора
+    px(x, 2, 9, 2, 5, '#c68642', S);              // руки
+    px(x, 15, 9, 2, 5, '#c68642', S);
+    px(x, 3, 8, 3, 2, '#c68642', S);              // кулаки
+    px(x, 13, 8, 3, 2, '#c68642', S);
+    px(x, 6, 15, 3, 1, '#8b5a2b', S);             // набедренная
+    px(x, 10, 15, 3, 1, '#8b5a2b', S);
+    px(x, 6, 16, 3, 5, '#a9714b', S);             // ноги
+    px(x, 10, 16, 3, 5, '#a9714b', S);
+    px(x, 5, 21, 4, 2, '#5d4037', S);             // сапоги
+    px(x, 10, 21, 4, 2, '#5d4037', S);
+    px(x, 16, 4, 2, 10, '#795548', S);            // дубовый томагавк
+    px(x, 14, 2, 5, 4, '#9e9e9e', S);             // камень
+    return c;
+  }
+
+  // ---------- ЗАГЛУШКА: Чекушка ----------
+  function fbBottle() {
+    const [c, x] = mkCanvas(24, 32);
+    px(x, 9, 0, 6, 2, '#2e6fb7');                 // крышка
+    px(x, 8, 2, 8, 3, '#9fd8b4');                 // горлышко
+    px(x, 8, 2, 2, 3, '#c9efe0');                 // блик
+    px(x, 5, 5, 14, 25, '#8fcaa6');               // бутылка
+    px(x, 5, 5, 3, 25, '#c9efe0');                // блик
+    px(x, 6, 12, 12, 9, '#f2f2f2');               // этикетка
+    x.fillStyle = '#c1272d';
+    x.font = 'bold 8px Arial';
+    x.fillText('МЧ', 8, 19);
+    return c;
+  }
+
+  // ---------- ЗАГЛУШКА: Завод ----------
+  function fbFactory() {
+    const [c, x] = mkCanvas(176, 140);
+    // трубы
+    for (const cx of [10, 34]) {
+      for (let i = 0; i < 7; i++) {
+        x.fillStyle = i % 2 ? '#e8e8e8' : '#c1272d';
+        x.fillRect(cx, 6 + i * 8, 10, 8);
+      }
+    }
+    px(x, 2, 54, 172, 84, '#8f3b2d');             // корпус
+    px(x, 2, 54, 172, 6, '#6d2c21');              // тень крыши
+    // окна
+    for (let i = 0; i < 5; i++) px(x, 8 + i * 9, 64, 6, 8, '#ffd97a');
+    for (let i = 0; i < 5; i++) px(x, 8 + i * 9, 80, 6, 8, '#ffd97a');
+    // вывеска
+    px(x, 30, 92, 60, 16, '#f2f2f2');
+    x.fillStyle = '#1a1a1a'; x.font = 'bold 11px Arial'; x.textAlign = 'center';
+    x.fillText('ЧЕКУШКА', 60, 103);
+    x.textAlign = 'left';
+    // ворота
+    px(x, 70, 108, 36, 32, '#3a2a22');
+    px(x, 86, 108, 2, 32, '#211712');
+    return c;
+  }
+
+  // ---------- ЗАГЛУШКА: Томагавк ----------
+  function fbTomahawk() {
+    const [c, x] = mkCanvas(20, 20);
+    x.strokeStyle = '#795548'; x.lineWidth = 3;
+    x.beginPath(); x.moveTo(4, 16); x.lineTo(15, 4); x.stroke();
+    x.fillStyle = '#9e9e9e';
+    x.fillRect(11, 1, 8, 6);
+    return c;
+  }
+
+  // ---------- ЗАГЛУШКА: Сердечко ----------
+  function fbHeart() {
+    const [c, x] = mkCanvas(26, 24);
+    x.fillStyle = '#ff4757';
+    x.beginPath();
+    x.arc(8, 8, 7, 0, 7); x.arc(18, 8, 7, 0, 7); x.fill();
+    x.beginPath();
+    x.moveTo(1, 11); x.lineTo(13, 23); x.lineTo(25, 11); x.closePath(); x.fill();
+    return c;
+  }
+
+  const FALLBACKS = {
+    andrey: fbAndrey, burmaldenets: fbEnemy, boss: fbBoss, checkushka: fbBottle,
+    factory: fbFactory, tomahawk: fbTomahawk, heart: fbHeart,
+  };
+
+  // ---------- Загрузка ----------
+  function loadOne(key, def) {
+    return new Promise((resolve) => {
+      const img = new Image();
+      const done = (ok) => {
+        store[key] = {
+          img: ok ? img : null,
+          fallback: FALLBACKS[key] ? FALLBACKS[key]() : null,
+          w: def.w, h: def.h, bg: !!def.bg,
+        };
+        resolve();
+      };
+      img.onload = () => done(true);
+      img.onerror = () => done(false);
+      img.src = def.file;
+    });
+  }
+
+  async function load() {
+    if (loaded) return;
+    await Promise.all(Object.entries(DEFS).map(([k, d]) => loadOne(k, d)));
+    loaded = true;
+  }
+
+  function get(key) { return store[key]; }
+
+  // Нарисовать спрайт (img или фолбэк) с флипом
+  function draw(ctx, key, x, y, w, h, flip = false) {
+    const s = store[key];
+    if (!s) return;
+    const src = s.img || s.fallback;
+    if (!src) return;
+    ctx.save();
+    if (flip) { ctx.translate(x + w, y); ctx.scale(-1, 1); }
+    else ctx.translate(x, y);
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(src, 0, 0, w, h);
+    ctx.restore();
+  }
+
+  // Портрет для диалогов (верхняя часть спрайта)
+  function portrait(key, canvas) {
+    const s = store[key];
+    const x = canvas.getContext('2d');
+    x.clearRect(0, 0, canvas.width, canvas.height);
+    x.imageSmoothingEnabled = false;
+    if (!s) return;
+    const src = s.img || s.fallback;
+    if (!src) return;
+    const sw = src.width, sh = Math.max(1, src.height * 0.5);
+    x.drawImage(src, 0, 0, sw, sh, 0, 0, canvas.width, canvas.height);
+  }
+
+  return { load, get, draw, portrait, isReady: () => loaded };
+})();
+
+</script>
+<script>
+// ============================================================
+// Уровни и сюжет
+// Легенда тайлов: '#' земля, 'B' кирпич, '=' платформа (можно спрыгнуть),
+// '^' шипы, 'c' чекушка, 'H' сердечко, 'e' бурмалденец, 't' метатель,
+// 'G' вождь-босс, 'F' завод (выход), 'P' старт
+// ============================================================
+const ROWS = 13;          // высота карты в тайлах
+const TILE = 40;          // размер тайла
+
+function buildLevel(def) {
+  const w = def.width;
+  const grid = Array.from({ length: ROWS }, () => Array(w).fill('.'));
+  const spawns = { enemies: [], bottles: [], hearts: [], tomahawks: [] };
+
+  // земля (2 ряда внизу)
+  (def.ground || []).forEach(([c0, c1]) => {
+    for (let r = 11; r < ROWS; r++) for (let c = c0; c <= c1; c++) grid[r][c] = '#';
+  });
+  // кирпичи: прямоугольники [c0, r0, c1, r1]
+  (def.bricks || []).forEach(([c0, r0, c1, r1]) => {
+    for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) grid[r][c] = 'B';
+  });
+  // платформы [c, r, len]
+  (def.plats || []).forEach(([c, r, len]) => {
+    for (let i = 0; i < len; i++) if (r >= 0 && r < ROWS && c + i < w) grid[r][c + i] = '=';
+  });
+  // шипы [c0, c1] — на земле (ряд 10), либо [c0, c1, ряд] — например на платформе
+  (def.spikes || []).forEach(([c0, c1, r]) => {
+    const row = (r === undefined || r === null) ? 10 : r;
+    if (row >= 0 && row < ROWS) for (let c = c0; c <= c1; c++) grid[row][c] = '^';
+  });
+  // чекушка
+  (def.bottles?.runs || []).forEach(([c0, c1, r]) => {
+    for (let c = c0; c <= c1; c++) spawns.bottles.push({ c, r });
+  });
+  (def.bottles?.singles || []).forEach(([c, r]) => spawns.bottles.push({ c, r }));
+  // сердечки
+  (def.hearts || []).forEach(([c, r]) => spawns.hearts.push({ c, r }));
+  // враги: [тип, колонка] — спавн на землю (ряд 10), либо [тип, колонка, ряд] — на платформу
+  (def.enemies || []).forEach(([type, c, r]) => spawns.enemies.push({ type, c, r: (r === undefined) ? 10 : r }));
+  if (def.boss) spawns.enemies.push({ type: 'boss', c: def.boss.col, r: 9 });
+
+  return {
+    def, w, grid, spawns,
+    spawnC: def.spawn?.c ?? 2,
+    factoryC: def.factory?.c ?? w - 6,
+    hints: def.hints || [],
+  };
+}
+
+// ============================================================
+// ДИАЛОГИ
+// ============================================================
+const DIALOGUES = {
+  intro: [
+    { who: 'andrey', text: 'Город Буримовка. Пятница, вечер. Андрей идёт в магазин «Чекушка и точка» — взять классики, мировой чекушки...' },
+    { who: 'andrey', text: 'Полка ПУСТАЯ?! БЛ***, ЧТО ЗА БЕСПРЕДЕЛ?! Я конечно всё понимаю, но НЕ ДО ТОЙ ЖЕ СТЕПЕНИ — я просто в а**е!' },
+    { who: 'radio', text: 'Срочные новости! Племя бурмалденцев захватило все заводы «Мировая чекушка» и вывезло запасы в Буримовку! Повторяем: ВСЁ, б***, вывезли!' },
+    { who: 'andrey', text: 'Ну всё, х*й с ними. Верну чекушку народу. Без обид, ребзя — но будет больно.' },
+    { who: 'narrator', text: 'И Андрей пошёл. Четыре карты. Орда бурмалденцев. Мат, томагавки и ноль трезвых. 18+ — предупреждали же.' },
+  ],
+  outroAfterBoss: [
+    { who: 'boss', text: 'Ты сильный воин... Держи перо. И чекушку держи. Мы в отпуск, доигрались, б***...' },
+    { who: 'andrey', text: 'Завод наш. Чекушка свободна. Каждому — по чекушке. Ну, почти каждому. Самым красивым — по две.' },
+  ],
+};
+
+// ============================================================
+// УРОВНИ
+// ============================================================
+const LEVELS = [
+  // ---------- 1. ВСТУПЛЕНИЕ (катсцена) ----------
+  {
+    id: 1, name: 'Вступление', type: 'cutscene',
+    cutscene: DIALOGUES.intro,
+  },
+
+  // ---------- 2. КАРТА 1: Поля Буримовки ----------
+  {
+    id: 2, name: 'Поля Буримовки', type: 'map', bg: 'bg_fields', width: 130,
+    ground: [[0, 29], [33, 69], [73, 129]],
+    plats: [
+      [9, 8, 4], [21, 8, 3], [37, 8, 4], [41, 6, 3], [55, 8, 3],
+      [69, 8, 5], [90, 8, 4], [94, 6, 3], [105, 8, 3],
+    ],
+    spikes: [[57, 58], [97, 98]],
+    bottles: {
+      runs: [[14, 16, 10], [10, 12, 7], [22, 22, 7], [38, 40, 7], [46, 48, 10],
+             [56, 56, 7], [60, 62, 9], [78, 80, 10], [91, 93, 7], [106, 106, 7],
+             [112, 114, 10]],
+      singles: [],
+    },
+    hearts: [[92, 5]],
+    enemies: [['e', 24], ['e', 46], ['e', 80], ['e', 96], ['e', 120]],
+    spawn: { c: 2 }, factory: { c: 123 },
+    hints: [
+      { c: 2, text: '← → — идти, ПРОБЕЛ — прыжок' },
+      { c: 13, text: 'Собирай чекушку!' },
+      { c: 22, text: 'Прыгай на бурмалденцев сверху!' },
+      { c: 114, text: 'Завод впереди — дойди до него!' },
+    ],
+    dialogue: {
+      intro: [
+        { who: 'andrey', text: 'Поля Буримовки. Красота — глаз не отвести! Одна беда: чекушки нет. Бл*ха-мохнатая, погнали отбирать!' },
+        { who: 'enemy', text: 'Чужак пришёл за чекушкой! Не видать тебе её, как зайцу третье перо! Вали нах*н отсюда!' },
+      ],
+      outro: [
+        { who: 'andrey', text: 'Первый район зачищен. Слышите? Вон там уже разливают МОЮ чекушку. Ничего-ничего, мы это поправим.' },
+      ],
+    },
+  },
+
+  // ---------- 3. КАРТА 2: Улицы Буримовки ----------
+  {
+    id: 3, name: 'Улицы Буримовки', type: 'map', bg: 'bg_city', width: 140,
+    ground: [[0, 19], [23, 39], [43, 59], [63, 82], [86, 99], [103, 139]],
+    plats: [
+      [12, 8, 3], [27, 8, 3], [31, 6, 3], [47, 8, 4], [64, 8, 5],
+      [70, 6, 3], [92, 8, 3], [100, 8, 3], [104, 6, 3], [117, 8, 3], [128, 8, 3],
+    ],
+    bricks: [[30, 10, 31, 10], [48, 10, 49, 9], [95, 10, 96, 10]],
+    spikes: [[27, 28], [52, 53], [78, 79], [92, 93], [111, 112], [122, 123], [48, 49, 7]],
+    bottles: {
+      runs: [[8, 10, 10], [13, 13, 7], [24, 25, 10], [28, 28, 7], [33, 35, 9],
+             [45, 46, 10], [56, 58, 10], [65, 67, 7], [71, 71, 5],
+             [75, 77, 10], [88, 90, 10], [93, 93, 7], [101, 102, 5], [107, 109, 10],
+             [118, 118, 7], [125, 127, 10], [129, 129, 7]],
+      singles: [],
+    },
+    hearts: [[71, 5], [96, 5]],
+    enemies: [['e', 9], ['e', 28, 7], ['e', 50], ['e', 55], ['t', 35], ['t', 67],
+              ['e', 74], ['e', 90], ['t', 93, 7], ['e', 105], ['t', 107],
+              ['e', 124], ['e', 132], ['t', 130], ['e', 136]],
+    spawn: { c: 2 }, factory: { c: 134 },
+    dialogue: {
+      intro: [
+        { who: 'enemy', text: 'Он пришёл! Он РЕАЛЬНО пришёл за чекушкой! Ату его, б***!' },
+        { who: 'andrey', text: 'Ату? Смешно. Я пришёл не ату-кать, а по-мужски поговорить. Чекушку — на стол, зубы — потом.' },
+      ],
+      outro: [
+        { who: 'andrey', text: 'Половина города за мной. Вторая половина тоже за мной — просто с томагавками и с матом.' },
+      ],
+    },
+  },
+
+  // ---------- 4. КАРТА 3: Заводской район ----------
+  {
+    id: 4, name: 'Заводской район', type: 'map', bg: 'bg_district', width: 150,
+    ground: [[0, 14], [18, 30], [34, 52], [56, 72], [76, 95], [99, 116], [120, 133], [137, 149]],
+    plats: [
+      [14, 8, 5], [24, 8, 3], [31, 8, 4], [40, 6, 3], [44, 8, 3], [52, 8, 5],
+      [62, 8, 3], [66, 6, 3], [72, 8, 5], [84, 8, 3], [95, 8, 5],
+      [104, 8, 3], [108, 6, 3], [116, 8, 5], [126, 8, 3], [136, 8, 3],
+    ],
+    bricks: [[26, 10, 27, 10], [59, 10, 60, 9], [88, 10, 89, 9], [131, 10, 132, 10]],
+    spikes: [[8, 9], [21, 22], [46, 47], [58, 58], [65, 66], [80, 81], [92, 93],
+             [110, 111], [127, 128], [138, 139], [14, 15, 7], [104, 105, 7]],
+    bottles: {
+      runs: [[5, 7, 10], [20, 20, 10], [25, 25, 7], [36, 38, 10], [41, 41, 5],
+             [45, 45, 7], [59, 61, 10], [63, 63, 7], [67, 67, 5], [79, 81, 10],
+             [85, 85, 7], [87, 87, 9], [101, 103, 10], [106, 106, 7], [109, 109, 5],
+             [122, 124, 10], [127, 127, 7], [131, 133, 10], [137, 137, 7], [140, 141, 10]],
+      singles: [],
+    },
+    hearts: [[67, 5], [86, 5], [109, 5]],
+    enemies: [['e', 12], ['e', 22], ['t', 28], ['e', 36], ['t', 44], ['e', 48], ['e', 40],
+              ['e', 62], ['t', 66], ['t', 17, 7], ['t', 52, 7], ['e', 77], ['e', 82],
+              ['t', 86], ['e', 90], ['t', 108], ['e', 114], ['e', 124], ['t', 128],
+              ['e', 142]],
+    spawn: { c: 2 }, factory: { c: 144 },
+    dialogue: {
+      intro: [
+        { who: 'andrey', text: 'Заводской район. Чую: чекушка близко. Или это вентиляция так дышит — п*здец как громко.' },
+        { who: 'enemy', text: 'Вождь сказал: кто сдаст чекушку без боя — тому большое перо! А кто с боем — тому перо И ПО БАШКЕ!' },
+      ],
+      outro: [
+        { who: 'andrey', text: 'Остался главный завод. Там вождь. Там ВСЯ чекушка. Сейчас мы тут устроим такой движ...' },
+      ],
+    },
+  },
+
+  // ---------- 5. КАРТА 4: Главный завод (босс) ----------
+  {
+    id: 5, name: 'Главный завод', type: 'map', bg: 'bg_plant', width: 100, boss: true,
+    ground: [[0, 99]],
+    plats: [[20, 8, 3], [38, 8, 3], [60, 8, 4], [68, 8, 4], [76, 8, 4]],
+    bricks: [[54, 9, 54, 10], [88, 9, 88, 10]],
+    spikes: [[15, 16], [41, 42]],
+    bottles: {
+      runs: [[5, 7, 10], [13, 14, 10], [30, 32, 10], [45, 47, 10],
+             [61, 63, 7], [69, 71, 7], [95, 97, 10]],
+      singles: [],
+    },
+    hearts: [[21, 5], [47, 5]],
+    enemies: [['e', 12], ['e', 25], ['e', 33], ['t', 48], ['t', 21, 7],
+              ['e', 55], ['e', 68, 7], ['t', 91]],
+    boss: { col: 75 },
+    spawn: { c: 2 }, factory: { c: 94 },
+    factoryLocked: true,
+    dialogue: {
+      intro: [
+        { who: 'boss', text: 'Стой, чужак! Это МОЙ завод! Вся мировая чекушка — теперь добро племени! Понял? Слыхал, б***?!' },
+        { who: 'andrey', text: 'Чекушка принадлежит народу. А я и есть народ. Уважаемый. Требую представительскую.' },
+        { who: 'boss', text: 'Х*Й ТЕБЕ, А НЕ ЧЕКУШКА! У-у-у-у! ЗА АТАКУ, БРАТЬЯ!' },
+      ],
+      outro: null, // особый финал после босса — DIALOGUES.outroAfterBoss
+    },
+  },
+
+  // ---------- 6. В РАЗРАБОТКЕ ----------
+  {
+    id: 6, name: 'В разработке', type: 'indev',
+  },
+];
+
+// Катсцены: фон для каждой реплики вступления
+const CUTSCENE_BG = ['bg_city', 'bg_city', 'bg_district', 'bg_district', 'bg_fields'];
+const CUTSCENE_BG_BY_INDEX = { 0: 'bg_city', 1: 'bg_city', 2: 'bg_district', 3: 'bg_district', 4: 'bg_fields' };
+
+</script>
+<script>
+// ============================================================
+// Физика + сущности
+// ============================================================
+const TILE_SOLID = new Set(['#', 'B']);
+
+function isSolid(level, c, r) {
+  if (c < 0 || c >= level.w) return true;   // стены по краям уровня
+  if (r < 0 || r >= ROWS) return false;     // сверху/внизу — открыто
+  return TILE_SOLID.has(level.grid[r][c]);
+}
+function isPlat(level, c, r) {
+  if (c < 0 || c >= level.w || r < 0 || r >= ROWS) return false;
+  return level.grid[r][c] === '=';
+}
+function isSpike(level, c, r) {
+  if (c < 0 || c >= level.w || r < 0 || r >= ROWS) return false;
+  return level.grid[r][c] === '^';
+}
+
+// Движение с разрешением коллизий по тайлам
+function moveEntity(ent, level, dt, ignorePlats = false) {
+  // --- X ---
+  ent.x += ent.vx * dt;
+  ent.hitWall = false;
+  {
+    const r0 = Math.floor(ent.y / TILE), r1 = Math.floor((ent.y + ent.h - 1) / TILE);
+    const c1 = Math.floor((ent.x + ent.w - 1) / TILE), c0 = Math.floor(ent.x / TILE);
+    if (ent.vx > 0) {
+      for (let r = r0; r <= r1; r++) if (isSolid(level, c1, r)) { ent.x = c1 * TILE - ent.w; ent.vx = 0; ent.hitWall = true; break; }
+    } else if (ent.vx < 0) {
+      for (let r = r0; r <= r1; r++) if (isSolid(level, c0, r)) { ent.x = (c0 + 1) * TILE; ent.vx = 0; ent.hitWall = true; break; }
+    }
+  }
+  // --- Y ---
+  const prevBottom = ent.y + ent.h;
+  ent.y += ent.vy * dt;
+  ent.onGround = false;
+  {
+    const c0 = Math.floor(ent.x / TILE), c1 = Math.floor((ent.x + ent.w - 1) / TILE);
+    const r0 = Math.floor(ent.y / TILE), r1 = Math.floor((ent.y + ent.h - 1) / TILE);
+    if (ent.vy > 0) {
+      for (let c = c0; c <= c1; c++) {
+        if (isSolid(level, c, r1)) { ent.y = r1 * TILE - ent.h; ent.vy = 0; ent.onGround = true; break; }
+        if (!ignorePlats && isPlat(level, c, r1) && prevBottom <= r1 * TILE + 8) {
+          ent.y = r1 * TILE - ent.h; ent.vy = 0; ent.onGround = true; break;
+        }
+      }
+    } else if (ent.vy < 0) {
+      for (let c = c0; c <= c1; c++) {
+        if (isSolid(level, c, r0)) { ent.y = (r0 + 1) * TILE; ent.vy = 0; break; }
+      }
+    }
+  }
+}
+
+function overlaps(a, b) {
+  return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+}
+
+// ============================================================
+// ИГРОК — Андрей
+// ============================================================
+class Player {
+  constructor(colC) {
+    this.w = 30; this.h = 50;
+    this.x = colC * TILE + 5;
+    this.y = 9 * TILE;
+    this.vx = 0; this.vy = 0;
+    this.dir = 1;
+    this.onGround = false;
+    this.hp = CONFIG.PLAYER_HP;
+    this.invuln = 0;
+    this.jumpBuffer = 0;
+    this.coyote = 0;
+    this.dropTimer = 0;
+    this.lastSafe = { x: this.x, y: this.y };
+    this.safeTimer = 0;
+    this.walkT = 0;
+    this.squash = 0;
+  }
+
+  update(dt, input, level, game) {
+    const SPEED = CONFIG.MOVE_SPEED, ACC = 2200, FRICTION = 2600;
+
+    // горизонталь
+    if (input.left) { this.vx -= ACC * dt; this.dir = -1; }
+    if (input.right) { this.vx += ACC * dt; this.dir = 1; }
+    if (!input.left && !input.right) {
+      const s = Math.sign(this.vx);
+      this.vx -= s * FRICTION * dt;
+      if (Math.sign(this.vx) !== s) this.vx = 0;
+    }
+    this.vx = Math.max(-SPEED, Math.min(SPEED, this.vx));
+
+    // прыжок: буфер + койот
+    this.jumpBuffer = input.jumpPressed ? 0.12 : Math.max(0, this.jumpBuffer - dt);
+    this.coyote = this.onGround ? 0.1 : Math.max(0, this.coyote - dt);
+    this.dropTimer = Math.max(0, this.dropTimer - dt);
+
+    if (this.jumpBuffer > 0 && input.down && this.onGround) {
+      // спрыгнуть с платформы
+      this.dropTimer = 0.22;
+      this.jumpBuffer = 0;
+      this.vy = 60;
+    } else if (this.jumpBuffer > 0 && (this.coyote > 0)) {
+      this.vy = CONFIG.JUMP_VEL;
+      this.jumpBuffer = 0;
+      this.coyote = 0;
+      this.squash = -0.25;
+      Audio8.sfx.jump();
+      game.spawnDust(this.x + this.w / 2, this.y + this.h, 4);
+    }
+    // короткий прыжок при отпускании
+    if (!input.jumpHeld && this.vy < -260) this.vy = -260;
+
+    this.vy = Math.min(this.vy + CONFIG.GRAVITY * dt, 1100);
+    moveEntity(this, level, dt, this.dropTimer > 0);
+
+    // приземление — пыль + сквош
+    if (this.onGround && this.prevVy > 380) {
+      this.squash = 0.3;
+      game.spawnDust(this.x + this.w / 2, this.y + this.h, 3);
+    }
+    this.prevVy = this.vy;
+    this.squash *= Math.pow(0.001, dt);
+
+    // безопасная точка (для респауна после ямы)
+    this.safeTimer -= dt;
+    if (this.onGround && this.safeTimer <= 0 && this.vy === 0) {
+      const fc = Math.floor((this.x + this.w / 2) / TILE);
+      const fr = Math.floor((this.y + this.h + 6) / TILE);
+      if (isSolid(level, fc, fr)) { this.lastSafe = { x: this.x, y: this.y }; this.safeTimer = 0.4; }
+    }
+
+    // шипы
+    if (this.invuln <= 0) {
+      const c0 = Math.floor((this.x + 6) / TILE), c1 = Math.floor((this.x + this.w - 6) / TILE);
+      const r = Math.floor((this.y + this.h - 4) / TILE);
+      for (let c = c0; c <= c1; c++) {
+        if (isSpike(level, c, r)) { this.hurt(c * TILE + 20 < this.x + this.w / 2 ? 1 : -1, game, true); break; }
+      }
+    }
+
+    // падение в яму
+    if (this.y > ROWS * TILE + 60) game.playerFell();
+
+    if (this.invuln > 0) this.invuln -= dt;
+    if (Math.abs(this.vx) > 20 && this.onGround) this.walkT += dt * Math.abs(this.vx) / 26;
+  }
+
+  hurt(dir, game, fromSpike = false) {
+    if (this.invuln > 0) return;
+    this.hp--;
+    this.invuln = 1.3;
+    this.vy = fromSpike ? -430 : -330;
+    this.vx = dir * 260;
+    Audio8.sfx.hurt();
+    game.onPlayerHurt();
+  }
+
+  respawn() {
+    this.x = this.lastSafe.x; this.y = this.lastSafe.y;
+    this.vx = 0; this.vy = 0;
+    this.invuln = 1.3;
+  }
+
+  draw(ctx, camX) {
+    if (this.invuln > 0 && Math.floor(this.invuln * 12) % 2 === 0) return; // мигание
+    const bob = (Math.abs(this.vx) > 20 && this.onGround) ? Math.abs(Math.sin(this.walkT * 6)) * 3 : 0;
+    const sq = this.squash;
+    const w = this.w + 10 - Math.abs(sq) * 12;
+    const h = this.h - sq * 10;
+    const x = this.x - (w - this.w) / 2 - camX;
+    const y = this.y + (this.h - h) - bob;
+    // тень
+    ctx.fillStyle = 'rgba(0,0,0,.25)';
+    ctx.beginPath();
+    ctx.ellipse(this.x + this.w / 2 - camX, this.y + this.h + 3, 16, 4, 0, 0, 7);
+    ctx.fill();
+    Sprites.draw(ctx, 'andrey', x, y, w, h, this.dir < 0);
+  }
+}
+
+// ============================================================
+// БУРМАЛДЕНЕЦ (пехота)
+// ============================================================
+class Walker {
+  constructor(colC, r = 10) {
+    this.w = 34; this.h = 46;
+    this.x = colC * TILE + 3;
+    this.y = r * TILE - this.h + TILE;
+    this.vx = -60; this.vy = 0;
+    this.dir = -1;
+    this.dead = false;
+    this.walkT = Math.random() * 3;
+  }
+  update(dt, level, game) {
+    this.vy = Math.min(this.vy + CONFIG.GRAVITY * dt, 900);
+    moveEntity(this, level, dt);
+    if (this.hitWall) this.flip();
+    // не падать с края и не ходить в шипы
+    if (this.onGround) {
+      const frontX = this.vx > 0 ? this.x + this.w + 3 : this.x - 3;
+      const fc = Math.floor(frontX / TILE);
+      const fr = Math.floor((this.y + this.h + 8) / TILE);
+      if (!isSolid(level, fc, fr) && !isPlat(level, fc, fr)) this.flip();
+      const br = Math.floor((this.y + this.h - 6) / TILE);
+      if (isSpike(level, fc, br)) this.flip();
+    }
+    this.walkT += dt * 5;
+  }
+  flip() { this.vx = -Math.sign(this.vx || this.dir) * 60; this.dir = Math.sign(this.vx); }
+  stomp(game) {
+    this.dead = true;
+    Audio8.sfx.stomp();
+    game.spawnStars(this.x + this.w / 2, this.y + 8);
+    game.kills++;
+  }
+  draw(ctx, camX) {
+    ctx.fillStyle = 'rgba(0,0,0,.25)';
+    ctx.beginPath();
+    ctx.ellipse(this.x + this.w / 2 - camX, this.y + this.h + 3, 14, 4, 0, 0, 7);
+    ctx.fill();
+    const bob = Math.abs(Math.sin(this.walkT)) * 2.5;
+    Sprites.draw(ctx, 'burmaldenets', this.x - camX, this.y - bob, this.w + 10, this.h + 12 - 0, this.vx > 0);
+  }
+}
+
+// ============================================================
+// МЕТАТЕЛЬ ТОМАГАВКОВ
+// ============================================================
+class Thrower extends Walker {
+  constructor(colC, r = 10) {
+    super(colC, r);
+    this.w = 34; this.h = 46;
+    this.vx = -36;
+    this.throwT = 1.2 + Math.random();
+  }
+  flip() { this.vx = -Math.sign(this.vx || this.dir) * 36; this.dir = Math.sign(this.vx); }
+  update(dt, level, game) {
+    super.update(dt, level, game);
+    this.throwT -= dt;
+    const p = game.player;
+    if (this.throwT <= 0 && Math.abs(p.x - this.x) < 360 && Math.abs(p.y - this.y) < 200) {
+      this.throwT = 2.4;
+      const dir = p.x > this.x ? 1 : -1;
+      game.tomahawks.push(new Tomahawk(this.x + this.w / 2, this.y + 8, dir));
+      Audio8.sfx.throw();
+    }
+  }
+}
+
+class Tomahawk {
+  constructor(x, y, dir) {
+    this.w = 18; this.h = 18;
+    this.x = x - 9; this.y = y;
+    this.vx = dir * 250; this.vy = -300;
+    this.rot = 0; this.dead = false;
+    this.harmless = 0.12; // чтобы не бить прямо из руки в упор
+  }
+  update(dt, level, game) {
+    this.vy += 1000 * dt;
+    this.x += this.vx * dt;
+    this.y += this.vy * dt;
+    this.rot += dt * 14;
+    this.harmless -= dt;
+    const c = Math.floor((this.x + 9) / TILE), r = Math.floor((this.y + 9) / TILE);
+    if (isSolid(level, c, r)) { this.dead = true; game.spawnDust(this.x + 9, this.y + 9, 4); }
+    if (this.y > ROWS * TILE + 40) this.dead = true;
+    if (this.harmless <= 0 && this.overlapPlayer(game.player)) {
+      this.dead = true;
+      game.player.hurt(Math.sign(game.player.x - this.x) || 1, game);
+    }
+  }
+  overlapPlayer(p) {
+    return overlaps(this, p);
+  }
+  draw(ctx, camX) {
+    ctx.save();
+    ctx.translate(this.x + 9 - camX, this.y + 9);
+    ctx.rotate(this.rot);
+    const spr = Sprites.get('tomahawk');
+    const src = spr.img || spr.fallback;
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(src, -10, -10, 20, 20);
+    ctx.restore();
+  }
+}
+
+// ============================================================
+// ВОЖДЬ БУРМАЛДЕНОВ (босс)
+// ============================================================
+class Boss {
+  constructor(colC) {
+    this.w = 66; this.h = 84;
+    this.x = colC * TILE + 7;
+    this.y = 8 * TILE;
+    this.vx = -70; this.vy = 0;
+    this.dir = -1;
+    this.hp = 6; this.maxHp = 6;
+    this.dead = false;
+    this.invuln = 0;
+    this.chargeT = 5;
+    this.state = 'walk';      // walk | telegraph | charge
+    this.telegraphT = 0;
+    this.walkT = 0;
+    this.hurtFlash = 0;
+  }
+  get speed() { return 70 + (this.maxHp - this.hp) * 22; }
+
+  update(dt, level, game) {
+    if (this.invuln > 0) this.invuln -= dt;
+    if (this.hurtFlash > 0) this.hurtFlash -= dt;
+
+    if (this.state === 'telegraph') {
+      this.telegraphT -= dt;
+      this.vx = 0;
+      if (this.telegraphT <= 0) { this.state = 'charge'; this.chargeDir = Math.sign(game.player.x - this.x) || 1; this.vx = this.chargeDir * this.speed * 2.4; }
+    } else if (this.state === 'charge') {
+      this.vx = this.chargeDir * this.speed * 2.4;
+      this.chargeT -= 0;
+      if (this.hitWall || (this.chargeDir > 0 && game.player.x < this.x && Math.random() < 0.01)) { this.state = 'walk'; this.chargeT = 4.5 + Math.random() * 2; }
+    } else {
+      this.chargeT -= dt;
+      if (this.chargeT <= 0) { this.state = 'telegraph'; this.telegraphT = 0.7; Audio8.sfx.throw(); }
+    }
+
+    this.vy = Math.min(this.vy + CONFIG.GRAVITY * dt, 900);
+    moveEntity(this, level, dt);
+    if (this.hitWall) {
+      if (this.state === 'charge') { this.state = 'walk'; this.chargeT = 4.5 + Math.random() * 2; game.shake = 0.25; }
+      this.vx = -Math.sign(this.vx || this.dir) * this.speed;
+    }
+    // не падать с края (в арене и так стены, но на всякий)
+    if (this.onGround && this.state === 'walk') {
+      const frontX = this.vx > 0 ? this.x + this.w + 3 : this.x - 3;
+      const fc = Math.floor(frontX / TILE), fr = Math.floor((this.y + this.h + 8) / TILE);
+      if (!isSolid(level, fc, fr) && !isPlat(level, fc, fr)) this.vx = -Math.sign(this.vx) * this.speed;
+    }
+    this.walkT += dt * 4;
+  }
+
+  stomp(game) {
+    if (this.invuln > 0) return;
+    this.hp--;
+    this.invuln = 1.1;
+    this.hurtFlash = 0.4;
+    game.shake = 0.3;
+    game.spawnStars(this.x + this.w / 2, this.y + 10);
+    Audio8.sfx.bossHit();
+    if (this.hp <= 0) {
+      this.dead = true;
+      Audio8.sfx.bossDie();
+      game.shake = 0.6;
+      game.onBossDead();
+    }
+  }
+
+  draw(ctx, camX, t) {
+    // телеграф рывка — мигает
+    let flash = false;
+    if (this.state === 'telegraph') flash = Math.floor(t * 10) % 2 === 0;
+    if (this.hurtFlash > 0) flash = true;
+    ctx.fillStyle = 'rgba(0,0,0,.3)';
+    ctx.beginPath();
+    ctx.ellipse(this.x + this.w / 2 - camX, this.y + this.h + 4, 26, 6, 0, 0, 7);
+    ctx.fill();
+    if (flash) {
+      ctx.save();
+      ctx.globalAlpha = 0.45;
+      Sprites.draw(ctx, 'boss', this.x - camX - 4, this.y - 4, this.w + 14, this.h + 12, this.vx > 0);
+      ctx.restore();
+    }
+    const bob = Math.abs(Math.sin(this.walkT)) * 3;
+    Sprites.draw(ctx, 'boss', this.x - camX, this.y - bob, this.w + 10, this.h + 8, this.vx > 0);
+    // HP босса
+    if (!this.dead) {
+      const bw = 70, bx = this.x + this.w / 2 - bw / 2 - camX, by = this.y - 18;
+      ctx.fillStyle = '#00000090'; ctx.fillRect(bx - 1, by - 1, bw + 2, 8);
+      ctx.fillStyle = '#ff4757'; ctx.fillRect(bx, by, bw * (this.hp / this.maxHp), 6);
+    }
+  }
+}
+
+// ============================================================
+// ПРЕДМЕТЫ
+// ============================================================
+class Bottle {
+  constructor(c, r) { this.c = c; this.r = r; this.t = Math.random() * 6; this.taken = false; }
+  rect() { return { x: this.c * TILE + 8, y: this.r * TILE + 4, w: 24, h: 34 }; }
+  update(dt) { this.t += dt; }
+  draw(ctx, camX) {
+    const bob = Math.sin(this.t * 3.2) * 4;
+    Sprites.draw(ctx, 'checkushka', this.c * TILE + 8 - camX, this.r * TILE + 4 + bob, 24, 32);
+  }
+}
+
+class HeartPickup {
+  constructor(c, r) { this.c = c; this.r = r; this.t = Math.random() * 6; this.taken = false; }
+  rect() { return { x: this.c * TILE + 7, y: this.r * TILE + 8, w: 26, h: 24 }; }
+  update(dt) { this.t += dt; }
+  draw(ctx, camX) {
+    const bob = Math.sin(this.t * 2.6) * 4;
+    Sprites.draw(ctx, 'heart', this.c * TILE + 7 - camX, this.r * TILE + 8 + bob, 26, 24);
+  }
+}
+
+// Завод — выход с уровня. Стоит НА земле (не зарывается в тайлы!),
+// триггером завершения уровня служит всё здание с запасом по краям.
+const GROUND_TOP = (ROWS - 2) * TILE; // верх земли — ряд 11 → y = 440
+
+class FactoryExit {
+  constructor(c, locked) {
+    this.c = c;
+    this.x = c * TILE; this.y = GROUND_TOP - 140;
+    this.w = 160; this.h = 140;
+    this.locked = locked;
+    this.t = 0;
+    this.near = 0;   // игрок рядом (для подсказки)
+  }
+  unlock() { this.locked = false; }
+  // зона-триггер: всё здание + 14px по краям, от крыши до земли
+  doorRect() { return { x: this.x - 14, y: this.y + 4, w: this.w + 28, h: this.h - 4 }; }
+  update(dt, player) {
+    this.t += dt;
+    const px = player ? player.x + player.w / 2 : -9999;
+    this.near = Math.abs(px - (this.x + this.w / 2)) < 300;
+  }
+  draw(ctx, camX) {
+    if (this.locked) ctx.globalAlpha = 0.35;
+    Sprites.draw(ctx, 'factory', this.x - camX, this.y, this.w, this.h);
+    ctx.globalAlpha = 1;
+    const cx = this.x + this.w / 2 - camX;
+    if (this.locked) {
+      ctx.fillStyle = '#ffd23f';
+      ctx.font = 'bold 22px Arial';
+      ctx.textAlign = 'center';
+      ctx.fillText('🔒', cx, this.y + 34 + Math.sin(this.t * 3) * 3);
+      ctx.textAlign = 'left';
+    } else {
+      // мигающая стрелка над заводом
+      const bob = Math.sin(this.t * 4) * 5;
+      ctx.fillStyle = '#2ed573';
+      ctx.font = 'bold 30px Arial';
+      ctx.textAlign = 'center';
+      ctx.fillText('▼', cx, this.y - 16 + bob);
+      // подсветка зоны триггера, когда игрок близко
+      if (this.near) {
+        const pulse = 0.35 + Math.sin(this.t * 6) * 0.2;
+        ctx.fillStyle = `rgba(46,213,115,${pulse})`;
+        ctx.fillRect(this.x - 14 - camX, this.y + this.h - 8, this.w + 28, 8);
+      }
+      ctx.textAlign = 'left';
+    }
+  }
+}
+
+</script>
+<script>
+// ============================================================
+// UI: меню, HUD, диалоги, катсцены, экраны
+// ============================================================
+const UI = (() => {
+  const $ = (id) => document.getElementById(id);
+  const cb = {}; // колбэки от Game
+
+  const SCREENS = ['gate', 'menu', 'levels', 'controls', 'pause', 'gameover', 'complete', 'ending', 'indev', 'tooyoung'];
+  let currentScreen = 'menu';
+
+  // ---------- экраны ----------
+  function showScreen(name) {
+    currentScreen = name;
+    SCREENS.forEach((s) => $('screen-' + s).classList.toggle('hidden', s !== name));
+    const inGame = name === null;
+    $('hud').classList.toggle('hidden', !inGame && name !== 'pause');
+    if (name !== null && name !== 'pause') $('dialogue').classList.add('hidden');
+  }
+
+  // ---------- HUD ----------
+  function setHud({ hp, bottles, levelName }) {
+    if (hp !== undefined) {
+      const hearts = $('hud-hearts').children;
+      for (let i = 0; i < hearts.length; i++) hearts[i].classList.toggle('empty', i >= hp);
+    }
+    if (bottles !== undefined) $('hud-bottles-count').textContent = bottles;
+    if (levelName !== undefined) $('hud-level').textContent = levelName;
+  }
+
+  // ---------- Диалоги (внизу экрана) ----------
+  const WHO_PORTRAIT = { andrey: 'andrey', enemy: 'burmaldenets', boss: 'boss', radio: 'checkushka', narrator: null };
+  const dlg = { lines: [], i: 0, typing: false, timer: null, resolve: null };
+
+  function dialogue(lines) {
+    return new Promise((resolve) => {
+      dlg.lines = lines || [];
+      dlg.i = 0;
+      dlg.resolve = resolve;
+      if (!dlg.lines.length) { resolve(); return; }
+      $('dialogue').classList.remove('hidden');
+      showDlgLine();
+    });
+  }
+
+  function showDlgLine() {
+    const line = dlg.lines[dlg.i];
+    const key = WHO_PORTRAIT[line.who];
+    const pc = $('portrait-canvas');
+    if (key) { pc.style.display = ''; Sprites.portrait(key, pc); }
+    else pc.style.display = 'none';
+    $('dialogue-name').textContent = line.who === 'narrator' ? '• • •' : (CONFIG.NAMES[line.who] || line.who);
+    // печатающийся текст
+    const el = $('dialogue-text');
+    el.textContent = '';
+    dlg.typing = true;
+    let pos = 0;
+    clearInterval(dlg.timer);
+    dlg.timer = setInterval(() => {
+      pos += 2;
+      el.textContent = line.text.slice(0, pos);
+      if (pos >= line.text.length) { clearInterval(dlg.timer); dlg.typing = false; }
+    }, 24);
+  }
+
+  function advanceDialogue() {
+    Audio8.sfx.click();
+    if (dlg.typing) {
+      clearInterval(dlg.timer);
+      $('dialogue-text').textContent = dlg.lines[dlg.i].text;
+      dlg.typing = false;
+      return;
+    }
+    dlg.i++;
+    if (dlg.i < dlg.lines.length) showDlgLine();
+    else {
+      $('dialogue').classList.add('hidden');
+      const r = dlg.resolve; dlg.resolve = null;
+      if (r) r();
+    }
+  }
+
+  // ---------- Катсцена ----------
+  const cut = { scenes: [], i: 0, resolve: null, typing: false, timer: null };
+
+  function cutscene(scenes, bgs) {
+    return new Promise((resolve) => {
+      cut.scenes = scenes || [];
+      cut.bgs = bgs || {};
+      cut.i = 0;
+      cut.resolve = resolve;
+      if (!cut.scenes.length) { resolve(); return; }
+      showScreen(null);
+      $('screen-cutscene').classList.remove('hidden');
+      showCutScene();
+    });
+  }
+
+  function cutPortrait(who) {
+    const key = WHO_PORTRAIT[who];
+    const el = $('cutscene-portrait');
+    if (!key) { el.style.backgroundImage = 'none'; el.textContent = who === 'narrator' ? '🎬' : '📻'; return; }
+    const tmp = document.createElement('canvas');
+    tmp.width = 96; tmp.height = 96;
+    Sprites.portrait(key, tmp);
+    el.textContent = '';
+    el.style.backgroundImage = `url(${tmp.toDataURL()})`;
+  }
+
+  function showCutScene() {
+    const s = cut.scenes[cut.i];
+    const bgKey = cut.bgs[cut.i] || 'bg_city';
+    const bg = Sprites.get(bgKey);
+    const el = $('cutscene-bg');
+    if (bg && bg.img) el.style.background = `url(${bg.img.src}) center/cover no-repeat`;
+    else el.style.background = 'linear-gradient(180deg, #23234a 0%, #12122b 55%, #3a1f2b 100%)';
+    cutPortrait(s.who);
+    $('cutscene-name').textContent = s.who === 'narrator' ? '• • •' : (CONFIG.NAMES[s.who] || s.who);
+    const textEl = $('cutscene-text');
+    textEl.textContent = '';
+    cut.typing = true;
+    let pos = 0;
+    clearInterval(cut.timer);
+    cut.timer = setInterval(() => {
+      pos += 2;
+      textEl.textContent = s.text.slice(0, pos);
+      if (pos >= s.text.length) { clearInterval(cut.timer); cut.typing = false; }
+    }, 26);
+  }
+
+  function advanceCutscene() {
+    Audio8.sfx.click();
+    if (cut.typing) {
+      clearInterval(cut.timer);
+      $('cutscene-text').textContent = cut.scenes[cut.i].text;
+      cut.typing = false;
+      return;
+    }
+    cut.i++;
+    if (cut.i < cut.scenes.length) showCutScene();
+    else finishCutscene();
+  }
+
+  function finishCutscene() {
+    clearInterval(cut.timer);
+    $('screen-cutscene').classList.add('hidden');
+    const r = cut.resolve; cut.resolve = null;
+    if (r) r();
+  }
+
+  // ---------- Выбор уровня ----------
+  function buildLevelsGrid(progress) {
+    const grid = $('levels-grid');
+    grid.innerHTML = '';
+    LEVELS.forEach((lv, i) => {
+      const isLast = lv.type === 'indev';
+      const done = progress.done[i];
+      const unlocked = isLast ? true : i < progress.unlocked;
+      const card = document.createElement('button');
+      card.className = 'level-card' + (unlocked ? '' : ' locked');
+      const state = isLast ? '🚧' : done ? '✔' : unlocked ? '▶' : '🔒';
+      card.innerHTML = `<span class="num">${lv.id}</span><span class="name">${lv.name}</span><span class="state">${state}</span>`;
+      card.addEventListener('click', () => { Audio8.resume(); if (!unlocked) { Audio8.sfx.locked(); return; } Audio8.sfx.click(); cb.onLevelPick(i); });
+      grid.appendChild(card);
+    });
+  }
+
+  // ---------- Соцсети ----------
+  function buildSocials() {
+    const box = $('socials');
+    box.innerHTML = '';
+    CONFIG.SOCIALS.forEach((s) => {
+      const a = document.createElement('a');
+      a.className = 'social-btn ' + (s.class || 'tg');
+      a.textContent = s.name;
+      a.href = s.url || '#';
+      a.target = '_blank';
+      a.rel = 'noopener';
+      box.appendChild(a);
+    });
+  }
+
+  // ---------- Звук ----------
+  function updateSoundButtons() {
+    const label = 'ЗВУК: ' + (Audio8.isEnabled() ? 'ВКЛ' : 'ВЫКЛ');
+    $('btn-sound').textContent = label;
+    $('btn-pause-sound').textContent = label;
+  }
+
+  // ---------- Полный экран ----------
+  function showComplete(text, hasNext) {
+    $('complete-text').innerHTML = text;
+    $('btn-next').style.display = hasNext ? '' : 'none';
+    showScreen('complete');
+  }
+
+  // ---------- Инициализация ----------
+  function init(callbacks) {
+    Object.assign(cb, callbacks);
+
+    $('btn-play').addEventListener('click', () => { Audio8.resume(); Audio8.sfx.click(); cb.onPlay(); });
+
+    // 18+ гейт
+    $('btn-gate-yes').addEventListener('click', () => { Audio8.resume(); Audio8.sfx.click(); showScreen('menu'); });
+    $('btn-gate-no').addEventListener('click', () => { Audio8.resume(); Audio8.sfx.click(); showScreen('tooyoung'); });
+    $('btn-tooyoung-back').addEventListener('click', () => { Audio8.sfx.click(); showScreen('gate'); });
+    $('btn-levels').addEventListener('click', () => { Audio8.resume(); Audio8.sfx.click(); buildLevelsGrid(cb.getProgress()); showScreen('levels'); });
+    $('btn-levels-back').addEventListener('click', () => { Audio8.sfx.click(); showScreen('menu'); });
+    $('btn-controls').addEventListener('click', () => { Audio8.sfx.click(); showScreen('controls'); });
+    $('btn-controls-back').addEventListener('click', () => { Audio8.sfx.click(); showScreen('menu'); });
+
+    $('btn-sound').addEventListener('click', () => { Audio8.setEnabled(!Audio8.isEnabled()); updateSoundButtons(); Audio8.sfx.click(); });
+    $('btn-pause-sound').addEventListener('click', () => { Audio8.setEnabled(!Audio8.isEnabled()); updateSoundButtons(); Audio8.sfx.click(); });
+
+    $('btn-pause').addEventListener('click', () => { Audio8.sfx.click(); cb.onPause(); });
+    $('btn-resume').addEventListener('click', () => { Audio8.sfx.click(); cb.onResume(); });
+    $('btn-restart').addEventListener('click', () => { Audio8.sfx.click(); cb.onRestart(); });
+    $('btn-pause-menu').addEventListener('click', () => { Audio8.sfx.click(); cb.onMenu(); });
+
+    $('btn-retry').addEventListener('click', () => { Audio8.sfx.click(); cb.onRetry(); });
+    $('btn-gameover-menu').addEventListener('click', () => { Audio8.sfx.click(); cb.onMenu(); });
+    $('btn-next').addEventListener('click', () => { Audio8.sfx.click(); cb.onNext(); });
+    $('btn-complete-menu').addEventListener('click', () => { Audio8.sfx.click(); cb.onMenu(); });
+
+    $('btn-cutscene-next').addEventListener('click', advanceCutscene);
+    $('btn-cutscene-skip').addEventListener('click', () => { Audio8.sfx.click(); finishCutscene(); });
+    $('screen-cutscene').addEventListener('click', (e) => {
+      if (e.target.id === 'cutscene-bg' || e.target.id === 'screen-cutscene') advanceCutscene();
+    });
+
+    $('btn-ending-menu').addEventListener('click', () => { Audio8.sfx.click(); cb.onMenu(); });
+    $('btn-indev-menu').addEventListener('click', () => { Audio8.sfx.click(); cb.onMenu(); });
+
+    // диалог: клик по кнопке и по самому окну
+    $('dialogue-next').addEventListener('click', advanceDialogue);
+    $('dialogue').addEventListener('click', (e) => { if (e.target.id === 'dialogue-text' || e.target.id === 'dialogue-body') advanceDialogue(); });
+
+    // клавиатура в диалогах/катсценах: пробел/enter = далее
+    document.addEventListener('keydown', (e) => {
+      if ((e.code === 'Space' || e.code === 'Enter')) {
+        if (!$('screen-cutscene').classList.contains('hidden')) { e.preventDefault(); advanceCutscene(); }
+        else if (!$('dialogue').classList.contains('hidden')) { e.preventDefault(); advanceDialogue(); }
+      }
+    });
+
+    buildSocials();
+    updateSoundButtons();
+  }
+
+  return {
+    init, showScreen, setHud, dialogue, cutscene,
+    buildLevelsGrid, updateSoundButtons, showComplete,
+  };
+})();
+
+</script>
+<script>
+// ============================================================
+// ЯДРО ИГРЫ
+// ============================================================
+const Game = (() => {
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+
+  let VIEW_W = 960;
+  const VIEW_H = 540;
+
+  // ---------- автрастягивание под весь экран ----------
+  // Высота мира всегда 540 (вертикальный геймплей не меняется),
+  // ширина обзора подгоняется под пропорции окна — чёрных полос нет.
+  function resizeCanvas() {
+    const vw = Math.max(1, window.innerWidth), vh = Math.max(1, window.innerHeight);
+    const aspect = Math.max(0.5, Math.min(3.2, vw / vh));
+    VIEW_W = Math.max(480, Math.min(1920, Math.round(VIEW_H * aspect)));
+    canvas.width = VIEW_W;
+    canvas.height = VIEW_H;
+    ctx.imageSmoothingEnabled = false;
+  }
+
+  // ---------- полный экран (Fullscreen API) ----------
+  // Тап по экрану только ОТКРЫВАЕТ полный экран — и всё.
+  // Обратно не выключаем: выйти можно штатными средствами браузера (Esc).
+  function isFullscreen() { return !!document.fullscreenElement; }
+  function enterFullscreen() {
+    try {
+      if (isFullscreen()) return; // уже во весь экран — ничего не делаем
+      const el = document.documentElement;
+      const fn = el.requestFullscreen || el.webkitRequestFullscreen;
+      if (fn) { const p = fn.call(el); if (p && p.catch) p.catch(() => {}); }
+    } catch (e) { /* игнор — некоторые окружения запрещают фуллскрин */ }
+  }
+
+  let state = 'boot';           // boot | menu | playing | paused | gameover | transition | ending
+  let frozen = false;           // true во время диалогов
+  let level = null, levelIndex = 0;
+  let player = null;
+  let enemies = [], tomahawks = [], bottles = [], hearts = [], particles = [];
+  let factory = null;
+  let cam = 0, shake = 0;
+  let bottlesGot = 0, kills = 0;
+  let tGlobal = 0, lastT = 0;
+  let bossRef = null;
+  let hudCache = { hp: -1, bottles: -1 };
+
+  const input = { left: false, right: false, down: false, jumpHeld: false, jumpPressed: false };
+
+  // API для сущностей (передаётся вместо this)
+  const api = {
+    spawnDust, spawnStars, onPlayerHurt, playerFell, onBossDead,
+    get player() { return player; },
+    get tomahawks() { return tomahawks; },
+    get shake() { return shake; },
+    set shake(v) { shake = v; },
+    get kills() { return kills; },
+    set kills(v) { kills = v; },
+  };
+
+  // ---------- прогресс ----------
+  const SAVE_KEY = 'melstroy_chekushka_v1';
+  let progress = { unlocked: 1, done: {}, sound: true };
+  try {
+    const raw = localStorage.getItem(SAVE_KEY);
+    if (raw) progress = Object.assign(progress, JSON.parse(raw));
+  } catch (e) { /* ignore */ }
+  function saveProgress() {
+    try { localStorage.setItem(SAVE_KEY, JSON.stringify(progress)); } catch (e) { /* ignore */ }
+  }
+
+  // ---------- загрузка уровня ----------
+  function startLevel(i) {
+    levelIndex = i;
+    const def = LEVELS[i];
+    if (!def) return;
+
+    if (def.type === 'indev') { Audio8.stopMusic(); UI.showScreen('indev'); return; }
+
+    if (def.type === 'cutscene') {
+      state = 'transition';
+      Audio8.stopMusic();
+      UI.showScreen(null);
+      UI.setHud({ levelName: def.name, hp: CONFIG.PLAYER_HP, bottles: 0 });
+      UI.cutscene(def.cutscene, CUTSCENE_BG_BY_INDEX).then(async () => {
+        await finishLevel(true);
+      });
+      return;
+    }
+
+    // карта
+    level = buildLevel(def);
+    enemies = []; tomahawks = []; bottles = []; hearts = []; particles = [];
+    bossRef = null;
+    level.spawns.enemies.forEach(({ type, c, r }) => {
+      if (type === 'e') enemies.push(new Walker(c, r));
+      else if (type === 't') enemies.push(new Thrower(c, r));
+      else if (type === 'boss') { const b = new Boss(c); enemies.push(b); bossRef = b; }
+    });
+    level.spawns.bottles.forEach(({ c, r }) => bottles.push(new Bottle(c, r)));
+    level.spawns.hearts.forEach(({ c, r }) => hearts.push(new HeartPickup(c, r)));
+    factory = new FactoryExit(level.factoryC, !!def.factoryLocked);
+    player = new Player(level.spawnC);
+    player.hp = CONFIG.PLAYER_HP;
+    bottlesGot = 0;
+    kills = 0;
+    cam = 0; shake = 0;
+    hudCache = { hp: -1, bottles: -1 };
+
+    state = 'playing';
+    frozen = true; // пока идёт вступительный диалог
+    UI.showScreen(null);
+    UI.setHud({ levelName: def.name, hp: player.hp, bottles: 0 });
+    Audio8.startMusic();
+
+    UI.dialogue(def.dialogue?.intro).then(() => { frozen = false; });
+  }
+
+  // ---------- завершение уровня ----------
+  async function finishLevel(isIntro = false) {
+    const def = LEVELS[levelIndex];
+    Audio8.stopMusic();
+    Audio8.sfx.win();
+    frozen = true;
+
+    if (!isIntro && def.dialogue?.outro) await UI.dialogue(def.dialogue.outro);
+
+    progress.done[levelIndex] = true;
+    progress.unlocked = Math.max(progress.unlocked, Math.min(levelIndex + 2, LEVELS.length - 1));
+    saveProgress();
+
+    if (levelIndex === 4) {
+      // после 4-й карты — финальный экран
+      state = 'ending';
+      UI.showScreen('ending');
+    } else if (levelIndex === 0) {
+      UI.showComplete('Вступление пройдено!<br>Дальше — первая карта Буримовки.', true);
+    } else {
+      const total = bottles.length;
+      UI.showComplete(`Чекушки собрано: <b style="color:#ffd23f">${bottlesGot}</b> / ${total}`, true);
+    }
+    state = 'transition';
+  }
+
+  // ---------- события ----------
+  function onPlayerHurt() {
+    if (player.hp <= 0) gameOver();
+  }
+  function playerFell() {
+    player.hp--;
+    shake = 0.35;
+    if (player.hp <= 0) { Audio8.sfx.hurt(); gameOver(); }
+    else { Audio8.sfx.hurt(); player.respawn(); }
+  }
+  function gameOver() {
+    state = 'gameover';
+    Audio8.stopMusic();
+    Audio8.sfx.lose();
+    UI.showScreen('gameover');
+  }
+  function onBossDead() {
+    // взрыв звёзд
+    for (let i = 0; i < 26; i++) particles.push(mkParticle(bossRef.x + bossRef.w / 2, bossRef.y + bossRef.h / 2, 'star'));
+    if (factory) factory.unlock();
+    frozen = true;
+    UI.dialogue(DIALOGUES.outroAfterBoss).then(() => {
+      frozen = false;
+    });
+  }
+
+  // ---------- частицы ----------
+  function mkParticle(x, y, kind) {
+    const colors = { dust: '#c9c2b8', star: Math.random() < 0.5 ? '#ffd23f' : '#ff4757', sparkle: '#9fd8b4' };
+    return {
+      x, y,
+      vx: (Math.random() - 0.5) * 260,
+      vy: kind === 'dust' ? -Math.random() * 120 : (Math.random() - 0.7) * 300,
+      g: kind === 'dust' ? 120 : 300,
+      life: 0.5 + Math.random() * 0.4, maxLife: 0.9,
+      size: kind === 'star' ? 6 : 4,
+      color: colors[kind] || '#fff',
+    };
+  }
+  function spawnDust(x, y, n) { for (let i = 0; i < n; i++) particles.push(mkParticle(x, y, 'dust')); }
+  function spawnStars(x, y) { for (let i = 0; i < 10; i++) particles.push(mkParticle(x, y, 'star')); }
+
+  // ---------- обновление ----------
+  function update(dt) {
+    tGlobal += dt;
+    if (shake > 0) shake -= dt;
+
+    if (state !== 'playing' || frozen) { input.jumpPressed = false; return; }
+
+    player.update(dt, input, level, api);
+
+    enemies.forEach((e) => e.update(dt, level, api));
+    tomahawks.forEach((t) => t.update(dt, level, api));
+    tomahawks = tomahawks.filter((t) => !t.dead);
+
+    // столкновения игрок-враги
+    enemies.forEach((e) => {
+      if (e.dead) return;
+      if (!overlaps(player, e)) return;
+      const stomping = player.vy > 90 && (player.y + player.h) - e.y < 20;
+      if (stomping) {
+        if (e instanceof Boss) {
+          if (e.invuln > 0) { player.vy = -480; }
+          else { e.stomp(api); player.vy = -540; }
+        } else {
+          e.stomp(api);
+          player.vy = -490;
+        }
+      } else {
+        player.hurt(Math.sign(player.x - e.x) || 1, api);
+      }
+    });
+    enemies = enemies.filter((e) => !e.dead);
+
+    // предметы
+    bottles.forEach((b) => {
+      b.update(dt);
+      if (!b.taken && overlaps(player, b.rect())) {
+        b.taken = true;
+        bottlesGot++;
+        Audio8.sfx.coin();
+        for (let i = 0; i < 4; i++) particles.push(mkParticle(b.c * TILE + 20, b.r * TILE + 20, 'sparkle'));
+      }
+    });
+    bottles = bottles.filter((b) => !b.taken);
+    hearts.forEach((h) => {
+      h.update(dt);
+      if (!h.taken && overlaps(player, h.rect())) {
+        h.taken = true;
+        if (player.hp < CONFIG.PLAYER_HP) { player.hp++; Audio8.sfx.heart(); }
+        else { bottlesGot++; Audio8.sfx.coin(); }
+      }
+    });
+    hearts = hearts.filter((h) => !h.taken);
+
+    // завод — выход (триггер = всё здание)
+    factory.update(dt, player);
+    if (!factory.locked && overlaps(player, factory.doorRect())) { finishLevel(); return; }
+
+    // частицы
+    particles.forEach((p) => { p.vy += p.g * dt; p.x += p.vx * dt; p.y += p.vy * dt; p.life -= dt; });
+    particles = particles.filter((p) => p.life > 0);
+
+    // камера
+    const target = Math.max(0, Math.min(player.x + player.w / 2 - VIEW_W * 0.44, level.w * TILE - VIEW_W));
+    cam += (target - cam) * Math.min(1, dt * 9);
+
+    // HUD
+    if (hudCache.hp !== player.hp || hudCache.bottles !== bottlesGot) {
+      hudCache = { hp: player.hp, bottles: bottlesGot };
+      UI.setHud({ hp: player.hp, bottles: bottlesGot });
+    }
+
+    input.jumpPressed = false;
+  }
+
+  // ---------- рендер ----------
+  const BG_COLORS = {
+    bg_fields: ['#87ceeb', '#5aa84f'],
+    bg_city: ['#9fb4c7', '#6b7a8c'],
+    bg_district: ['#e8875a', '#4a3a52'],
+    bg_plant: ['#1c2a4a', '#0d1424'],
+  };
+
+  function drawBackground(bgKey) {
+    const spr = Sprites.get(bgKey);
+    if (spr && spr.img) {
+      const img = spr.img;
+      const scale = VIEW_H / img.height;
+      const w = img.width * scale;
+      let off = -((cam * 0.28) % w);
+      for (let x = off; x < VIEW_W; x += w) ctx.drawImage(img, x, 0, w, VIEW_H);
+    } else {
+      const [top, bottom] = BG_COLORS[bgKey] || BG_COLORS.bg_fields;
+      const grad = ctx.createLinearGradient(0, 0, 0, VIEW_H);
+      grad.addColorStop(0, top); grad.addColorStop(1, bottom);
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, VIEW_W, VIEW_H);
+    }
+  }
+
+  function drawTiles() {
+    const c0 = Math.max(0, Math.floor(cam / TILE) - 1);
+    const c1 = Math.min(level.w - 1, Math.ceil((cam + VIEW_W) / TILE) + 1);
+    for (let r = 0; r < ROWS; r++) {
+      for (let c = c0; c <= c1; c++) {
+        const t = level.grid[r][c];
+        if (t === '.') continue;
+        const x = c * TILE - cam, y = r * TILE;
+        if (t === '#') {
+          const grass = !TILE_SOLID.has(level.grid[r - 1]?.[c] || '.');
+          ctx.fillStyle = '#7a4a2b';
+          ctx.fillRect(x, y, TILE, TILE);
+          ctx.fillStyle = '#63391f';
+          ctx.fillRect(x + 4, y + 14, 8, 6);
+          ctx.fillRect(x + 24, y + 26, 10, 6);
+          if (grass) {
+            ctx.fillStyle = '#3fa34d';
+            ctx.fillRect(x, y, TILE, 12);
+            ctx.fillStyle = '#54c15f';
+            ctx.fillRect(x, y, TILE, 5);
+          }
+        } else if (t === 'B') {
+          ctx.fillStyle = '#9e5a3c';
+          ctx.fillRect(x, y, TILE, TILE);
+          ctx.fillStyle = '#7a4029';
+          ctx.fillRect(x, y + 19, TILE, 2);
+          ctx.fillRect(x, y, 2, TILE);
+          ctx.fillRect(x + 19, y + 19, 2, 21);
+          ctx.fillRect(x + 39, y, 1, TILE);
+        } else if (t === '=') {
+          ctx.fillStyle = '#8b5a2b';
+          ctx.fillRect(x, y, TILE, 16);
+          ctx.fillStyle = '#a9714b';
+          ctx.fillRect(x, y, TILE, 6);
+          ctx.fillStyle = '#5d3a1a';
+          ctx.fillRect(x, y + 14, TILE, 2);
+        } else if (t === '^') {
+          ctx.fillStyle = '#8d99ae';
+          for (let i = 0; i < 2; i++) {
+            ctx.beginPath();
+            ctx.moveTo(x + i * 20, y + 40);
+            ctx.lineTo(x + i * 20 + 10, y + 8);
+            ctx.lineTo(x + i * 20 + 20, y + 40);
+            ctx.closePath();
+            ctx.fill();
+          }
+        }
+      }
+    }
+  }
+
+  function drawHints() {
+    ctx.font = 'bold 15px Arial';
+    ctx.textAlign = 'center';
+    level.hints.forEach((h) => {
+      const x = h.c * TILE - cam + 60, y = 9.2 * TILE;
+      ctx.fillStyle = 'rgba(0,0,0,.55)';
+      const wTxt = ctx.measureText(h.text).width;
+      ctx.fillRect(x - wTxt / 2 - 8, y - 16, wTxt + 16, 24);
+      ctx.fillStyle = '#ffe9a8';
+      ctx.fillText(h.text, x, y);
+    });
+    ctx.textAlign = 'left';
+  }
+
+  function render() {
+    ctx.clearRect(0, 0, VIEW_W, VIEW_H);
+    if (!level) return;
+
+    const def = LEVELS[levelIndex];
+    drawBackground(def.bg || 'bg_fields');
+
+    ctx.save();
+    let sx = 0, sy = 0;
+    if (shake > 0) { sx = (Math.random() - 0.5) * 12 * shake; sy = (Math.random() - 0.5) * 12 * shake; }
+    ctx.translate(sx, sy);
+
+    drawTiles();
+    if (def.type === 'map') drawHints();
+
+    bottles.forEach((b) => b.draw(ctx, cam));
+    hearts.forEach((h) => h.draw(ctx, cam));
+    factory.draw(ctx, cam);
+    enemies.forEach((e) => e.draw(ctx, cam, tGlobal));
+    tomahawks.forEach((t) => t.draw(ctx, cam));
+    if (player) player.draw(ctx, cam);
+
+    // частицы
+    particles.forEach((p) => {
+      ctx.globalAlpha = Math.max(0, p.life / p.maxLife);
+      ctx.fillStyle = p.color;
+      ctx.fillRect(p.x - cam - p.size / 2, p.y - p.size / 2, p.size, p.size);
+      ctx.globalAlpha = 1;
+    });
+
+    ctx.restore();
+  }
+
+  // ---------- цикл ----------
+  function loop(t) {
+    const dt = Math.min(0.033, (t - lastT) / 1000 || 0.016);
+    lastT = t;
+    update(dt);
+    render();
+    requestAnimationFrame(loop);
+  }
+
+  // ---------- пауза ----------
+  function togglePause() {
+    if (state === 'playing') {
+      state = 'paused';
+      Audio8.stopMusic();
+      UI.showScreen('pause');
+    } else if (state === 'paused') {
+      state = 'playing';
+      UI.showScreen(null);
+      Audio8.startMusic();
+    }
+  }
+
+  function toMenu() {
+    state = 'menu';
+    Audio8.stopMusic();
+    level = null;
+    UI.showScreen('menu');
+  }
+
+  // ---------- колбэки для UI ----------
+  const callbacks = {
+    onPlay() {
+      // автофуллскрин по жесту пользователя (если окружение разрешает)
+      enterFullscreen();
+      const firstUndone = LEVELS.findIndex((_, i) => i < LEVELS.length - 1 && !progress.done[i]);
+      startLevel(firstUndone === -1 ? 0 : firstUndone);
+    },
+    onLevelPick(i) { startLevel(i); },
+    getProgress() { return progress; },
+    onPause() { togglePause(); },
+    onResume() { togglePause(); },
+    onRestart() { startLevel(levelIndex); },
+    onRetry() { startLevel(levelIndex); },
+    onMenu() { toMenu(); },
+    onNext() { startLevel(levelIndex + 1); },
+  };
+
+  // ---------- ввод ----------
+  function bindInput() {
+    document.addEventListener('keydown', (e) => {
+      const codes = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Space', 'KeyA', 'KeyD', 'KeyW', 'KeyS', 'KeyP', 'Escape'];
+      if (codes.includes(e.code)) e.preventDefault();
+      if (state === 'playing' && !frozen) {
+        if (e.code === 'ArrowLeft' || e.code === 'KeyA') input.left = true;
+        if (e.code === 'ArrowRight' || e.code === 'KeyD') input.right = true;
+        if (e.code === 'ArrowDown' || e.code === 'KeyS') input.down = true;
+        if ((e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW') && !e.repeat) {
+          input.jumpHeld = true; input.jumpPressed = true;
+        }
+      }
+      if (e.code === 'KeyP' || e.code === 'Escape') togglePause();
+      if (e.code === 'KeyF' && !e.repeat) enterFullscreen();
+    });
+
+    // тап/клик по экрану игры — ТОЛЬКО открыть полный экран (без выключения)
+    canvas.addEventListener('pointerup', (e) => {
+      if (e.pointerType === 'mouse' && e.button !== 0) return;
+      enterFullscreen();
+    });
+    document.addEventListener('keyup', (e) => {
+      if (e.code === 'ArrowLeft' || e.code === 'KeyA') input.left = false;
+      if (e.code === 'ArrowRight' || e.code === 'KeyD') input.right = false;
+      if (e.code === 'ArrowDown' || e.code === 'KeyS') input.down = false;
+      if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW') input.jumpHeld = false;
+    });
+
+    // тач-кнопки
+    const isTouch = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
+    if (isTouch) document.getElementById('touch').classList.remove('hidden');
+    const bindHold = (id, on, off) => {
+      const el = document.getElementById(id);
+      const start = (e) => { e.preventDefault(); Audio8.resume(); on(); };
+      const end = (e) => { e.preventDefault(); off(); };
+      el.addEventListener('pointerdown', start);
+      el.addEventListener('pointerup', end);
+      el.addEventListener('pointercancel', end);
+      el.addEventListener('pointerleave', end);
+    };
+    bindHold('touch-left', () => input.left = true, () => input.left = false);
+    bindHold('touch-right', () => input.right = true, () => input.right = false);
+    bindHold('touch-jump', () => { input.jumpHeld = true; input.jumpPressed = true; }, () => input.jumpHeld = false);
+
+    // пауза при уходе со вкладки
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden && state === 'playing') togglePause();
+    });
+
+    // подсказка поворота
+    const checkOrient = () => {
+      const portrait = window.innerHeight > window.innerWidth;
+      document.getElementById('rotate-hint').classList.toggle('hidden', !(isTouch && portrait));
+    };
+    window.addEventListener('resize', checkOrient);
+    checkOrient();
+  }
+
+  // ---------- service worker ----------
+  function registerSW() {
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('sw.js').catch(() => {});
+    }
+  }
+
+  // ---------- запуск ----------
+  async function boot() {
+    Audio8.setEnabled(progress.sound !== false);
+    resizeCanvas();
+    window.addEventListener('resize', resizeCanvas);
+    window.addEventListener('orientationchange', () => setTimeout(resizeCanvas, 120));
+    await Sprites.load();
+    // иконка чекушки в HUD (скроем, если файла нет)
+    const bi = document.getElementById('hud-bottle-icon');
+    bi.src = 'image/checkushka.png';
+    bi.onerror = () => { bi.style.visibility = 'hidden'; };
+    bi.onload = () => { bi.style.visibility = ''; };
+    UI.init(callbacks);
+    bindInput();
+    registerSW();
+    UI.showScreen('gate'); // сначала 18+
+    state = 'menu';
+    // отладочный хук (можно дёргать из консоли)
+    window.GameDebug = {
+      startLevel, finishLevel,
+      get player() { return player; },
+      get enemies() { return enemies; },
+      get factory() { return factory; },
+    };
+    requestAnimationFrame((t) => { lastT = t; requestAnimationFrame(loop); });
+  }
+
+  window.addEventListener('load', boot);
+
+  // наружу (для отладки)
+  return { get state() { return state; } };
+})();
+
+</script>
 </body>
 </html>
