@@ -8,6 +8,8 @@ const Game = (() => {
 
   let VIEW_W = 960;
   const VIEW_H = 540;
+  let ZOOM = 1.4;               // приближение камеры к персонажу
+  let camY = 0;                 // вертикальная камера (мир 540 по высоте)
 
   // ---------- автрастягивание под весь экран ----------
   // Высота мира всегда 540 (вертикальный геймплей не меняется),
@@ -19,6 +21,8 @@ const Game = (() => {
     canvas.width = VIEW_W;
     canvas.height = VIEW_H;
     ctx.imageSmoothingEnabled = false;
+    // в портрете зум поменьше — нужно видеть дальше вперёд
+    ZOOM = VIEW_W >= VIEW_H ? 1.4 : 1.2;
   }
 
   // ---------- полный экран (Fullscreen API) ----------
@@ -106,7 +110,11 @@ const Game = (() => {
     bottlesGot = 0;
     kills = 0;
     cam = 0; shake = 0;
+    camY = VIEW_H - VIEW_H / ZOOM; // сразу «прижата к полу»
     hudCache = { hp: -1, bottles: -1 };
+    // сброс ввода — чтобы залипшая клавиша/кнопка не тянула Андрея после рестарта
+    input.left = false; input.right = false; input.down = false;
+    input.jumpHeld = false; input.jumpPressed = false;
 
     state = 'playing';
     frozen = true; // пока идёт вступительный диалог
@@ -246,9 +254,12 @@ const Game = (() => {
     particles.forEach((p) => { p.vy += p.g * dt; p.x += p.vx * dt; p.y += p.vy * dt; p.life -= dt; });
     particles = particles.filter((p) => p.life > 0);
 
-    // камера
-    const target = Math.max(0, Math.min(player.x + player.w / 2 - VIEW_W * 0.44, level.w * TILE - VIEW_W));
+    // камера: горизонт + мягкое вертикальное слежение, всё в «приближенных» координатах
+    const viewW = VIEW_W / ZOOM, viewH = VIEW_H / ZOOM;
+    const target = Math.max(0, Math.min(player.x + player.w / 2 - viewW * 0.44, level.w * TILE - viewW));
     cam += (target - cam) * Math.min(1, dt * 9);
+    const ty = Math.max(0, Math.min(player.y + player.h / 2 - viewH * 0.55, VIEW_H - viewH));
+    camY += (ty - camY) * Math.min(1, dt * 7);
 
     // HUD
     if (hudCache.hp !== player.hp || hudCache.bottles !== bottlesGot) {
@@ -285,8 +296,9 @@ const Game = (() => {
   }
 
   function drawTiles() {
+    const viewW = VIEW_W / ZOOM;
     const c0 = Math.max(0, Math.floor(cam / TILE) - 1);
-    const c1 = Math.min(level.w - 1, Math.ceil((cam + VIEW_W) / TILE) + 1);
+    const c1 = Math.min(level.w - 1, Math.ceil((cam + viewW) / TILE) + 1);
     for (let r = 0; r < ROWS; r++) {
       for (let c = c0; c <= c1; c++) {
         const t = level.grid[r][c];
@@ -360,6 +372,9 @@ const Game = (() => {
     let sx = 0, sy = 0;
     if (shake > 0) { sx = (Math.random() - 0.5) * 12 * shake; sy = (Math.random() - 0.5) * 12 * shake; }
     ctx.translate(sx, sy);
+    // приближение: мир рисуется крупнее, камера следит за Андреем
+    ctx.scale(ZOOM, ZOOM);
+    ctx.translate(0, -camY);
 
     drawTiles();
     if (def.type === 'map') drawHints();
