@@ -28,6 +28,9 @@ const UI = (() => {
     if (hats !== undefined) {
       $('hud-plush-count').textContent = hats;
       $('hud-plush').classList.toggle('hidden', hats <= 0);
+      // кнопка броска на сенсорных экранах — только когда есть снаряды
+      const ts = document.getElementById('touch-shoot');
+      if (ts) ts.classList.toggle('hidden', hats <= 0);
     }
   }
 

@@ -250,24 +250,39 @@ html, body {
 .social-btn.yt { background: #e62117; }
 .social-btn.tt { background: #23232b; }
 
-/* ---------- Тач ---------- */
+/* ---------- Тач: flex-группы у больших пальцев, без наездов ---------- */
 #touch { position: absolute; inset: 0; z-index: 10; pointer-events: none; }
+.touch-side {
+  position: absolute;
+  bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+  display: flex;
+  gap: clamp(12px, 2.4vmin, 20px);      /* гарантированный зазор между кнопками */
+  align-items: flex-end;
+  pointer-events: none;
+}
+.touch-side.left { left: calc(12px + env(safe-area-inset-left, 0px)); }
+.touch-side.right { right: calc(12px + env(safe-area-inset-right, 0px)); }
 #touch button {
   pointer-events: auto;
-  position: absolute; bottom: 4%;
-  width: 13vmin; height: 13vmin; min-width: 56px; min-height: 56px;
+  flex: 0 0 auto;
+  width: clamp(58px, 13.5vmin, 92px);
+  height: clamp(58px, 13.5vmin, 92px);
   border-radius: 50%;
-  border: 3px solid #ffffff30;
-  background: rgba(255,255,255,.09);
-  color: #ffffffcc; font-size: 5vmin;
+  border: 3px solid #ffffff38;
+  background: rgba(255,255,255,.10);
+  color: #ffffffdd;
+  font-size: clamp(22px, 5vmin, 34px);
+  line-height: 1;
   font-family: inherit;
   touch-action: none;
+  -webkit-user-select: none; user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  box-shadow: 0 4px 14px rgba(0,0,0,.35);
+  transition: transform .06s ease, background .06s ease;
 }
-#touch button:active { background: rgba(255,255,255,.25); }
-#touch-left { left: 3%; }
-#touch-right { left: calc(3% + 14.5vmin); }
-#touch-jump { right: 3%; width: 16vmin; height: 16vmin; }
-#touch-shoot { right: calc(3% + 17.5vmin); background: rgba(255,170,200,.16); }
+#touch button:active { background: rgba(255,255,255,.28); transform: scale(.93); }
+#touch #touch-jump { width: clamp(68px, 16vmin, 108px); height: clamp(68px, 16vmin, 108px); font-size: clamp(26px, 6vmin, 40px); }
+#touch #touch-shoot { background: rgba(255,170,200,.20); border-color: #ffaac866; }
 
 /* ---------- Поворот ---------- */
 #rotate-hint {
@@ -457,12 +472,12 @@ html, body {
 
   <!-- Тач-контролы -->
   <div id="touch" class="hidden">
-    <div class="touch-left">
+    <div class="touch-side left">
       <button id="touch-left" aria-label="Влево">◀</button>
       <button id="touch-right" aria-label="Вправо">▶</button>
     </div>
-    <div class="touch-right">
-      <button id="touch-shoot" aria-label="Бросить плюшку">✸</button>
+    <div class="touch-side right">
+      <button id="touch-shoot" aria-label="Бросить плюшку" class="hidden">✸</button>
       <button id="touch-jump" aria-label="Прыжок">▲</button>
     </div>
   </div>
@@ -1689,6 +1704,9 @@ const UI = (() => {
     if (hats !== undefined) {
       $('hud-plush-count').textContent = hats;
       $('hud-plush').classList.toggle('hidden', hats <= 0);
+      // кнопка броска на сенсорных экранах — только когда есть снаряды
+      const ts = document.getElementById('touch-shoot');
+      if (ts) ts.classList.toggle('hidden', hats <= 0);
     }
   }
 
