@@ -1,0 +1,252 @@
+/* Мелстрой: Мировая Чекушка — стили */
+:root {
+  --bg: #0d0d1a;
+  --panel: #16162a;
+  --accent: #ffd23f;
+  --accent2: #ff4757;
+  --green: #2ed573;
+  --text: #f5f6fa;
+  --muted: #9aa0b4;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body {
+  height: 100%;
+  background: #05050c;
+  font-family: 'Pixelify Sans', 'Trebuchet MS', 'Segoe UI', Arial, sans-serif;
+  color: var(--text);
+  overflow: hidden;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+#stage {
+  position: relative;
+  width: min(100vw, calc(100vh * 16 / 9));
+  height: min(100vh, calc(100vw * 9 / 16));
+  margin: auto;
+  top: 50%;
+  transform: translateY(-50%);
+  background: var(--bg);
+  overflow: hidden;
+  box-shadow: 0 0 60px rgba(0,0,0,.8);
+}
+#game { position: absolute; inset: 0; width: 100%; height: 100%; image-rendering: pixelated; }
+
+.hidden { display: none !important; }
+
+/* ---------- HUD ---------- */
+#hud {
+  position: absolute; top: 0; left: 0; right: 0;
+  display: flex; align-items: center; gap: 14px;
+  padding: 8px 14px;
+  font-size: clamp(14px, 2.2vmin, 22px);
+  text-shadow: 2px 2px 0 #000;
+  pointer-events: none;
+  z-index: 5;
+}
+#hud-hearts { letter-spacing: 2px; font-size: 1.25em; }
+#hud-hearts .heart { color: var(--accent2); }
+#hud-hearts .heart.empty { color: #3a3a52; }
+#hud-bottles { display: flex; align-items: center; gap: 6px; color: var(--accent); font-weight: bold; }
+#hud-bottle-icon { width: 1.2em; height: 1.6em; object-fit: contain; image-rendering: pixelated; }
+#hud-level { margin-left: auto; color: var(--muted); }
+#btn-pause {
+  pointer-events: auto; margin-left: 8px;
+  background: rgba(0,0,0,.45); color: var(--text);
+  border: 2px solid #ffffff33; border-radius: 8px;
+  width: 1.9em; height: 1.9em; font-size: 1em;
+  cursor: pointer; font-family: inherit;
+}
+
+/* ---------- Экраны ---------- */
+.screen {
+  position: absolute; inset: 0; z-index: 20;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  text-align: center;
+  background: radial-gradient(ellipse at center, rgba(13,13,26,.82) 0%, rgba(5,5,12,.96) 100%);
+  padding: 3vmin;
+}
+.screen-title {
+  font-size: clamp(22px, 5.2vmin, 44px);
+  letter-spacing: 2px;
+  margin-bottom: 2vmin;
+  text-shadow: 3px 3px 0 #000;
+}
+.screen-title.danger { color: var(--accent2); }
+.screen-title.success { color: var(--green); }
+.screen-text { font-size: clamp(13px, 2.4vmin, 20px); line-height: 1.5; color: #d8dbe8; margin-bottom: 2vmin; }
+
+/* ---------- Меню ---------- */
+#screen-menu {
+  background:
+    radial-gradient(ellipse at 50% 110%, rgba(255, 210, 63, .14), transparent 60%),
+    linear-gradient(160deg, #12122b 0%, #0d0d1a 55%, #1c0f14 100%);
+}
+.menu-inner { display: flex; flex-direction: column; align-items: center; gap: 2.6vmin; max-width: 90%; }
+.title-top {
+  font-size: clamp(40px, 10vmin, 92px);
+  font-weight: bold; letter-spacing: 4px;
+  color: var(--accent);
+  text-shadow: 0 0 24px rgba(255,210,63,.35), 5px 5px 0 #7a2d00, 8px 8px 0 #000;
+}
+.title-bottom {
+  font-size: clamp(20px, 4.6vmin, 40px);
+  font-weight: bold; letter-spacing: 8px;
+  color: var(--text);
+  text-shadow: 4px 4px 0 #000;
+}
+.title-sub { margin-top: 1vmin; font-size: clamp(12px, 2vmin, 18px); color: var(--muted); letter-spacing: 2px; }
+.menu-buttons { display: flex; flex-direction: column; gap: 1.6vmin; align-items: center; }
+.big-btn {
+  font-family: inherit;
+  font-size: clamp(15px, 2.8vmin, 24px);
+  font-weight: bold; letter-spacing: 2px;
+  color: #1a1200;
+  background: linear-gradient(180deg, #ffe27a, var(--accent));
+  border: 3px solid #000; border-radius: 10px;
+  padding: 1.6vmin 4.5vmin;
+  cursor: pointer;
+  box-shadow: 0 5px 0 #8a5a00, 0 5px 0 3px #00000055;
+  transition: transform .06s, box-shadow .06s;
+  min-height: 44px;
+}
+.big-btn:active { transform: translateY(4px); box-shadow: 0 1px 0 #8a5a00; }
+.big-btn.small { background: linear-gradient(180deg, #2c2c4e, #20203a); color: var(--text); box-shadow: 0 4px 0 #000; border-color: #000; font-size: clamp(12px, 2.2vmin, 18px); }
+.big-btn.small:active { box-shadow: 0 1px 0 #000; }
+.big-btn.ghost { background: transparent; color: var(--muted); border-color: #ffffff22; box-shadow: none; }
+.menu-footer { font-size: clamp(10px, 1.7vmin, 14px); color: #6a6f85; }
+
+/* ---------- Выбор уровня ---------- */
+#levels-grid {
+  display: grid; grid-template-columns: repeat(3, 1fr);
+  gap: 2vmin; margin-bottom: 2.6vmin;
+  width: min(78vmin, 640px);
+}
+.level-card {
+  font-family: inherit;
+  background: var(--panel);
+  border: 3px solid #2c2c4e; border-radius: 12px;
+  color: var(--text);
+  padding: 1.8vmin 1vmin;
+  cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; gap: .6vmin;
+  transition: border-color .1s, transform .06s;
+  min-height: 44px;
+}
+.level-card:not(.locked):hover { border-color: var(--accent); }
+.level-card:not(.locked):active { transform: scale(.97); }
+.level-card .num { font-size: clamp(16px, 3vmin, 26px); font-weight: bold; color: var(--accent); }
+.level-card .name { font-size: clamp(10px, 1.8vmin, 15px); color: var(--muted); }
+.level-card.locked { opacity: .45; cursor: not-allowed; filter: grayscale(.6); }
+.level-card .state { font-size: clamp(12px, 2.2vmin, 18px); }
+
+/* ---------- Управление (инфо) ---------- */
+.controls-list { display: flex; flex-direction: column; gap: 1.2vmin; margin-bottom: 2.4vmin; }
+.ctrl-row { display: flex; gap: 3vmin; justify-content: space-between; font-size: clamp(12px, 2.2vmin, 18px); }
+.ctrl-row .keys { color: var(--accent); font-weight: bold; }
+.ctrl-row span:last-child { color: var(--muted); }
+
+/* ---------- Диалог ---------- */
+#dialogue {
+  position: absolute; left: 50%; bottom: 4%;
+  transform: translateX(-50%);
+  width: min(88%, 760px);
+  display: flex; gap: 12px; align-items: flex-end;
+  background: rgba(10, 10, 22, .93);
+  border: 3px solid var(--accent);
+  border-radius: 14px;
+  padding: 12px 16px;
+  z-index: 15;
+  box-shadow: 0 0 30px rgba(0,0,0,.6);
+}
+#dialogue-portrait canvas { width: 72px; height: 72px; image-rendering: pixelated; border: 2px solid #ffffff2a; border-radius: 8px; background: #000; }
+#dialogue-body { flex: 1; text-align: left; }
+#dialogue-name { color: var(--accent); font-weight: bold; font-size: clamp(13px, 2.2vmin, 18px); margin-bottom: 4px; }
+#dialogue-text { font-size: clamp(13px, 2.3vmin, 19px); line-height: 1.45; min-height: 3em; }
+#dialogue-next {
+  font-family: inherit; float: right; margin-top: 6px;
+  background: var(--accent); border: 2px solid #000; border-radius: 8px;
+  font-weight: bold; font-size: clamp(11px, 1.9vmin, 15px);
+  padding: 5px 14px; cursor: pointer; color: #1a1200; min-height: 32px;
+}
+
+/* ---------- Катсцена ---------- */
+#screen-cutscene { padding: 0; background: #000; }
+#cutscene-bg {
+  position: absolute; inset: 0;
+  background-size: cover; background-position: center;
+  filter: brightness(.55) saturate(.9);
+}
+#cutscene-content {
+  position: relative; z-index: 2;
+  display: flex; align-items: center; gap: 3vmin;
+  width: min(86%, 820px);
+  background: rgba(8, 8, 18, .88);
+  border: 3px solid var(--accent);
+  border-radius: 16px;
+  padding: 2.4vmin 3vmin;
+}
+#cutscene-portrait {
+  width: clamp(64px, 14vmin, 120px); height: clamp(64px, 14vmin, 120px);
+  background: #000; border: 3px solid #ffffff2a; border-radius: 10px;
+  background-size: contain; background-repeat: no-repeat; background-position: center;
+  image-rendering: pixelated;
+  flex-shrink: 0;
+}
+#cutscene-name { color: var(--accent); font-weight: bold; font-size: clamp(15px, 2.8vmin, 24px); margin-bottom: 8px; }
+#cutscene-text { font-size: clamp(14px, 2.6vmin, 22px); line-height: 1.5; }
+#cutscene-buttons { position: relative; z-index: 2; display: flex; gap: 2vmin; margin-top: 2.4vmin; }
+
+/* ---------- Финал / в разработке ---------- */
+.ending-inner { display: flex; flex-direction: column; align-items: center; gap: 2.2vmin; max-width: 92%; }
+.ending-title {
+  font-size: clamp(28px, 6.4vmin, 56px); font-weight: bold; line-height: 1.15;
+  color: var(--accent); letter-spacing: 3px;
+  text-shadow: 4px 4px 0 #000;
+}
+.ending-title.small { font-size: clamp(22px, 4.8vmin, 40px); }
+.ending-subscribe { color: var(--green); font-weight: bold; font-size: clamp(14px, 2.8vmin, 24px); letter-spacing: 1px; text-shadow: 2px 2px 0 #000; }
+#socials { display: flex; gap: 1.6vmin; flex-wrap: wrap; justify-content: center; }
+.social-btn {
+  font-family: inherit; font-size: clamp(12px, 2.2vmin, 18px); font-weight: bold;
+  padding: 1.4vmin 3vmin; border-radius: 10px; cursor: pointer;
+  border: 2px solid #000; color: #fff; text-decoration: none; min-height: 44px;
+  display: inline-flex; align-items: center;
+}
+.social-btn.tg { background: #279fd9; }
+.social-btn.yt { background: #e62117; }
+.social-btn.tt { background: #23232b; }
+
+/* ---------- Тач ---------- */
+#touch { position: absolute; inset: 0; z-index: 10; pointer-events: none; }
+#touch button {
+  pointer-events: auto;
+  position: absolute; bottom: 4%;
+  width: 13vmin; height: 13vmin; min-width: 56px; min-height: 56px;
+  border-radius: 50%;
+  border: 3px solid #ffffff30;
+  background: rgba(255,255,255,.09);
+  color: #ffffffcc; font-size: 5vmin;
+  font-family: inherit;
+  touch-action: none;
+}
+#touch button:active { background: rgba(255,255,255,.25); }
+#touch-left { left: 3%; }
+#touch-right { left: calc(3% + 14.5vmin); }
+#touch-jump { right: 3%; width: 16vmin; height: 16vmin; }
+
+/* ---------- Поворот ---------- */
+#rotate-hint {
+  position: fixed; inset: 0; z-index: 100;
+  background: #05050cf2;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2vmin;
+  font-size: clamp(16px, 4vmin, 26px); color: var(--text); text-align: center;
+}
+#rotate-hint div { font-size: 12vmin; color: var(--accent); }
+@media (orientation: landscape) { #rotate-hint:not(.force) { display: none !important; } }
+
+/* Скроллбар для грида уровней при узком экране */
+@media (max-width: 560px) {
+  #levels-grid { grid-template-columns: repeat(2, 1fr); }
+}
