@@ -6,7 +6,34 @@ const Game = (() => {
   const ctx = canvas.getContext('2d');
   ctx.imageSmoothingEnabled = false;
 
-  const VIEW_W = 960, VIEW_H = 540;
+  let VIEW_W = 960;
+  const VIEW_H = 540;
+
+  // ---------- автрастягивание под весь экран ----------
+  // Высота мира всегда 540 (вертикальный геймплей не меняется),
+  // ширина обзора подгоняется под пропорции окна — чёрных полос нет.
+  function resizeCanvas() {
+    const vw = Math.max(1, window.innerWidth), vh = Math.max(1, window.innerHeight);
+    const aspect = Math.max(0.5, Math.min(3.2, vw / vh));
+    VIEW_W = Math.max(480, Math.min(1920, Math.round(VIEW_H * aspect)));
+    canvas.width = VIEW_W;
+    canvas.height = VIEW_H;
+    ctx.imageSmoothingEnabled = false;
+  }
+
+  // ---------- полный экран (Fullscreen API) ----------
+  function isFullscreen() { return !!document.fullscreenElement; }
+  function toggleFullscreen() {
+    try {
+      if (isFullscreen()) {
+        document.exitFullscreen ? document.exitFullscreen().catch(() => {}) : null;
+      } else {
+        const el = document.documentElement;
+        const fn = el.requestFullscreen || el.webkitRequestFullscreen;
+        if (fn) { const p = fn.call(el); if (p && p.catch) p.catch(() => {}); }
+      }
+    } catch (e) { /* игнор — некоторые окружения запрещают фуллскрин */ }
+  }
 
   let state = 'boot';           // boot | menu | playing | paused | gameover | transition | ending
   let frozen = false;           // true во время диалогов
@@ -212,8 +239,8 @@ const Game = (() => {
     });
     hearts = hearts.filter((h) => !h.taken);
 
-    // завод — выход
-    factory.update(dt);
+    // завод — выход (триггер = всё здание)
+    factory.update(dt, player);
     if (!factory.locked && overlaps(player, factory.doorRect())) { finishLevel(); return; }
 
     // частицы
@@ -221,7 +248,7 @@ const Game = (() => {
     particles = particles.filter((p) => p.life > 0);
 
     // камера
-    const target = Math.max(0, Math.min(player.x + player.w / 2 - 420, level.w * TILE - VIEW_W));
+    const target = Math.max(0, Math.min(player.x + player.w / 2 - VIEW_W * 0.44, level.w * TILE - VIEW_W));
     cam += (target - cam) * Math.min(1, dt * 9);
 
     // HUD
@@ -388,6 +415,8 @@ const Game = (() => {
   // ---------- колбэки для UI ----------
   const callbacks = {
     onPlay() {
+      // автофуллскрин по жесту пользователя (если окружение разрешает)
+      if (!isFullscreen()) toggleFullscreen();
       const firstUndone = LEVELS.findIndex((_, i) => i < LEVELS.length - 1 && !progress.done[i]);
       startLevel(firstUndone === -1 ? 0 : firstUndone);
     },
@@ -415,6 +444,16 @@ const Game = (() => {
         }
       }
       if (e.code === 'KeyP' || e.code === 'Escape') togglePause();
+      if (e.code === 'KeyF' && !e.repeat) toggleFullscreen();
+    });
+
+    // кнопка фуллскрина в HUD
+    document.getElementById('btn-fullscreen').addEventListener('click', (e) => {
+      e.stopPropagation();
+      toggleFullscreen();
+    });
+    document.addEventListener('fullscreenchange', () => {
+      document.getElementById('btn-fullscreen').textContent = isFullscreen() ? '⤡' : '⛶';
     });
     document.addEventListener('keyup', (e) => {
       if (e.code === 'ArrowLeft' || e.code === 'KeyA') input.left = false;
@@ -463,6 +502,9 @@ const Game = (() => {
   // ---------- запуск ----------
   async function boot() {
     Audio8.setEnabled(progress.sound !== false);
+    resizeCanvas();
+    window.addEventListener('resize', resizeCanvas);
+    window.addEventListener('orientationchange', () => setTimeout(resizeCanvas, 120));
     await Sprites.load();
     // иконка чекушки в HUD (скроем, если файла нет)
     const bi = document.getElementById('hud-bottle-icon');
@@ -479,6 +521,7 @@ const Game = (() => {
       startLevel, finishLevel,
       get player() { return player; },
       get enemies() { return enemies; },
+      get factory() { return factory; },
     };
     requestAnimationFrame((t) => { lastT = t; requestAnimationFrame(loop); });
   }

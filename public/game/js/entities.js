@@ -403,35 +403,51 @@ class HeartPickup {
   }
 }
 
-// Завод — выход с уровня
+// Завод — выход с уровня. Стоит НА земле (не зарывается в тайлы!),
+// триггером завершения уровня служит всё здание с запасом по краям.
+const GROUND_TOP = (ROWS - 2) * TILE; // верх земли — ряд 11 → y = 440
+
 class FactoryExit {
   constructor(c, locked) {
     this.c = c;
-    this.x = c * TILE; this.y = ROWS * TILE - 140;
+    this.x = c * TILE; this.y = GROUND_TOP - 140;
     this.w = 160; this.h = 140;
     this.locked = locked;
     this.t = 0;
+    this.near = 0;   // игрок рядом (для подсказки)
   }
   unlock() { this.locked = false; }
-  doorRect() { return { x: this.x + 58, y: this.y + 66, w: 44, h: 74 }; }
-  update(dt) { this.t += dt; }
+  // зона-триггер: всё здание + 14px по краям, от крыши до земли
+  doorRect() { return { x: this.x - 14, y: this.y + 4, w: this.w + 28, h: this.h - 4 }; }
+  update(dt, player) {
+    this.t += dt;
+    const px = player ? player.x + player.w / 2 : -9999;
+    this.near = Math.abs(px - (this.x + this.w / 2)) < 300;
+  }
   draw(ctx, camX) {
     if (this.locked) ctx.globalAlpha = 0.35;
     Sprites.draw(ctx, 'factory', this.x - camX, this.y, this.w, this.h);
     ctx.globalAlpha = 1;
+    const cx = this.x + this.w / 2 - camX;
     if (this.locked) {
       ctx.fillStyle = '#ffd23f';
       ctx.font = 'bold 22px Arial';
       ctx.textAlign = 'center';
-      ctx.fillText('🔒', this.x + 80 - camX, this.y + 60 + Math.sin(this.t * 3) * 3);
+      ctx.fillText('🔒', cx, this.y + 34 + Math.sin(this.t * 3) * 3);
       ctx.textAlign = 'left';
     } else {
-      // стрелка-указатель над заводом
+      // мигающая стрелка над заводом
       const bob = Math.sin(this.t * 4) * 5;
       ctx.fillStyle = '#2ed573';
-      ctx.font = 'bold 26px Arial';
+      ctx.font = 'bold 30px Arial';
       ctx.textAlign = 'center';
-      ctx.fillText('▼', this.x + 80 - camX, this.y - 14 + bob);
+      ctx.fillText('▼', cx, this.y - 16 + bob);
+      // подсветка зоны триггера, когда игрок близко
+      if (this.near) {
+        const pulse = 0.35 + Math.sin(this.t * 6) * 0.2;
+        ctx.fillStyle = `rgba(46,213,115,${pulse})`;
+        ctx.fillRect(this.x - 14 - camX, this.y + this.h - 8, this.w + 28, 8);
+      }
       ctx.textAlign = 'left';
     }
   }
