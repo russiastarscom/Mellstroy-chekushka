@@ -40,7 +40,7 @@
 <body>
 <header>
   <h1>⚙ АДМИН-ПАНЕЛЬ — РЕДАКТОР КАР <small style="color:#8a8aa0">(временная, убирается по команде)</small></h1>
-  <div class="warn">«ОПУБЛИКОВАТЬ» — карта меняется для ВСЕХ игроков сразу. «СБРОС» — вернуть официальные карты. Панель работает только на этом сервере.</div>
+  <div class="warn">«ОПУБЛИКОВАТЬ» — карта меняется для ВСЕХ игроков сразу. «СБРОС» — вернуть официальные карты. Правки сами сохраняются как черновик в браузере, но игроки видят только ОПУБЛИКОВАННОЕ.</div>
   <div class="status none" id="status">загрузка…</div>
 </header>
 <div id="tabs"></div>
@@ -93,6 +93,48 @@ let tool = 'ground';
 let zoom = { cs: 26 };
 let hover = null;          // {c,r}
 const E = {};              // idx -> {cells, ents, spawn, factory, name, dirty, undo}
+let pubAt = null;          // дата последней публикации (из API)
+
+// ---------- черновики: автосохранение правок в браузере ----------
+const DRAFT_KEY = 'adminMapDrafts_v1';
+let saveTimer = null;
+function saveDrafts() {
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => {
+    try {
+      const out = { savedAt: Date.now(), levels: {} };
+      MAP_IDX.forEach(([i]) => {
+        const st = E[i];
+        out.levels[i] = { cells: st.cells, ents: st.ents, spawn: st.spawn, factory: st.factory, name: st.name, clean: !st.dirty };
+      });
+      localStorage.setItem(DRAFT_KEY, JSON.stringify(out));
+    } catch (e) { /* приватный режим — работаем без черновиков */ }
+  }, 300);
+}
+function loadDrafts() {
+  try {
+    const raw = localStorage.getItem(DRAFT_KEY);
+    if (!raw) return null;
+    const d = JSON.parse(raw);
+    return (d && d.levels) ? d : null;
+  } catch (e) { return null; }
+}
+function applyDrafts(d) {
+  let any = false;
+  MAP_IDX.forEach(([i]) => {
+    const s = d.levels[i];
+    const w = ORIGINALS[i].width;
+    if (s && Array.isArray(s.cells) && s.cells.length === ROWS && s.cells[0] && s.cells[0].length === w && Array.isArray(s.ents)) {
+      E[i].cells = s.cells; E[i].ents = s.ents;
+      E[i].spawn = (typeof s.spawn === 'number') ? s.spawn : E[i].spawn;
+      E[i].factory = (typeof s.factory === 'number') ? s.factory : E[i].factory;
+      E[i].name = s.name || E[i].name;
+      E[i].dirty = !s.clean;
+      any = true;
+    }
+  });
+  return any;
+}
 
 const toastEl = $('toast');
 let toastTimer = null;
@@ -337,7 +379,7 @@ function applyTool(c, r) {
   const entAt = (cc, rr) => st.ents.find((e) => e.c === cc && e.r === rr);
   if (tool === 'ground') {
     if (r < 11) { toast('Земля — только нижние ряды 11–12. Выше ставь кирпич или платформу.'); return; }
-    if (st.cells[r][c] !== '#') { st.cells[r][c] = '#'; st.dirty = true; }
+    if (st.cells[r][c] !== '#') { st.cells[11][c] = '#'; st.cells[12][c] = '#'; st.dirty = true; } // земля всегда 2 ряда, как в игре
   } else if (tool === 'B' || tool === '=' || tool === '^') {
     if (st.cells[r][c] !== tool) {
       if (r >= 11 && tool !== 'B' && st.cells[r][c] === '#') { toast('Сначала сотри землю ластиком.'); return; }
@@ -346,7 +388,11 @@ function applyTool(c, r) {
   } else if (tool === 'erase') {
     const e = entAt(c, r);
     if (e) { st.ents.splice(st.ents.indexOf(e), 1); st.dirty = true; }
-    if (st.cells[r][c] !== '.') { st.cells[r][c] = '.'; st.dirty = true; }
+    if (st.cells[r][c] !== '.') {
+      if (r >= 11 && st.cells[r][c] === '#') { st.cells[11][c] = '.'; st.cells[12][c] = '.'; } // стираем яму насквозь
+      else st.cells[r][c] = '.';
+      st.dirty = true;
+    }
   } else if (tool === 'spawn') {
     if (st.cells[10][c] !== '.') { toast('Клетка старта занята тайлом — сотри его.'); return; }
     if (st.spawn !== c) { st.spawn = c; st.dirty = true; }
@@ -361,7 +407,7 @@ function applyTool(c, r) {
     st.ents.push({ t: tool, c, r: tool === 'G' ? Math.min(r, 9) : r });
     st.dirty = true;
   }
-  draw(); buildTabs();
+  draw(); buildTabs(); saveDrafts(); setStatus(pubAt);
 }
 cv.addEventListener('pointerdown', (ev) => {
   if (!E[cur]) return;
@@ -394,14 +440,14 @@ $('btn-undo').onclick = () => {
   const snap = st.undo.pop();
   if (!snap) { toast('Отменять нечего'); return; }
   Object.assign(st, JSON.parse(snap));
-  st.dirty = true; draw(); buildTabs();
+  st.dirty = true; draw(); buildTabs(); saveDrafts(); setStatus(pubAt);
 };
 document.addEventListener('keydown', (e) => {
   if ((e.ctrlKey || e.metaKey) && e.code === 'KeyZ') { e.preventDefault(); $('btn-undo').click(); }
 });
 $('zoom-in').onclick = () => { zoom.cs = Math.min(40, zoom.cs + 4); $('zoom-val').textContent = zoom.cs + 'px'; draw(); };
 $('zoom-out').onclick = () => { zoom.cs = Math.max(10, zoom.cs - 4); $('zoom-val').textContent = zoom.cs + 'px'; draw(); };
-$('lvlname').addEventListener('input', () => { E[cur].name = $('lvlname').value; E[cur].dirty = true; buildTabs(); });
+$('lvlname').addEventListener('input', () => { E[cur].name = $('lvlname').value; E[cur].dirty = true; buildTabs(); saveDrafts(); setStatus(pubAt); });
 
 function buildPayload() {
   const levels = {};
@@ -415,7 +461,9 @@ async function publish() {
     const j = await r.json();
     if (!j.ok) { toast('Ошибка публикации: ' + (j.error || r.status)); return null; }
     MAP_IDX.forEach(([i]) => { E[i].dirty = false; });
-    setStatus(j.updatedAt);
+    pubAt = j.updatedAt || Date.now();
+    saveDrafts();
+    setStatus(pubAt);
     buildTabs();
     return j;
   } catch (e) { toast('Сервер недоступен: ' + e.message); return null; }
@@ -430,32 +478,61 @@ $('btn-export').onclick = () => {
 };
 $('btn-reset-level').onclick = () => {
   E[cur] = defToState(ORIGINALS[cur]);
+  E[cur].dirty = true;
   $('lvlname').value = E[cur].name;
-  draw(); buildTabs(); toast('Карта возвращена к официальной (не забудь опубликовать)', true);
+  draw(); buildTabs(); saveDrafts(); setStatus(pubAt);
+  toast('Карта возвращена к официальной (не забудь опубликовать)', true);
 };
 $('btn-reset-all').onclick = async () => {
   if (!confirm('Убрать ВСЕ опубликованные правки и вернуть официальные карты для всех игроков?')) return;
   try { await fetch(API, { method: 'DELETE' }); } catch (e) { toast('Сервер недоступен'); return; }
   MAP_IDX.forEach(([i]) => { E[i] = defToState(ORIGINALS[i]); });
+  pubAt = null;
   $('lvlname').value = E[cur].name;
-  setStatus(null); draw(); buildTabs();
+  saveDrafts(); setStatus(null); draw(); buildTabs();
   toast('Официальные карты восстановлены для всех.', true);
 };
 
 // ---------- статус / загрузка ----------
-async function setStatus(updatedAt) {
+function setStatus(updatedAt) {
   const el = $('status');
-  if (updatedAt) { el.textContent = 'Опубликовано: ' + new Date(updatedAt).toLocaleString('ru') + ' — игроки получают карты с сервера'; el.classList.remove('none'); }
-  else { el.textContent = 'Публикаций нет — у всех игроков официальные карты'; el.classList.add('none'); }
+  const anyDirty = MAP_IDX.some(([i]) => E[i].dirty);
+  if (anyDirty) {
+    el.textContent = '⚠ Есть НЕОПУБЛИКОВАННЫЕ правки — черновик сохранён в браузере, но игроки его пока не видят. Нажми «ОПУБЛИКОВАТЬ».';
+    el.classList.remove('none'); el.style.color = '#ffd23f';
+  } else if (updatedAt) {
+    el.textContent = 'Опубликовано: ' + new Date(updatedAt).toLocaleString('ru') + ' — игроки получают карты с сервера';
+    el.classList.remove('none'); el.style.color = '';
+  } else {
+    el.textContent = 'Публикаций нет — у всех игроков официальные карты';
+    el.classList.add('none'); el.style.color = '';
+  }
 }
 async function boot() {
   let ov = null;
   try { const r = await fetch(API, { cache: 'no-store' }); const j = await r.json(); if (j && j.levels) ov = j; } catch (e) { /* нет API */ }
   MAP_IDX.forEach(([i]) => { E[i] = defToState((ov && ov.levels && ov.levels[i]) || ORIGINALS[i]); });
+  // черновик браузера применяем, только если он не старше публикации с сервера
+  const dr = loadDrafts();
+  let appliedDraft = false;
+  let hadDirtyDraft = false;
+  if (dr) {
+    const pubTs = ov && ov.updatedAt ? (new Date(ov.updatedAt).getTime() || 0) : 0;
+    if (!pubTs || (dr.savedAt || 0) >= pubTs) {
+      appliedDraft = applyDrafts(dr);
+      hadDirtyDraft = appliedDraft && MAP_IDX.some(([i]) => E[i].dirty);
+    } else {
+      try { localStorage.removeItem(DRAFT_KEY); } catch (e) {}
+      setTimeout(() => toast('На сервере публикация новее — старый черновик отброшен', true), 600);
+    }
+  }
+  pubAt = (ov && ov.updatedAt) || null;
   cur = MAP_IDX[0][0];
-  if (ov && ov.updatedAt) setStatus(ov.updatedAt); else setStatus(null);
+  setStatus(pubAt);
   $('lvlname').value = E[cur].name;
   fitZoom(); buildTabs(); draw();
+  if (hadDirtyDraft) toast('Черновик восстановлен — есть НЕОПУБЛИКОВАННЫЕ правки', true);
+  else if (appliedDraft) toast('Черновик восстановлен из браузера', true);
   if (ov) toast('Загружены ОПУБЛИКОВАННЫЕ карты (редактируешь их)', true);
   window.ADMIN = { E, stateToDef, defToState, publish, buildPayload, paint: (c, r, t) => { tool = t; applyTool(c, r); }, get cur() { return cur; } };
 }
