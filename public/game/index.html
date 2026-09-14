@@ -2525,6 +2525,30 @@ const Game = (() => {
       pi.onerror = () => { pi.style.visibility = 'hidden'; };
       pi.onload = () => { pi.style.visibility = ''; };
     }
+    // === ADMIN MAP OVERRIDE — НАЧАЛО (временная админ-панель; удалить этот блок + admin.html при снятии) ===
+    try {
+      let ov = null;
+      try {
+        const r1 = await fetch('maps-override.json', { cache: 'no-store', signal: AbortSignal.timeout(2500) });
+        if (r1.ok) ov = await r1.json();
+      } catch (e) { /* нет файла — норма для статичного хостинга */ }
+      if (!ov) {
+        try {
+          const r2 = await fetch('/api/game-maps', { cache: 'no-store', signal: AbortSignal.timeout(2500) });
+          if (r2.ok) { const j = await r2.json(); if (j && j.levels) ov = j; }
+        } catch (e) { /* нет API — норма */ }
+      }
+      if (ov && ov.levels) {
+        Object.entries(ov.levels).forEach(([i, def]) => {
+          const k = Number(i);
+          if (LEVELS[k] && LEVELS[k].type === 'map' && def && def.type === 'map') {
+            LEVELS[k] = Object.assign({}, LEVELS[k], def); // диалоги/фон берутся из def или оригинала
+          }
+        });
+      }
+    } catch (e) { /* подмена карт необязательна */ }
+    // === ADMIN MAP OVERRIDE — КОНЕЦ ===
+
     UI.init(callbacks);
     bindInput();
     registerSW();
