@@ -81,6 +81,10 @@ const Game = (() => {
     const def = LEVELS[i];
     if (!def) return;
 
+    // прогресс: запоминаем, на каком уровне игрок находится
+    progress.cur = i;
+    saveProgress();
+
     if (def.type === 'indev') { Audio8.stopMusic(); UI.showScreen('indev'); return; }
 
     if (def.type === 'cutscene') {
@@ -473,6 +477,7 @@ const Game = (() => {
     state = 'menu';
     Audio8.stopMusic();
     level = null;
+    UI.updatePlayButton(); // надпись «ПРОДОЛЖИТЬ: …» по свежему прогрессу
     UI.showScreen('menu');
   }
 
@@ -481,8 +486,16 @@ const Game = (() => {
     onPlay() {
       // автофуллскрин по жесту пользователя (если окружение разрешает)
       enterFullscreen();
-      const firstUndone = LEVELS.findIndex((_, i) => i < LEVELS.length - 1 && !progress.done[i]);
-      startLevel(firstUndone === -1 ? 0 : firstUndone);
+      // продолжаем с уровня, на котором остановились (иначе — первый непройденный)
+      const total = LEVELS.length - 1;
+      let start = 0;
+      if (progress.cur !== undefined && !progress.done[progress.cur] && progress.cur < total) {
+        start = progress.cur;
+      } else {
+        const firstUndone = LEVELS.findIndex((_, i) => i < total && !progress.done[i]);
+        start = firstUndone === -1 ? 0 : firstUndone;
+      }
+      startLevel(start);
     },
     onLevelPick(i) { startLevel(i); },
     getProgress() { return progress; },

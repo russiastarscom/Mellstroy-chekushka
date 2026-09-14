@@ -147,6 +147,7 @@ html, body {
 .big-btn.small { background: linear-gradient(180deg, #2c2c4e, #20203a); color: var(--text); box-shadow: 0 4px 0 #000; border-color: #000; font-size: clamp(12px, 2.2vmin, 18px); }
 .big-btn.small:active { box-shadow: 0 1px 0 #000; }
 .big-btn.ghost { background: transparent; color: var(--muted); border-color: #ffffff22; box-shadow: none; }
+#btn-play { white-space: nowrap; }
 .menu-footer { font-size: clamp(10px, 1.7vmin, 14px); color: #6a6f85; }
 
 /* ---------- Выбор уровня ---------- */
@@ -172,12 +173,6 @@ html, body {
 .level-card .name { font-size: clamp(10px, 1.8vmin, 15px); color: var(--muted); }
 .level-card.locked { opacity: .45; cursor: not-allowed; filter: grayscale(.6); }
 .level-card .state { font-size: clamp(12px, 2.2vmin, 18px); }
-
-/* ---------- Управление (инфо) ---------- */
-.controls-list { display: flex; flex-direction: column; gap: 1.2vmin; margin-bottom: 2.4vmin; }
-.ctrl-row { display: flex; gap: 3vmin; justify-content: space-between; font-size: clamp(12px, 2.2vmin, 18px); }
-.ctrl-row .keys { color: var(--accent); font-weight: bold; }
-.ctrl-row span:last-child { color: var(--muted); }
 
 /* ---------- Диалог ---------- */
 #dialogue {
@@ -375,7 +370,6 @@ html, body {
         <button id="btn-play" class="big-btn">▶ ИГРАТЬ</button>
         <button id="btn-levels" class="big-btn">КАРТЫ</button>
         <button id="btn-sound" class="big-btn small">ЗВУК: ВКЛ</button>
-        <button id="btn-controls" class="big-btn small">УПРАВЛЕНИЕ</button>
       </div>
       <div class="menu-footer">Фанатская треш-игра 18+: мат, чёрный юмор.<br>Все совпадения с вашей бутылкой случайны.</div>
     </div>
@@ -386,21 +380,6 @@ html, body {
     <h2 class="screen-title">ВЫБОР КАРТЫ</h2>
     <div id="levels-grid"></div>
     <button id="btn-levels-back" class="big-btn small">← НАЗАД</button>
-  </div>
-
-  <!-- Управление -->
-  <div id="screen-controls" class="screen hidden">
-    <h2 class="screen-title">УПРАВЛЕНИЕ</h2>
-    <div class="controls-list">
-      <div class="ctrl-row"><span class="keys">← → / A D</span><span>идти</span></div>
-      <div class="ctrl-row"><span class="keys">ПРОБЕЛ / W / ↑</span><span>прыжок</span></div>
-      <div class="ctrl-row"><span class="keys">↓ + прыжок</span><span>спрыгнуть с платформы</span></div>
-      <div class="ctrl-row"><span class="keys">X / кнопка ✸</span><span>бросить плюшку</span></div>
-      <div class="ctrl-row"><span class="keys">P / ESC</span><span>пауза</span></div>
-      <div class="ctrl-row"><span class="keys">Прыжок на голову</span><span>давить бурмалденцев</span></div>
-      <div class="ctrl-row"><span class="keys">Телефон</span><span>кнопки на экране</span></div>
-    </div>
-    <button id="btn-controls-back" class="big-btn small">← НАЗАД</button>
   </div>
 
   <!-- Пауза -->
@@ -1686,7 +1665,7 @@ const UI = (() => {
   const $ = (id) => document.getElementById(id);
   const cb = {}; // колбэки от Game
 
-  const SCREENS = ['gate', 'menu', 'levels', 'controls', 'pause', 'gameover', 'complete', 'ending', 'indev', 'tooyoung'];
+  const SCREENS = ['gate', 'menu', 'levels', 'pause', 'gameover', 'complete', 'ending', 'indev', 'tooyoung'];
   let currentScreen = 'menu';
 
   // ---------- экраны ----------
@@ -1874,6 +1853,24 @@ const UI = (() => {
     $('btn-pause-sound').textContent = label;
   }
 
+  // ---------- Кнопка запуска: играть / продолжить с сохранённого уровня ----------
+  function updatePlayButton() {
+    const p = cb.getProgress ? cb.getProgress() : { done: {} };
+    const b = $('btn-play');
+    if (!b) return;
+    const total = LEVELS.length - 1; // без экрана «в разработке»
+    let i;
+    if (p.cur !== undefined && !p.done[p.cur] && p.cur < total) {
+      i = p.cur; // начатый, но не пройденный уровень
+    } else {
+      i = LEVELS.findIndex((_, k) => k < total && !p.done[k]);
+      if (i === -1) { b.textContent = '▶ ИГРАТЬ ЗАНОВО'; return; }
+    }
+    if (i === 0 && !p.done[0]) { b.textContent = '▶ ИГРАТЬ'; return; } // самое начало
+    const def = LEVELS[i];
+    b.textContent = '▶ ПРОДОЛЖИТЬ: ' + (def.type === 'cutscene' ? 'ВСТУПЛЕНИЕ' : def.name || ('КАРТА ' + def.id));
+  }
+
   // ---------- Полный экран ----------
   function showComplete(text, hasNext) {
     $('complete-text').innerHTML = text;
@@ -1893,8 +1890,6 @@ const UI = (() => {
     $('btn-tooyoung-back').addEventListener('click', () => { Audio8.sfx.click(); showScreen('gate'); });
     $('btn-levels').addEventListener('click', () => { Audio8.resume(); Audio8.sfx.click(); buildLevelsGrid(cb.getProgress()); showScreen('levels'); });
     $('btn-levels-back').addEventListener('click', () => { Audio8.sfx.click(); showScreen('menu'); });
-    $('btn-controls').addEventListener('click', () => { Audio8.sfx.click(); showScreen('controls'); });
-    $('btn-controls-back').addEventListener('click', () => { Audio8.sfx.click(); showScreen('menu'); });
 
     $('btn-sound').addEventListener('click', () => { Audio8.setEnabled(!Audio8.isEnabled()); updateSoundButtons(); Audio8.sfx.click(); });
     $('btn-pause-sound').addEventListener('click', () => { Audio8.setEnabled(!Audio8.isEnabled()); updateSoundButtons(); Audio8.sfx.click(); });
@@ -1932,11 +1927,12 @@ const UI = (() => {
 
     buildSocials();
     updateSoundButtons();
+    updatePlayButton();
   }
 
   return {
     init, showScreen, setHud, dialogue, cutscene,
-    buildLevelsGrid, updateSoundButtons, showComplete,
+    buildLevelsGrid, updateSoundButtons, updatePlayButton, showComplete,
   };
 })();
 
@@ -2024,6 +2020,10 @@ const Game = (() => {
     levelIndex = i;
     const def = LEVELS[i];
     if (!def) return;
+
+    // прогресс: запоминаем, на каком уровне игрок находится
+    progress.cur = i;
+    saveProgress();
 
     if (def.type === 'indev') { Audio8.stopMusic(); UI.showScreen('indev'); return; }
 
@@ -2417,6 +2417,7 @@ const Game = (() => {
     state = 'menu';
     Audio8.stopMusic();
     level = null;
+    UI.updatePlayButton(); // надпись «ПРОДОЛЖИТЬ: …» по свежему прогрессу
     UI.showScreen('menu');
   }
 
@@ -2425,8 +2426,16 @@ const Game = (() => {
     onPlay() {
       // автофуллскрин по жесту пользователя (если окружение разрешает)
       enterFullscreen();
-      const firstUndone = LEVELS.findIndex((_, i) => i < LEVELS.length - 1 && !progress.done[i]);
-      startLevel(firstUndone === -1 ? 0 : firstUndone);
+      // продолжаем с уровня, на котором остановились (иначе — первый непройденный)
+      const total = LEVELS.length - 1;
+      let start = 0;
+      if (progress.cur !== undefined && !progress.done[progress.cur] && progress.cur < total) {
+        start = progress.cur;
+      } else {
+        const firstUndone = LEVELS.findIndex((_, i) => i < total && !progress.done[i]);
+        start = firstUndone === -1 ? 0 : firstUndone;
+      }
+      startLevel(start);
     },
     onLevelPick(i) { startLevel(i); },
     getProgress() { return progress; },

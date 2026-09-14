@@ -131,6 +131,7 @@ html, body {
 .big-btn.small { background: linear-gradient(180deg, #2c2c4e, #20203a); color: var(--text); box-shadow: 0 4px 0 #000; border-color: #000; font-size: clamp(12px, 2.2vmin, 18px); }
 .big-btn.small:active { box-shadow: 0 1px 0 #000; }
 .big-btn.ghost { background: transparent; color: var(--muted); border-color: #ffffff22; box-shadow: none; }
+#btn-play { white-space: nowrap; }
 .menu-footer { font-size: clamp(10px, 1.7vmin, 14px); color: #6a6f85; }
 
 /* ---------- Выбор уровня ---------- */
@@ -156,12 +157,6 @@ html, body {
 .level-card .name { font-size: clamp(10px, 1.8vmin, 15px); color: var(--muted); }
 .level-card.locked { opacity: .45; cursor: not-allowed; filter: grayscale(.6); }
 .level-card .state { font-size: clamp(12px, 2.2vmin, 18px); }
-
-/* ---------- Управление (инфо) ---------- */
-.controls-list { display: flex; flex-direction: column; gap: 1.2vmin; margin-bottom: 2.4vmin; }
-.ctrl-row { display: flex; gap: 3vmin; justify-content: space-between; font-size: clamp(12px, 2.2vmin, 18px); }
-.ctrl-row .keys { color: var(--accent); font-weight: bold; }
-.ctrl-row span:last-child { color: var(--muted); }
 
 /* ---------- Диалог ---------- */
 #dialogue {

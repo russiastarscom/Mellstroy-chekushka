@@ -5,7 +5,7 @@ const UI = (() => {
   const $ = (id) => document.getElementById(id);
   const cb = {}; // колбэки от Game
 
-  const SCREENS = ['gate', 'menu', 'levels', 'controls', 'pause', 'gameover', 'complete', 'ending', 'indev', 'tooyoung'];
+  const SCREENS = ['gate', 'menu', 'levels', 'pause', 'gameover', 'complete', 'ending', 'indev', 'tooyoung'];
   let currentScreen = 'menu';
 
   // ---------- экраны ----------
@@ -193,6 +193,24 @@ const UI = (() => {
     $('btn-pause-sound').textContent = label;
   }
 
+  // ---------- Кнопка запуска: играть / продолжить с сохранённого уровня ----------
+  function updatePlayButton() {
+    const p = cb.getProgress ? cb.getProgress() : { done: {} };
+    const b = $('btn-play');
+    if (!b) return;
+    const total = LEVELS.length - 1; // без экрана «в разработке»
+    let i;
+    if (p.cur !== undefined && !p.done[p.cur] && p.cur < total) {
+      i = p.cur; // начатый, но не пройденный уровень
+    } else {
+      i = LEVELS.findIndex((_, k) => k < total && !p.done[k]);
+      if (i === -1) { b.textContent = '▶ ИГРАТЬ ЗАНОВО'; return; }
+    }
+    if (i === 0 && !p.done[0]) { b.textContent = '▶ ИГРАТЬ'; return; } // самое начало
+    const def = LEVELS[i];
+    b.textContent = '▶ ПРОДОЛЖИТЬ: ' + (def.type === 'cutscene' ? 'ВСТУПЛЕНИЕ' : def.name || ('КАРТА ' + def.id));
+  }
+
   // ---------- Полный экран ----------
   function showComplete(text, hasNext) {
     $('complete-text').innerHTML = text;
@@ -212,8 +230,6 @@ const UI = (() => {
     $('btn-tooyoung-back').addEventListener('click', () => { Audio8.sfx.click(); showScreen('gate'); });
     $('btn-levels').addEventListener('click', () => { Audio8.resume(); Audio8.sfx.click(); buildLevelsGrid(cb.getProgress()); showScreen('levels'); });
     $('btn-levels-back').addEventListener('click', () => { Audio8.sfx.click(); showScreen('menu'); });
-    $('btn-controls').addEventListener('click', () => { Audio8.sfx.click(); showScreen('controls'); });
-    $('btn-controls-back').addEventListener('click', () => { Audio8.sfx.click(); showScreen('menu'); });
 
     $('btn-sound').addEventListener('click', () => { Audio8.setEnabled(!Audio8.isEnabled()); updateSoundButtons(); Audio8.sfx.click(); });
     $('btn-pause-sound').addEventListener('click', () => { Audio8.setEnabled(!Audio8.isEnabled()); updateSoundButtons(); Audio8.sfx.click(); });
@@ -251,10 +267,11 @@ const UI = (() => {
 
     buildSocials();
     updateSoundButtons();
+    updatePlayButton();
   }
 
   return {
     init, showScreen, setHud, dialogue, cutscene,
-    buildLevelsGrid, updateSoundButtons, showComplete,
+    buildLevelsGrid, updateSoundButtons, updatePlayButton, showComplete,
   };
 })();
