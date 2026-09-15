@@ -1937,7 +1937,8 @@ const UI = (() => {
       const card = document.createElement('button');
       card.className = 'level-card' + (unlocked ? '' : ' locked');
       const state = isLast ? '🚧' : done ? '✔' : unlocked ? '▶' : '🔒';
-      card.innerHTML = `<span class="num">${lv.id}</span><span class="name">${lv.name}</span><span class="state">${state}</span>`;
+      // номер — позиция в порядке игры (1, 2, 3…), меняется при добавлении/удалении/перемещении уровней
+      card.innerHTML = `<span class="num">${i + 1}</span><span class="name">${lv.name}</span><span class="state">${state}</span>`;
       card.addEventListener('click', () => { Audio8.resume(); if (!unlocked) { Audio8.sfx.locked(); return; } Audio8.sfx.click(); cb.onLevelPick(i); });
       grid.appendChild(card);
     });
@@ -1980,7 +1981,7 @@ const UI = (() => {
     const p = cb.getProgress ? cb.getProgress() : { done: {} };
     const b = $('btn-play');
     if (!b) return;
-    const total = LEVELS.length - 1; // без экрана «в разработке»
+    const total = LEVELS.length - (LEVELS[LEVELS.length - 1] && LEVELS[LEVELS.length - 1].type === 'indev' ? 1 : 0); // без экрана «в разработке», если он есть
     let i;
     if (p.cur !== undefined && !p.done[p.cur] && p.cur < total) {
       i = p.cur; // начатый, но не пройденный уровень
@@ -1990,7 +1991,7 @@ const UI = (() => {
     }
     if (i === 0 && !p.done[0]) { b.textContent = '▶ ИГРАТЬ'; return; } // самое начало
     const def = LEVELS[i];
-    b.textContent = '▶ ПРОДОЛЖИТЬ: ' + (def.type === 'cutscene' ? 'ВСТУПЛЕНИЕ' : def.name || ('КАРТА ' + def.id));
+    b.textContent = '▶ ПРОДОЛЖИТЬ: ' + (def.type === 'cutscene' ? 'ВСТУПЛЕНИЕ' : def.name || ('УРОВЕНЬ ' + (i + 1)));
   }
 
   // ---------- Полный экран ----------
@@ -2227,8 +2228,9 @@ const Game = (() => {
     progress.unlocked = Math.max(progress.unlocked, Math.min(levelIndex + 2, LEVELS.length - 1));
     saveProgress();
 
-    if (levelIndex === 4) {
-      // после 4-й карты — финальный экран
+    // финальный экран — после последнего играбельного уровня (дальше только «В разработке» или конец)
+    const nextDef = LEVELS[levelIndex + 1];
+    if (!nextDef || nextDef.type === 'indev') {
       state = 'ending';
       UI.showScreen('ending');
     } else if (levelIndex === 0) {
@@ -2687,13 +2689,19 @@ const Game = (() => {
       }
     });
   }
-  // Применяет пакет из админ-панели: карты (сколько угодно), разговоры, текстуры, музыку, каналы
+  // Применяет пакет из админ-панели: карты (сколько угодно, в любом порядке), разговоры, текстуры, музыку, каналы
   function applyCms(j) {
     if (Array.isArray(j.maps) && j.maps.length) {
       const intro = LEVELS[0];
-      const indev = LEVELS[LEVELS.length - 1];
-      const defs = j.maps.map((m) => m && m.def).filter((d) => d && d.type === 'map');
-      if (defs.length) LEVELS.splice(0, LEVELS.length, intro, ...defs, indev);
+      const defs = j.maps.map((m) => m && m.def).filter((d) => d && (d.type === 'map' || d.type === 'indev'));
+      if (defs.length) {
+        // старые публикации (без маркера v) всегда заканчивались экраном «В разработке» — сохраняем поведение
+        if (!(j.v >= 3) && !defs.some((d) => d.type === 'indev')) {
+          const iv = LEVELS.find((x) => x.type === 'indev');
+          if (iv) defs.push(JSON.parse(JSON.stringify(iv)));
+        }
+        LEVELS.splice(0, LEVELS.length, intro, ...defs);
+      }
     } else if (j.levels) {
       applyLegacyLevels(j.levels);
     }

@@ -22,6 +22,7 @@ type Track = { id: string; name: string; url: string };
 type Social = { name: string; class: string; url: string };
 type Cms = {
   levels: Record<string, unknown> | null;
+  v: number | null;
   maps: { key: string; def: Record<string, unknown> }[] | null;
   intro: { cutscene: unknown[]; outroAfterBoss: unknown[] } | null;
   textures: Record<string, TextureRef> | null;
@@ -31,7 +32,7 @@ type Cms = {
 };
 
 function emptyCms(): Omit<Cms, 'updatedAt'> {
-  return { levels: null, maps: null, intro: null, textures: null, music: null, socials: null };
+  return { levels: null, v: null, maps: null, intro: null, textures: null, music: null, socials: null };
 }
 
 function readCms(): Omit<Cms, 'updatedAt'> & { updatedAt: string | null } {
@@ -55,7 +56,15 @@ function validateMaps(maps: unknown): string | null {
     if (!m || typeof m !== 'object') return 'map: not an object';
     const { key, def } = m as { key: unknown; def: unknown };
     if (typeof key !== 'string' || !/^[\w-]{1,40}$/.test(key)) return `bad map key "${key}"`;
-    if (!def || typeof def !== 'object' || (def as { type?: string }).type !== 'map') return `map ${key}: type must be "map"`;
+    if (!def || typeof def !== 'object') return `map ${key}: bad def`;
+    const dtype = (def as { type?: string }).type;
+    // экран «В разработке» — уровень-заглушка без террейна
+    if (dtype === 'indev') {
+      const d = def as Record<string, unknown>;
+      if (typeof d.name !== 'string' || !(d.name as string).trim()) return `map ${key}: indev needs a name`;
+      continue;
+    }
+    if (dtype !== 'map') return `map ${key}: type must be "map" or "indev"`;
     const d = def as Record<string, unknown>;
     const w = d.width;
     if (typeof w !== 'number' || w < 20 || w > 600) return `map ${key}: width 20..600`;
@@ -126,6 +135,8 @@ export async function POST(req: Request) {
     if (err) return NextResponse.json({ ok: false, error: err }, { status: 400 });
     const cur = readCms();
     const next = { ...emptyCms(), ...cur };
+    // маркер формата панели (список карт управляет экраном «В разработке» и порядком уровней)
+    if (typeof body.v === 'number') next.v = body.v;
     // maps — новый формат списка карт (заменяет старое levels)
     if (body.maps !== undefined) next.maps = (body.maps as Cms['maps']) || null;
     if (body.levels !== undefined && body.maps === undefined) next.levels = (body.levels as Cms['levels']) || null;

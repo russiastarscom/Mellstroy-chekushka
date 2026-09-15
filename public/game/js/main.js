@@ -146,8 +146,9 @@ const Game = (() => {
     progress.unlocked = Math.max(progress.unlocked, Math.min(levelIndex + 2, LEVELS.length - 1));
     saveProgress();
 
-    if (levelIndex === 4) {
-      // после 4-й карты — финальный экран
+    // финальный экран — после последнего играбельного уровня (дальше только «В разработке» или конец)
+    const nextDef = LEVELS[levelIndex + 1];
+    if (!nextDef || nextDef.type === 'indev') {
       state = 'ending';
       UI.showScreen('ending');
     } else if (levelIndex === 0) {
@@ -606,13 +607,19 @@ const Game = (() => {
       }
     });
   }
-  // Применяет пакет из админ-панели: карты (сколько угодно), разговоры, текстуры, музыку, каналы
+  // Применяет пакет из админ-панели: карты (сколько угодно, в любом порядке), разговоры, текстуры, музыку, каналы
   function applyCms(j) {
     if (Array.isArray(j.maps) && j.maps.length) {
       const intro = LEVELS[0];
-      const indev = LEVELS[LEVELS.length - 1];
-      const defs = j.maps.map((m) => m && m.def).filter((d) => d && d.type === 'map');
-      if (defs.length) LEVELS.splice(0, LEVELS.length, intro, ...defs, indev);
+      const defs = j.maps.map((m) => m && m.def).filter((d) => d && (d.type === 'map' || d.type === 'indev'));
+      if (defs.length) {
+        // старые публикации (без маркера v) всегда заканчивались экраном «В разработке» — сохраняем поведение
+        if (!(j.v >= 3) && !defs.some((d) => d.type === 'indev')) {
+          const iv = LEVELS.find((x) => x.type === 'indev');
+          if (iv) defs.push(JSON.parse(JSON.stringify(iv)));
+        }
+        LEVELS.splice(0, LEVELS.length, intro, ...defs);
+      }
     } else if (j.levels) {
       applyLegacyLevels(j.levels);
     }

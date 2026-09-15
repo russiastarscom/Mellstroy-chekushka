@@ -98,8 +98,21 @@ function defToState(def) {
   };
 }
 
+function indevState(name, dirty) {
+  // экран «В разработке» — уровень без террейна
+  return { isIndev: true, cells: null, ents: null, undo: [], dirty: !!dirty, spawn: 2, factory: 0, bg: 'bg_fields', name: name || 'В разработке', dialogs: { intro: [], outro: [], hints: [] } };
+}
+function officialIndev() {
+  const d = LEVELS.find((x) => x.type === 'indev');
+  if (!d) return null;
+  return { key: 'indev', id: d.id || 6, def: JSON.parse(JSON.stringify(d)), ed: indevState(d.name, false) };
+}
+
 function stateToDef(m) {
   const st = m.ed;
+  if (st.isIndev) {
+    return { id: m.id, type: 'indev', name: (st.name || 'В разработке').slice(0, 40) };
+  }
   const { cells, ents } = st;
   const w = st.cells[0].length;
   const ground = [], bricks = [], plats = [], spikes = [];
@@ -154,6 +167,7 @@ function stateToDef(m) {
 
 function validateMap(m) {
   const st = m.ed;
+  if (st.isIndev) return null; // экран-заглушка — проверять нечего
   const w = st.cells[0].length;
   if (st.spawn < 1 || st.spawn > w - 2) return 'Старт Андрея вне карты';
   if (st.factory < 1 || st.factory > w - 2) return 'Завод вне карты';
@@ -180,8 +194,9 @@ function saveDrafts() {
         savedAt: Date.now(),
         maps: CMS.maps.map((m) => ({
           key: m.key, id: m.id, def: m.def ? JSON.parse(JSON.stringify(m.def)) : null,
-          ed: { cells: m.ed.cells, ents: m.ed.ents, spawn: m.ed.spawn, factory: m.ed.factory, name: m.ed.name, bg: m.ed.bg, dialogs: m.ed.dialogs, clean: !m.ed.dirty },
+          ed: { cells: m.ed.cells, ents: m.ed.ents, spawn: m.ed.spawn, factory: m.ed.factory, name: m.ed.name, bg: m.ed.bg, dialogs: m.ed.dialogs, isIndev: !!m.ed.isIndev, clean: !m.ed.dirty },
         })),
+        listV: 3, // маркер: список карт уже управляет экраном «В разработке»
         intro: CMS.intro, introClean: !introDirty,
         socials: CMS.socials, socialsClean: !socialsDirty,
         textures: CMS.textures, texturesClean: !texturesDirty,
@@ -206,6 +221,13 @@ function applyDrafts(d) {
   list.forEach((s) => {
     const def = s.def ? JSON.parse(JSON.stringify(s.def)) : null;
     const ed = s.ed || {};
+    // экран «В разработке» — отдельный вид уровня без террейна
+    if (ed.isIndev || (def && def.type === 'indev')) {
+      const nm = ed.name || (def && def.name) || 'В разработке';
+      restored.push({ key: s.key || 'indev', id: s.id || 6, def: (def && def.type === 'indev') ? def : { id: s.id || 6, type: 'indev', name: nm }, ed: indevState(nm, ed.clean === false) });
+      any = true;
+      return;
+    }
     const w = def ? def.width : (Array.isArray(ed.cells) && ed.cells[0] ? ed.cells[0].length : 0);
     let base = null;
     if (w >= 20 && Array.isArray(ed.cells) && ed.cells.length === ROWS && ed.cells[0] && ed.cells[0].length === w && Array.isArray(ed.ents)) {
@@ -226,6 +248,11 @@ function applyDrafts(d) {
     });
     any = true;
   });
+  // старый черновик (сделан ДО появления управления «В разработке») — добавляем официальный экран
+  if (d.listV !== 3 && !restored.some((m) => m.ed.isIndev)) {
+    const iv = officialIndev();
+    if (iv) { restored.push(iv); any = true; }
+  }
   if (restored.length) CMS.maps = restored;
   if (d.intro && Array.isArray(d.intro.cutscene)) {
     CMS.intro = { cutscene: d.intro.cutscene, outroAfterBoss: d.intro.outroAfterBoss || [] };
@@ -257,7 +284,9 @@ function buildMapTabs() {
   box.innerHTML = '';
   CMS.maps.forEach((m, i) => {
     const b = document.createElement('button');
-    b.innerHTML = `№${m.id} ${m.ed.name || 'Карта'}${m.ed.dirty ? ' <span class="dirty">●</span>' : ''}`;
+    // № — позиция в игре (катсцена = №1), а не постоянный id: цифры меняются вместе с порядком
+    b.innerHTML = `${m.ed.isIndev ? '🚧 ' : ''}№${i + 2} ${m.ed.name || 'Карта'}${m.ed.dirty ? ' <span class="dirty">●</span>' : ''}`;
+    b.title = m.ed.isIndev ? 'Экран «В разработке» — можно настроить или удалить' : 'Карта';
     b.onclick = () => { curMap = i; syncMapOpts(); draw(); buildMapTabs(); };
     if (i === curMap) b.classList.add('active');
     box.appendChild(b);
@@ -283,22 +312,52 @@ function addMap() {
     dialogs: { intro: [], outro: [], hints: [] },
   };
   for (let c = 0; c < w; c++) { ed.cells[11][c] = '#'; ed.cells[12][c] = '#'; }
-  CMS.maps.push({ key: 'map-' + Date.now().toString(36), id, def: null, ed });
-  curMap = CMS.maps.length - 1;
+  // вставляем сразу ПОСЛЕ выбранной карты («создать в другом месте»), но перед экраном «В разработке»
+  const at = (CMS.maps[curMap] && CMS.maps[curMap].ed.isIndev) ? curMap : curMap + 1;
+  CMS.maps.splice(at, 0, { key: 'map-' + Date.now().toString(36), id, def: null, ed });
+  curMap = at;
+  mapsListDirty = true;
   saveDrafts(); markDirty();
   syncMapOpts(); draw(); buildMapTabs(); buildDlgMapSelect();
-  toast('Карта добавлена — рисуй и публикуй!', true);
+  toast('Карта вставлена на это место — стрелками ↑/↓ можно передвинуть', true);
 }
 function delMap() {
   const m = CMS.maps[curMap];
   if (!m) return;
-  if (!confirm(`Удалить карту «${m.ed.name}» (№${m.id}) из публикации? У игроков сдвинутся номера последующих карт.`)) return;
+  const msg = m.ed.isIndev
+    ? `Удалить уровень «${m.ed.name}» (№${curMap + 2}, экран «в разработке»)? Игра будет заканчиваться финальным экраном после последней карты.`
+    : `Удалить карту «${m.ed.name}» (№${curMap + 2}) из публикации? У игроков сдвинутся номера последующих карт.`;
+  if (!confirm(msg)) return;
   CMS.maps.splice(curMap, 1);
-  curMap = Math.max(0, curMap - 1);
+  curMap = Math.max(0, Math.min(curMap, CMS.maps.length - 1));
   mapsListDirty = true;
   saveDrafts(); markDirty();
   syncMapOpts(); draw(); buildMapTabs(); buildDlgMapSelect();
-  toast('Карта удалена из списка (не забудь ОПУБЛИКОВАТЬ)', true);
+  toast('Уровень удалён из списка (не забудь ОПУБЛИКОВАТЬ)', true);
+}
+function moveMap(dir) {
+  const j = curMap + dir;
+  if (!CMS.maps[curMap] || j < 0 || j >= CMS.maps.length) return;
+  const [m] = CMS.maps.splice(curMap, 1);
+  CMS.maps.splice(j, 0, m);
+  curMap = j;
+  mapsListDirty = true;
+  saveDrafts(); markDirty();
+  syncMapOpts(); draw(); buildMapTabs(); buildDlgMapSelect();
+  toast(dir < 0 ? 'Уровень передвинут выше по порядку' : 'Уровень передвинут ниже по порядку', true);
+}
+function indevToMap() {
+  const m = CMS.maps[curMap];
+  if (!m || !m.ed.isIndev) return;
+  const w = 60;
+  const name = (!m.ed.name || m.ed.name === 'В разработке') ? 'Новая карта' : m.ed.name;
+  const ed = { cells: Array.from({ length: ROWS }, () => Array(w).fill('.')), ents: [], undo: [], dirty: true, spawn: 2, factory: w - 6, name, bg: 'bg_fields', dialogs: { intro: [], outro: [], hints: [] } };
+  for (let c = 0; c < w; c++) { ed.cells[11][c] = '#'; ed.cells[12][c] = '#'; }
+  m.ed = ed; m.def = null; m.key = 'map-' + Date.now().toString(36);
+  mapsListDirty = true;
+  saveDrafts(); markDirty();
+  syncMapOpts(); draw(); buildMapTabs(); buildDlgMapSelect();
+  toast('Уровень стал обычной картой — рисуй террейн и публикуй', true);
 }
 function resetMap() {
   const m = CMS.maps[curMap];
@@ -320,13 +379,20 @@ function resetMap() {
 function syncMapOpts() {
   const m = CMS.maps[curMap];
   if (!m) return;
-  $('lvlname').value = m.ed.name || '';
-  $('lvbg').value = m.ed.bg || 'bg_fields';
+  const ind = !!m.ed.isIndev;
+  $('indevopts').style.display = ind ? '' : 'none';
+  ['toolbar', 'canvaswrap', 'cellinfo', 'mapopts'].forEach((id) => { $(id).style.display = ind ? 'none' : ''; });
+  if (ind) {
+    $('indevname').value = m.ed.name || '';
+  } else {
+    $('lvlname').value = m.ed.name || '';
+    $('lvbg').value = m.ed.bg || 'bg_fields';
+  }
 }
 
 // ---------- рендер карты ----------
 function fitZoom() {
-  if (!curEd()) return;
+  if (!curEd() || curEd().isIndev) return;
   const w = curEd().cells[0].length;
   const availW = $('canvaswrap').clientWidth - 30;
   const top = $('canvaswrap').getBoundingClientRect().top;
@@ -338,7 +404,7 @@ function fitZoom() {
 }
 function draw() {
   const st = curEd();
-  if (!st) return;
+  if (!st || st.isIndev) return;
   const w = st.cells[0].length;
   const cs = zoom.cs;
   const TOP = 14;
@@ -495,6 +561,17 @@ $('lvlname').addEventListener('input', () => { curEd().name = $('lvlname').value
 $('lvbg').addEventListener('change', () => { curEd().bg = $('lvbg').value; curEd().dirty = true; saveDrafts(); setStatus(); });
 $('btn-reset-level').onclick = resetMap;
 $('btn-del-map').onclick = delMap;
+$('btn-move-up').onclick = () => moveMap(-1);
+$('btn-move-down').onclick = () => moveMap(1);
+$('btn-indev-to-map').onclick = indevToMap;
+$('btn-del-level').onclick = delMap;
+$('indevname').addEventListener('input', () => {
+  const m = CMS.maps[curMap];
+  if (!m || !m.ed.isIndev) return;
+  m.ed.name = $('indevname').value;
+  m.ed.dirty = true;
+  buildMapTabs(); saveDrafts(); setStatus();
+});
 
 function markDirty() { /* все dirty-флаги уже выставлены вызывающим кодом */ }
 
@@ -505,9 +582,10 @@ function buildDlgMapSelect() {
   const sel = $('dlg-map');
   sel.innerHTML = '';
   CMS.maps.forEach((m, i) => {
+    if (m.ed.isIndev) return; // у экрана «В разработке» нет разговоров
     const o = document.createElement('option');
     o.value = i;
-    o.textContent = `№${m.id} ${m.ed.name || 'Карта'}`;
+    o.textContent = `№${i + 2} ${m.ed.name || 'Карта'}`;
     sel.appendChild(o);
   });
   sel.value = String(curMap);
@@ -589,7 +667,7 @@ function renderAllDialogs() {
   renderList('dlg-intro', CMS.intro.cutscene, (rebuild) => { touchIntro(); if (rebuild) renderAllDialogs(); });
   renderList('dlg-outroBoss', CMS.intro.outroAfterBoss, (rebuild) => { touchIntro(); if (rebuild) renderAllDialogs(); });
   const m = CMS.maps[curMap];
-  if (m) {
+  if (m && !m.ed.isIndev) {
     renderList('dlg-mapIntro', m.ed.dialogs.intro, (rebuild) => { touchMapDialogs(); if (rebuild) renderAllDialogs(); });
     renderList('dlg-mapOutro', m.ed.dialogs.outro, (rebuild) => { touchMapDialogs(); if (rebuild) renderAllDialogs(); });
     renderList('dlg-hints', m.ed.dialogs.hints, (rebuild) => { touchMapDialogs(); if (rebuild) renderAllDialogs(); }, true);
@@ -814,6 +892,7 @@ document.querySelectorAll('#modes button').forEach((b) => {
 // ============================================================
 function buildPayload() {
   return {
+    v: 3, // маркер формата: список карт управляет экраном «В разработке» и порядком уровней
     maps: CMS.maps.map((m) => ({ key: m.key, def: stateToDef(m) })),
     intro: { cutscene: CMS.intro.cutscene, outroAfterBoss: CMS.intro.outroAfterBoss },
     textures: CMS.textures,
@@ -883,6 +962,8 @@ function officialMapsToCms() {
   MAP_LEVELS.forEach((d, i) => {
     CMS.maps.push({ key: 'map-' + (i + 1), id: d.id || (i + 2), def: JSON.parse(JSON.stringify(d)), ed: defToState(d) });
   });
+  const iv = officialIndev();
+  if (iv) CMS.maps.push(iv); // экран «В разработке» тоже редактируется/удаляется
   CMS.intro = {
     cutscene: (DIALOGUES.intro || []).map((l) => ({ who: l.who, text: l.text })),
     outroAfterBoss: (DIALOGUES.outroAfterBoss || []).map((l) => ({ who: l.who, text: l.text })),
@@ -890,8 +971,16 @@ function officialMapsToCms() {
   CMS.socials = (CONFIG.SOCIALS || []).map((s) => ({ name: s.name, class: s.class || 'tg', url: s.url || '#' }));
 }
 function serverMapsToCms(j) {
+  const newList = j.v >= 3; // маркер публикации новой панели — список карт уже управляет экраном «В разработке»
   if (Array.isArray(j.maps) && j.maps.length) {
-    CMS.maps = j.maps.filter((m) => m && m.def).map((m) => ({ key: m.key, id: m.def.id || 2, def: m.def, ed: defToState(m.def) }));
+    CMS.maps = j.maps.filter((m) => m && m.def).map((m) => {
+      if (m.def.type === 'indev') return { key: m.key || 'indev', id: m.def.id || 6, def: m.def, ed: indevState(m.def.name, false) };
+      return { key: m.key, id: m.def.id || 2, def: m.def, ed: defToState(m.def) };
+    });
+    if (!newList && !CMS.maps.some((m) => m.ed.isIndev)) {
+      const iv = officialIndev();
+      if (iv) CMS.maps.push(iv); // старая публикация — добавляем официальный экран
+    }
   } else if (j.levels && typeof j.levels === 'object') {
     // миграция со старого формата levels:{idx:def}
     CMS.maps = [];
@@ -900,6 +989,7 @@ function serverMapsToCms(j) {
       if (def && def.type === 'map') CMS.maps.push({ key: 'map-' + k, id: def.id || (k + 2), def, ed: defToState(def) });
     });
     if (!CMS.maps.length) officialMapsToCms();
+    else { const iv = officialIndev(); if (iv) CMS.maps.push(iv); }
   } else {
     officialMapsToCms();
   }
@@ -944,7 +1034,7 @@ async function boot() {
     get CMS() { return CMS; },
     get curMap() { return curMap; },
     paint: (c, r, t) => { tool = t; applyTool(c, r); },
-    addMap, stateToDef, publish, buildPayload, switchMode,
+    addMap, stateToDef, publish, buildPayload, switchMode, moveMap, indevToMap,
     renderAll: { textures: renderTextures, music: renderMusic, socials: renderSocials, dialogs: renderAllDialogs },
     get dirty() { return anyDirty(); },
   };

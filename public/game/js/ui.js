@@ -166,7 +166,8 @@ const UI = (() => {
       const card = document.createElement('button');
       card.className = 'level-card' + (unlocked ? '' : ' locked');
       const state = isLast ? '🚧' : done ? '✔' : unlocked ? '▶' : '🔒';
-      card.innerHTML = `<span class="num">${lv.id}</span><span class="name">${lv.name}</span><span class="state">${state}</span>`;
+      // номер — позиция в порядке игры (1, 2, 3…), меняется при добавлении/удалении/перемещении уровней
+      card.innerHTML = `<span class="num">${i + 1}</span><span class="name">${lv.name}</span><span class="state">${state}</span>`;
       card.addEventListener('click', () => { Audio8.resume(); if (!unlocked) { Audio8.sfx.locked(); return; } Audio8.sfx.click(); cb.onLevelPick(i); });
       grid.appendChild(card);
     });
@@ -209,7 +210,7 @@ const UI = (() => {
     const p = cb.getProgress ? cb.getProgress() : { done: {} };
     const b = $('btn-play');
     if (!b) return;
-    const total = LEVELS.length - 1; // без экрана «в разработке»
+    const total = LEVELS.length - (LEVELS[LEVELS.length - 1] && LEVELS[LEVELS.length - 1].type === 'indev' ? 1 : 0); // без экрана «в разработке», если он есть
     let i;
     if (p.cur !== undefined && !p.done[p.cur] && p.cur < total) {
       i = p.cur; // начатый, но не пройденный уровень
@@ -219,7 +220,7 @@ const UI = (() => {
     }
     if (i === 0 && !p.done[0]) { b.textContent = '▶ ИГРАТЬ'; return; } // самое начало
     const def = LEVELS[i];
-    b.textContent = '▶ ПРОДОЛЖИТЬ: ' + (def.type === 'cutscene' ? 'ВСТУПЛЕНИЕ' : def.name || ('КАРТА ' + def.id));
+    b.textContent = '▶ ПРОДОЛЖИТЬ: ' + (def.type === 'cutscene' ? 'ВСТУПЛЕНИЕ' : def.name || ('УРОВЕНЬ ' + (i + 1)));
   }
 
   // ---------- Полный экран ----------

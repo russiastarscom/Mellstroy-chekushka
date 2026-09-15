@@ -180,12 +180,25 @@
       <option value="bg_district">Район</option>
       <option value="bg_plant">Завод (ночь)</option>
     </select></label>
+    <button class="act gray" id="btn-move-up" title="Передвинуть уровень выше по порядку">↑ Выше</button>
+    <button class="act gray" id="btn-move-down" title="Передвинуть уровень ниже по порядку">↓ Ниже</button>
     <button class="act warn" id="btn-reset-level">Сброс этой карты</button>
     <button class="act warn" id="btn-del-map">🗑 Удалить карту</button>
   </div>
+  <div id="indevopts" style="display:none">
+    <div class="dlg-block" style="margin-bottom:0">
+      <h3>🚧 ЭКРАН «В РАЗРАБОТКЕ»</h3>
+      <div class="sub">Это финальная заглушка в конце игры. Можно: переименовать её, превратить в обычную играбельную карту или удалить совсем — тогда игра будет заканчиваться финальным экраном сразу после последней карты.</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <label style="color:#8a8aa0">Название: <input id="indevname" style="background:#23233a;border:1px solid #3a3a5a;color:#fff;border-radius:8px;padding:8px 10px;width:190px;font-weight:bold;font-size:14px"></label>
+        <button class="act" id="btn-indev-to-map">🔧 Сделать обычной картой</button>
+        <button class="act warn" id="btn-del-level">🗑 Удалить уровень</button>
+      </div>
+    </div>
+  </div>
   <div id="canvaswrap"><canvas id="cv"></canvas></div>
   <div id="cellinfo"></div>
-  <div id="hint">Земля — два нижних ряда (11–12), ластик пробивает ямы насквозь. Врагов не ставь в землю. «💬 РАЗГОВОРЫ» — диалоги и подсказки выбранной карты. Всё публикуется одной кнопкой внизу.</div>
+  <div id="hint">Земля — два нижних ряда (11–12), ластик пробивает ямы насквозь. «↑ Выше / ↓ Ниже» — порядок уровней, новая карта вставляется после выбранной. «🚧 В разработке» — экран в конце игры: его можно настроить или удалить. Всё публикуется одной кнопкой внизу.</div>
 </div>
 
 <!-- ================= РАЗГОВОРЫ ================= -->
