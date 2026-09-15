@@ -66,7 +66,7 @@ const Game = (() => {
 
   // ---------- прогресс ----------
   const SAVE_KEY = 'melstroy_chekushka_v1';
-  let progress = { unlocked: 1, done: {}, sound: true };
+  let progress = { unlocked: 1, done: {}, sound: true, musicVol: 1, sfxVol: 1 };
   try {
     const raw = localStorage.getItem(SAVE_KEY);
     if (raw) progress = Object.assign(progress, JSON.parse(raw));
@@ -499,6 +499,8 @@ const Game = (() => {
     },
     onLevelPick(i) { startLevel(i); },
     getProgress() { return progress; },
+    getSoundPrefs() { return { musicVol: progress.musicVol, sfxVol: progress.sfxVol }; },
+    setSoundPrefs(v) { progress.musicVol = v.musicVol; progress.sfxVol = v.sfxVol; saveProgress(); },
     onPause() { togglePause(); },
     onResume() { togglePause(); },
     onRestart() { startLevel(levelIndex); },
@@ -577,6 +579,7 @@ const Game = (() => {
 
   // ---------- запуск ----------
   async function boot() {
+    Audio8.setVolumes(typeof progress.musicVol === 'number' ? progress.musicVol : 1, typeof progress.sfxVol === 'number' ? progress.sfxVol : 1);
     Audio8.setEnabled(progress.sound !== false);
     resizeCanvas();
     window.addEventListener('resize', resizeCanvas);
@@ -594,30 +597,74 @@ const Game = (() => {
       pi.onerror = () => { pi.style.visibility = 'hidden'; };
       pi.onload = () => { pi.style.visibility = ''; };
     }
-    // === ADMIN MAP OVERRIDE — НАЧАЛО (временная админ-панель; удалить этот блок + admin.html при снятии) ===
+  // === ADMIN CMS OVERRIDE — НАЧАЛО (временная админ-панель; удалить этот блок + admin.html + api/game-cms при снятии) ===
+  function applyLegacyLevels(levels) {
+    Object.entries(levels).forEach(([i, def]) => {
+      const k = Number(i);
+      if (LEVELS[k] && LEVELS[k].type === 'map' && def && def.type === 'map') {
+        LEVELS[k] = Object.assign({}, LEVELS[k], def); // диалоги/фон берутся из def или оригинала
+      }
+    });
+  }
+  // Применяет пакет из админ-панели: карты (сколько угодно), разговоры, текстуры, музыку, каналы
+  function applyCms(j) {
+    if (Array.isArray(j.maps) && j.maps.length) {
+      const intro = LEVELS[0];
+      const indev = LEVELS[LEVELS.length - 1];
+      const defs = j.maps.map((m) => m && m.def).filter((d) => d && d.type === 'map');
+      if (defs.length) LEVELS.splice(0, LEVELS.length, intro, ...defs, indev);
+    } else if (j.levels) {
+      applyLegacyLevels(j.levels);
+    }
+    if (j.intro && typeof j.intro === 'object') {
+      if (Array.isArray(j.intro.cutscene) && j.intro.cutscene.length && LEVELS[0]) LEVELS[0].cutscene = j.intro.cutscene;
+      if (Array.isArray(j.intro.outroAfterBoss) && j.intro.outroAfterBoss.length) DIALOGUES.outroAfterBoss = j.intro.outroAfterBoss;
+    }
+    if (j.textures && typeof j.textures === 'object') {
+      const map = {};
+      Object.entries(j.textures).forEach(([k, v]) => { if (v && v.url) map[k] = v.url; });
+      Sprites.setCustom(map);
+      const bi = document.getElementById('hud-bottle-icon');
+      if (bi && map.checkushka) { bi.style.visibility = ''; bi.src = map.checkushka; }
+      const pi = document.getElementById('hud-plush-icon');
+      if (pi && map.plush) { pi.style.visibility = ''; pi.src = map.plush; }
+    }
+    if (j.music && Array.isArray(j.music.tracks) && j.music.active) {
+      const tr = j.music.tracks.find((t) => t.id === j.music.active);
+      if (tr && tr.url) Audio8.setCustomMusic(tr.url);
+    }
+    if (Array.isArray(j.socials) && j.socials.length) {
+      CONFIG.SOCIALS = j.socials.map((s) => ({ name: s.name, class: s.class || 'tg', url: s.url || '#' }));
+    }
+  }
+  async function loadAdminCms() {
     try {
-      let ov = null;
+      let cms = null;
       try {
-        const r1 = await fetch('maps-override.json', { cache: 'no-store', signal: AbortSignal.timeout(2500) });
-        if (r1.ok) ov = await r1.json();
-      } catch (e) { /* нет файла — норма для статичного хостинга */ }
-      if (!ov) {
+        const r0 = await fetch('/api/game-cms', { cache: 'no-store', signal: AbortSignal.timeout(2500) });
+        if (r0.ok) { const j = await r0.json(); if (j && j.ok) cms = j; }
+      } catch (e) { /* нет API — норма */ }
+      if (!cms) {
+        // статичный хостинг: рядом с index.html лежит game-cms.json (экспорт панели)
         try {
-          const r2 = await fetch('/api/game-maps', { cache: 'no-store', signal: AbortSignal.timeout(2500) });
-          if (r2.ok) { const j = await r2.json(); if (j && j.levels) ov = j; }
-        } catch (e) { /* нет API — норма */ }
+          const r1 = await fetch('game-cms.json', { cache: 'no-store', signal: AbortSignal.timeout(2500) });
+          if (r1.ok) cms = await r1.json();
+        } catch (e) { /* нет файла */ }
       }
-      if (ov && ov.levels) {
-        Object.entries(ov.levels).forEach(([i, def]) => {
-          const k = Number(i);
-          if (LEVELS[k] && LEVELS[k].type === 'map' && def && def.type === 'map') {
-            LEVELS[k] = Object.assign({}, LEVELS[k], def); // диалоги/фон берутся из def или оригинала
-          }
-        });
+      if (cms && (cms.maps || cms.levels || cms.textures || cms.music || cms.socials || cms.intro)) {
+        applyCms(cms);
+        return;
       }
-    } catch (e) { /* подмена карт необязательна */ }
-    // === ADMIN MAP OVERRIDE — КОНЕЦ ===
+      try {
+        const r2 = await fetch('maps-override.json', { cache: 'no-store', signal: AbortSignal.timeout(2500) });
+        if (r2.ok) { const j = await r2.json(); if (j && j.levels) applyLegacyLevels(j.levels); }
+      } catch (e) { /* нет файла — норма */ }
+    } catch (e) { /* подмена необязательна */ }
+  }
+  // === ADMIN CMS OVERRIDE — КОНЕЦ ===
 
+  // ---------- запуск ----------
+    await loadAdminCms();
     UI.init(callbacks);
     bindInput();
     registerSW();

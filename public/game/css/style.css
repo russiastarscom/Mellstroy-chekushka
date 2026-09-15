@@ -228,6 +228,10 @@ html, body {
 .social-btn.tg { background: #279fd9; }
 .social-btn.yt { background: #e62117; }
 .social-btn.tt { background: #23232b; }
+.social-btn.vk { background: #4c75a3; }
+.social-btn.tw { background: #9146ff; }
+.social-btn.ds { background: #5865f2; }
+.social-btn.other { background: #5a5a72; }
 
 /* ---------- Тач: flex-группы у больших пальцев, без наездов ---------- */
 #touch { position: absolute; inset: 0; z-index: 10; pointer-events: none; }
@@ -276,4 +280,44 @@ html, body {
 /* Скроллбар для грида уровней при узком экране */
 @media (max-width: 560px) {
   #levels-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* ---------- Настройки звука ---------- */
+.snd-box {
+  width: min(520px, 86vw);
+  background: #ffffff10;
+  border: 1px solid #ffffff22;
+  border-radius: 14px;
+  padding: 18px 18px 8px;
+  margin-bottom: 18px;
+}
+.snd-row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 0 16px;
+}
+.snd-label { flex: 0 0 110px; font-weight: bold; font-size: 15px; }
+.snd-val { flex: 0 0 46px; text-align: right; color: var(--accent); font-weight: bold; font-size: 14px; }
+.snd-row input[type="range"] {
+  flex: 1; height: 34px; -webkit-appearance: none; appearance: none;
+  background: transparent; cursor: pointer;
+}
+.snd-row input[type="range"]::-webkit-slider-runnable-track {
+  height: 10px; border-radius: 6px;
+  background: linear-gradient(90deg, var(--accent) var(--fill, 50%), #3a3a55 var(--fill, 50%));
+}
+.snd-row input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none;
+  width: 24px; height: 24px; border-radius: 50%;
+  background: #fff; border: 3px solid var(--accent);
+  margin-top: -7px; box-shadow: 0 2px 8px rgba(0,0,0,.4);
+}
+.snd-row input[type="range"]::-moz-range-track {
+  height: 10px; border-radius: 6px; background: #3a3a55;
+}
+.snd-row input[type="range"]::-moz-range-progress {
+  height: 10px; border-radius: 6px; background: var(--accent);
+}
+.snd-row input[type="range"]::-moz-range-thumb {
+  width: 20px; height: 20px; border-radius: 50%;
+  background: #fff; border: 3px solid var(--accent);
 }

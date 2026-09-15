@@ -214,6 +214,21 @@ const Sprites = (() => {
     loaded = true;
   }
 
+  // Подмена спрайтов с сервера (админ-панель): {key: url}
+  // Картинка вписывается в тот же слот w/h, фолбэк и портрет остаются.
+  function setCustom(map) {
+    Object.entries(map || {}).forEach(([key, url]) => {
+      const def = DEFS[key];
+      if (!def || !url) return;
+      const img = new Image();
+      img.onload = () => {
+        if (store[key]) store[key].img = img;
+        else store[key] = { img, fallback: FALLBACKS[key] ? FALLBACKS[key]() : null, w: def.w, h: def.h, bg: !!def.bg, pr: def.portrait || null };
+      };
+      img.src = url;
+    });
+  }
+
   function get(key) { return store[key]; }
 
   // Нарисовать спрайт (img или фолбэк) с флипом
@@ -269,5 +284,5 @@ const Sprites = (() => {
     x.drawImage(src, bx, py0, bw, hh, (canvas.width - dw) / 2, (canvas.height - dh) / 2, dw, dh);
   }
 
-  return { load, get, draw, portrait, isReady: () => loaded };
+  return { load, setCustom, get, draw, portrait, isReady: () => loaded, SLOTS: Object.keys(DEFS) };
 })();

@@ -88,7 +88,7 @@
       <div class="menu-buttons">
         <button id="btn-play" class="big-btn">▶ ИГРАТЬ</button>
         <button id="btn-levels" class="big-btn">КАРТЫ</button>
-        <button id="btn-sound" class="big-btn small">ЗВУК: ВКЛ</button>
+        <button id="btn-sound" class="big-btn small">🔊 НАСТРОЙКИ ЗВУКА</button>
       </div>
       <div class="menu-footer">Фанатская треш-игра 18+: мат, чёрный юмор.<br>Все совпадения с вашей бутылкой случайны.</div>
     </div>
@@ -99,6 +99,27 @@
     <h2 class="screen-title">ВЫБОР КАРТЫ</h2>
     <div id="levels-grid"></div>
     <button id="btn-levels-back" class="big-btn small">← НАЗАД</button>
+  </div>
+
+  <!-- Настройки звука -->
+  <div id="screen-sound" class="screen hidden">
+    <h2 class="screen-title">НАСТРОЙКИ ЗВУКА</h2>
+    <div class="snd-box">
+      <div class="snd-row">
+        <span class="snd-label">🎵 Музыка</span>
+        <input id="snd-music" type="range" min="0" max="100" value="100">
+        <span id="snd-music-val" class="snd-val">100%</span>
+      </div>
+      <div class="snd-row">
+        <span class="snd-label">💥 Эффекты</span>
+        <input id="snd-sfx" type="range" min="0" max="100" value="100">
+        <span id="snd-sfx-val" class="snd-val">100%</span>
+      </div>
+    </div>
+    <div class="menu-buttons">
+      <button id="btn-sound-toggle" class="big-btn small">ЗВУК: ВКЛ</button>
+      <button id="btn-sound-back" class="big-btn small">← НАЗАД</button>
+    </div>
   </div>
 
   <!-- Пауза -->

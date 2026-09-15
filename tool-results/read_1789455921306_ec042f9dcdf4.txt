@@ -1,0 +1,545 @@
+     1→<!DOCTYPE html>
+     2→<html lang="ru">
+     3→<head>
+     4→<meta charset="utf-8">
+     5→<meta name="viewport" content="width=device-width, initial-scale=1">
+     6→<title>АДМИН — редактор карт | Мелстрой: Мировая Чекушка</title>
+     7→<style>
+     8→  * { box-sizing: border-box; margin: 0; padding: 0; }
+     9→  body { background: #12121f; color: #e8e8f0; font: 14px/1.45 Arial, sans-serif; padding-bottom: 40px; }
+    10→  header { background: linear-gradient(90deg, #2a0a0a, #1a1a2e); border-bottom: 2px solid #e63946; padding: 10px 14px; }
+    11→  header h1 { font-size: 18px; color: #ffd23f; letter-spacing: .5px; }
+    12→  header .warn { color: #ff9c9c; font-size: 12px; margin-top: 3px; }
+    13→  header .status { font-size: 12px; color: #9fe8a0; margin-top: 3px; }
+    14→  header .status.none { color: #8a8aa0; }
+    15→  #tabs { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 14px 0; }
+    16→  #tabs button { background: #23233a; color: #cfcfe6; border: 1px solid #3a3a5a; border-radius: 8px 8px 0 0; padding: 8px 12px; cursor: pointer; font-weight: bold; }
+    17→  #tabs button.active { background: #e63946; color: #fff; border-color: #e63946; }
+    18→  #tabs button .dirty { color: #ffd23f; }
+    19→  #toolbar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 10px 14px; background: #1a1a2b; border-bottom: 1px solid #2c2c46; position: sticky; top: 0; z-index: 5; }
+    20→  .tool { background: #23233a; border: 2px solid #3a3a5a; color: #cfcfe6; border-radius: 8px; padding: 7px 9px; cursor: pointer; font-size: 13px; min-width: 44px; text-align: center; }
+    21→  .tool.active { border-color: #ffd23f; background: #3a3a20; color: #ffe9a8; }
+    22→  .tool b { display: block; font-size: 15px; }
+    23→  .sep { width: 1px; height: 30px; background: #3a3a5a; margin: 0 4px; }
+    24→  .act { background: #2a6a3a; border: none; color: #fff; border-radius: 8px; padding: 9px 12px; cursor: pointer; font-weight: bold; }
+    25→  .act.warn { background: #8a3a3a; }
+    26→  .act.gray { background: #3a3a5a; }
+    27→  .act.big { background: #e63946; font-size: 15px; }
+    28→  #lvlname { background: #23233a; border: 1px solid #3a3a5a; color: #fff; border-radius: 8px; padding: 8px 10px; width: 200px; font-weight: bold; }
+    29→  #zoombox { display: flex; gap: 4px; align-items: center; color: #8a8aa0; }
+    30→  #zoombox button { width: 30px; height: 30px; border-radius: 6px; border: 1px solid #3a3a5a; background: #23233a; color: #fff; cursor: pointer; }
+    31→  #canvaswrap { overflow: auto; padding: 10px 14px; background: #0d0d18; }
+    32→  #cv { background: #1c1c30; border: 1px solid #33335a; touch-action: none; cursor: crosshair; image-rendering: pixelated; }
+    33→  #hint { padding: 4px 14px; color: #8a8aa0; font-size: 12px; }
+    34→  #cellinfo { padding: 0 14px 8px; color: #6fc0ff; font-size: 12px; min-height: 18px; }
+    35→  #toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: #e63946; color: #fff; padding: 10px 18px; border-radius: 10px; font-weight: bold; opacity: 0; transition: opacity .25s; pointer-events: none; max-width: 90vw; z-index: 50; }
+    36→  #toast.ok { background: #2a8a4a; }
+    37→  #toast.show { opacity: 1; }
+    38→</style>
+    39→</head>
+    40→<body>
+    41→<header>
+    42→  <h1>⚙ АДМИН-ПАНЕЛЬ — РЕДАКТОР КАР <small style="color:#8a8aa0">(временная, убирается по команде)</small></h1>
+    43→  <div class="warn">«ОПУБЛИКОВАТЬ» — карта меняется для ВСЕХ игроков сразу. «СБРОС» — вернуть официальные карты. Правки сами сохраняются как черновик в браузере, но игроки видят только ОПУБЛИКОВАННОЕ.</div>
+    44→  <div class="status none" id="status">загрузка…</div>
+    45→</header>
+    46→<div id="tabs"></div>
+    47→<div id="toolbar">
+    48→  <button class="tool" data-tool="ground" title="Земля, только 2 нижних ряда"><b>▓</b>земля</button>
+    49→  <button class="tool" data-tool="B" title="Кирпич — твёрдый, любой ряд"><b>🧱</b>кирпич</button>
+    50→  <button class="tool" data-tool="=" title="Платформа — можно спрыгнуть вниз"><b>▬</b>платформа</button>
+    51→  <button class="tool" data-tool="^" title="Шипы — урон"><b>▲</b>шипы</button>
+    52→  <button class="tool" data-tool="erase" title="Ластик — стереть тайл/сущность"><b>⌫</b>ластик</button>
+    53→  <div class="sep"></div>
+    54→  <button class="tool" data-tool="e" title="Рядовой бурмалдинец"><b>👊</b>враг</button>
+    55→  <button class="tool" data-tool="t" title="Метатель томагавков"><b>🪓</b>метатель</button>
+    56→  <button class="tool" data-tool="G" title="Вождь (босс) — обязателен на карте 4"><b>👑</b>вождь</button>
+    57→  <button class="tool" data-tool="bottle" title="Чекушка (+1)"><b>🍾</b>чекушка</button>
+    58→  <button class="tool" data-tool="heart" title="Сердечко (+1 HP)"><b>❤</b>сердце</button>
+    59→  <button class="tool" data-tool="plush" title="Гора плюшек (+3 снаряда)"><b>🧸</b>плюшки</button>
+    60→  <button class="tool" data-tool="spawn" title="Старт Андрея"><b>🚩</b>старт</button>
+    61→  <button class="tool" data-tool="factory" title="Завод (выход)"><b>🏭</b>завод</button>
+    62→  <div class="sep"></div>
+    63→  <button class="tool" id="btn-undo" title="Отменить последнее действие (Ctrl+Z)"><b>↩</b>отмена</button>
+    64→  <div id="zoombox"><button id="zoom-out">−</button><span id="zoom-val"></span><button id="zoom-in">+</button></div>
+    65→</div>
+    66→<div style="padding: 8px 14px 0; display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+    67→  <label style="color:#8a8aa0">Название карты: <input id="lvlname"></label>
+    68→  <button class="act big" id="btn-publish">🚀 ОПУБЛИКОВАТЬ ДЛЯ ВСЕХ</button>
+    69→  <button class="act" id="btn-test">▶ Тест (публикует + откроет игру)</button>
+    70→  <button class="act gray" id="btn-export">⬇ Экспорт JSON</button>
+    71→  <button class="act warn" id="btn-reset-level">Сброс этой карты</button>
+    72→  <button class="act warn" id="btn-reset-all">СБРОС ВСЕГО (официальные карты)</button>
+    73→</div>
+    74→<div id="canvaswrap"><canvas id="cv"></canvas></div>
+    75→<div id="cellinfo"></div>
+    76→<div id="hint">Земля ставится только в двух нижних рядах (11–12). Платформу «▬» можно пройти снизу и спрыгнуть вниз. Врагов не ставь в землю и в шипы. На карте 4 «Вождь 👑» обязателен — без него завод не откроется.</div>
+    77→<div id="toast"></div>
+    78→
+    79→<script src="js/levels.js"></script>
+    80→<script>
+    81→// ============================================================
+    82→// ВРЕМЕННАЯ АДМИН-ПАНЕЛЬ: редактор карт «Мелстрой: Мировая Чекушка».
+    83→// Удаляется файлом admin.html + блоком в main.js + api/game-maps.
+    84→// ============================================================
+    85→const $ = (id) => document.getElementById(id);
+    86→const API = '/api/game-maps';
+    87→const MAP_IDX = LEVELS.map((d, i) => [i, d]).filter(([, d]) => d.type === 'map');
+    88→const ORIGINALS = {};
+    89→MAP_IDX.forEach(([i, d]) => { ORIGINALS[i] = JSON.parse(JSON.stringify(d)); });
+    90→
+    91→let cur = null;            // индекс LEVELS текущей карты
+    92→let tool = 'ground';
+    93→let zoom = { cs: 26 };
+    94→let hover = null;          // {c,r}
+    95→const E = {};              // idx -> {cells, ents, spawn, factory, name, dirty, undo}
+    96→let pubAt = null;          // дата последней публикации (из API)
+    97→
+    98→// ---------- черновики: автосохранение правок в браузере ----------
+    99→const DRAFT_KEY = 'adminMapDrafts_v1';
+   100→let saveTimer = null;
+   101→function saveDrafts() {
+   102→  clearTimeout(saveTimer);
+   103→  saveTimer = setTimeout(() => {
+   104→    try {
+   105→      const out = { savedAt: Date.now(), levels: {} };
+   106→      MAP_IDX.forEach(([i]) => {
+   107→        const st = E[i];
+   108→        out.levels[i] = { cells: st.cells, ents: st.ents, spawn: st.spawn, factory: st.factory, name: st.name, clean: !st.dirty };
+   109→      });
+   110→      localStorage.setItem(DRAFT_KEY, JSON.stringify(out));
+   111→    } catch (e) { /* приватный режим — работаем без черновиков */ }
+   112→  }, 300);
+   113→}
+   114→function loadDrafts() {
+   115→  try {
+   116→    const raw = localStorage.getItem(DRAFT_KEY);
+   117→    if (!raw) return null;
+   118→    const d = JSON.parse(raw);
+   119→    return (d && d.levels) ? d : null;
+   120→  } catch (e) { return null; }
+   121→}
+   122→function applyDrafts(d) {
+   123→  let any = false;
+   124→  MAP_IDX.forEach(([i]) => {
+   125→    const s = d.levels[i];
+   126→    const w = ORIGINALS[i].width;
+   127→    if (s && Array.isArray(s.cells) && s.cells.length === ROWS && s.cells[0] && s.cells[0].length === w && Array.isArray(s.ents)) {
+   128→      E[i].cells = s.cells; E[i].ents = s.ents;
+   129→      E[i].spawn = (typeof s.spawn === 'number') ? s.spawn : E[i].spawn;
+   130→      E[i].factory = (typeof s.factory === 'number') ? s.factory : E[i].factory;
+   131→      E[i].name = s.name || E[i].name;
+   132→      E[i].dirty = !s.clean;
+   133→      any = true;
+   134→    }
+   135→  });
+   136→  return any;
+   137→}
+   138→
+   139→const toastEl = $('toast');
+   140→let toastTimer = null;
+   141→function toast(msg, ok = false) {
+   142→  toastEl.textContent = msg;
+   143→  toastEl.classList.toggle('ok', ok);
+   144→  toastEl.classList.add('show');
+   145→  clearTimeout(toastTimer);
+   146→  toastTimer = setTimeout(() => toastEl.classList.remove('show'), 2600);
+   147→}
+   148→
+   149→// ---------- def (levels.js) <-> состояние редактора ----------
+   150→function defToState(def) {
+   151→  const w = def.width;
+   152→  const cells = Array.from({ length: ROWS }, () => Array(w).fill('.'));
+   153→  (def.ground || []).forEach(([c0, c1]) => {
+   154→    for (let r = 11; r < ROWS; r++) for (let c = c0; c <= c1; c++) if (c >= 0 && c < w) cells[r][c] = '#';
+   155→  });
+   156→  (def.bricks || []).forEach(([c0, r0, c1, r1]) => {
+   157→    for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++)
+   158→      if (r >= 0 && r < ROWS && c >= 0 && c < w) cells[r][c] = 'B';
+   159→  });
+   160→  (def.plats || []).forEach(([c, r, len]) => {
+   161→    for (let i = 0; i < len; i++) { const cc = c + i; if (r >= 0 && r < ROWS && cc >= 0 && cc < w) cells[r][cc] = '='; }
+   162→  });
+   163→  (def.spikes || []).forEach(([c0, c1, r]) => {
+   164→    const row = (r === undefined || r === null) ? 10 : r;
+   165→    for (let c = c0; c <= c1; c++) if (row >= 0 && row < ROWS && c >= 0 && c < w) cells[row][c] = '^';
+   166→  });
+   167→  const ents = [];
+   168→  const add = (t, c, r) => { if (c >= 0 && c < w && r >= 0 && r < ROWS) ents.push({ t, c, r }); };
+   169→  (def.bottles?.runs || []).forEach(([c0, c1, r]) => { for (let c = c0; c <= c1; c++) add('bottle', c, r); });
+   170→  (def.bottles?.singles || []).forEach(([c, r]) => add('bottle', c, r));
+   171→  (def.hearts || []).forEach(([c, r]) => add('heart', c, r));
+   172→  (def.plushes || []).forEach(([c, r]) => add('plush', c, r));
+   173→  (def.enemies || []).forEach(([t, c, r]) => add(t, c, (r === undefined || r === null) ? 10 : r));
+   174→  if (def.boss) add('G', def.boss.col, 9);
+   175→  return {
+   176→    cells, ents, undo: [], dirty: false,
+   177→    spawn: def.spawn?.c ?? 2, factory: def.factory?.c ?? (w - 6),
+   178→    name: def.name || ORIGINALS_NAME(def),
+   179→  };
+   180→}
+   181→function ORIGINALS_NAME(def) { return def.name || 'Карта'; }
+   182→
+   183→function stateToDef(idx) {
+   184→  const orig = ORIGINALS[idx];
+   185→  const st = E[idx];
+   186→  const { cells, ents } = st;
+   187→  const w = orig.width;
+   188→  const ground = [], bricks = [], plats = [], spikes = [];
+   189→  const singles = [], hearts = [], plushes = [], enemies = [];
+   190→  let bossCol = null;
+   191→  for (let r = 11; r < ROWS; r++) {
+   192→    let c = 0;
+   193→    while (c < w) {
+   194→      if (cells[r][c] === '#') {
+   195→        const c0 = c; while (c < w && cells[r][c] === '#') c++;
+   196→        if (!ground.some((g) => g[0] === c0 && g[1] === c - 1)) ground.push([c0, c - 1]);
+   197→      }
+   198→      else c++;
+   199→    }
+   200→  }
+   201→  for (let r = 0; r < ROWS; r++) {
+   202→    let c = 0;
+   203→    while (c < w) {
+   204→      const ch = cells[r][c];
+   205→      if (ch === 'B' || ch === '=' || ch === '^') {
+   206→        const c0 = c; while (c < w && cells[r][c] === ch) c++;
+   207→        if (ch === 'B') bricks.push([c0, r, c - 1, r]);
+   208→        else if (ch === '=') plats.push([c0, r, c - c0]);
+   209→        else spikes.push([c0, c - 1, r]);
+   210→      } else c++;
+   211→    }
+   212→  }
+   213→  ents.forEach((e) => {
+   214→    if (e.t === 'bottle') singles.push([e.c, e.r]);
+   215→    else if (e.t === 'heart') hearts.push([e.c, e.r]);
+   216→    else if (e.t === 'plush') plushes.push([e.c, e.r]);
+   217→    else if (e.t === 'e' || e.t === 't') enemies.push([e.t, e.c, e.r]);
+   218→    else if (e.t === 'G') bossCol = e.c;
+   219→  });
+   220→  const def = {
+   221→    id: orig.id, type: 'map', bg: orig.bg, width: w,
+   222→    name: (st.name || orig.name || 'Карта').slice(0, 40),
+   223→    ground, bricks, plats, spikes,
+   224→    bottles: { runs: [], singles },
+   225→    hearts, enemies,
+   226→    spawn: { c: st.spawn }, factory: { c: st.factory },
+   227→  };
+   228→  if (orig.plushes || plushes.length) def.plushes = plushes;
+   229→  if (bossCol !== null) def.boss = { col: bossCol };
+   230→  if (orig.factoryLocked) def.factoryLocked = true;
+   231→  if (orig.hints) def.hints = orig.hints;
+   232→  if (orig.dialogue) def.dialogue = orig.dialogue;
+   233→  return def;
+   234→}
+   235→
+   236→function validateState(idx) {
+   237→  const orig = ORIGINALS[idx];
+   238→  const st = E[idx];
+   239→  const w = orig.width;
+   240→  if (st.spawn < 1 || st.spawn > w - 2) return 'Старт Андрея вне карты';
+   241→  if (st.factory < 1 || st.factory > w - 2) return 'Завод вне карты';
+   242→  const above = st.cells[10][st.spawn];
+   243→  if (above !== '.') return `Старт (${st.spawn},10) занят тайлом «${above}» — убери его`;
+   244→  for (const e of st.ents) {
+   245→    if (e.c < 0 || e.c >= w) return 'Сущность вне карты';
+   246→    if (e.r >= 11) return 'Сущность внутри земли — подними выше';
+   247→  }
+   248→  if (orig.factoryLocked && !st.ents.some((e) => e.t === 'G'))
+   249→    return 'На карте 4 обязателен Вождь 👑 (без него завод не откроется)';
+   250→  return null;
+   251→}
+   252→// ---------- спрайты для превью ----------
+   253→const IMG = {};
+   254→['andrey', 'burmaldenets', 'boss', 'checkushka', 'heart', 'plush', 'factory'].forEach((k) => {
+   255→  const im = new Image();
+   256→  im.src = 'image/' + k + '.png';
+   257→  im.onload = () => { if (E[cur]) draw(); };
+   258→  IMG[k] = im;
+   259→});
+   260→
+   261→// ---------- вкладки ----------
+   262→function buildTabs() {
+   263→  const box = $('tabs');
+   264→  box.innerHTML = '';
+   265→  LEVELS.forEach((d, i) => {
+   266→    const b = document.createElement('button');
+   267→    if (d.type !== 'map') { b.textContent = `№${d.id} ${d.name} (не карта)`; b.disabled = true; b.style.opacity = .45; }
+   268→    else {
+   269→      const dirty = E[i].dirty ? ' <span class="dirty">●</span>' : '';
+   270→      b.innerHTML = `№${d.id} ${E[i].name || d.name}${dirty}`;
+   271→      b.onclick = () => { cur = i; draw(); buildTabs(); $('lvlname').value = E[i].name || ''; };
+   272→      if (i === cur) b.classList.add('active');
+   273→    }
+   274→    box.appendChild(b);
+   275→  });
+   276→}
+   277→
+   278→// ---------- рендер ----------
+   279→const cv = $('cv');
+   280→function fitZoom() {
+   281→  const w = E[cur].cells[0].length;
+   282→  const avail = $('canvaswrap').clientWidth - 30;
+   283→  zoom.cs = Math.max(12, Math.min(36, Math.floor(avail / w)));
+   284→  $('zoom-val').textContent = zoom.cs + 'px';
+   285→}
+   286→function draw() {
+   287→  const st = E[cur];
+   288→  const w = st.cells[0].length;
+   289→  const cs = zoom.cs;
+   290→  const TOP = 14;
+   291→  const dpr = window.devicePixelRatio || 1;
+   292→  cv.width = (w * cs) * dpr;
+   293→  cv.height = (TOP + ROWS * cs) * dpr;
+   294→  cv.style.width = (w * cs) + 'px';
+   295→  cv.style.height = (TOP + ROWS * cs) + 'px';
+   296→  const x = cv.getContext('2d');
+   297→  x.setTransform(dpr, 0, 0, dpr, 0, 0);
+   298→  x.fillStyle = '#1c1c30'; x.fillRect(0, 0, w * cs, TOP + ROWS * cs);
+   299→  // номера колонок
+   300→  x.fillStyle = '#55557a'; x.font = '9px Arial'; x.textAlign = 'center';
+   301→  for (let c = 0; c < w; c += 5) x.fillText(c, c * cs + cs / 2, 10);
+   302→  // тайлы
+   303→  for (let r = 0; r < ROWS; r++) {
+   304→    for (let c = 0; c < w; c++) {
+   305→      const ch = st.cells[r][c];
+   306→      const px = c * cs, py = TOP + r * cs;
+   307→      if (ch === '#') { x.fillStyle = '#7a4a2b'; x.fillRect(px, py, cs, cs); x.fillStyle = '#4caf50'; x.fillRect(px, py, cs, Math.max(3, cs * .22)); }
+   308→      else if (ch === 'B') { x.fillStyle = '#9c4a2d'; x.fillRect(px, py, cs, cs); x.strokeStyle = '#5d2c1a'; x.lineWidth = 1; x.strokeRect(px + .5, py + .5, cs - 1, cs - 1); x.beginPath(); x.moveTo(px, py + cs / 2); x.lineTo(px + cs, py + cs / 2); x.stroke(); }
+   309→      else if (ch === '=') { x.fillStyle = '#b98a4a'; x.fillRect(px, py + cs * .2, cs, cs * .45); x.fillStyle = '#8a6234'; x.fillRect(px, py + cs * .5, cs, cs * .15); }
+   310→      else if (ch === '^') { x.fillStyle = '#b9b9c9'; for (let k = 0; k < 2; k++) { x.beginPath(); x.moveTo(px + k * cs / 2, py + cs); x.lineTo(px + k * cs / 2 + cs / 4, py + cs * .25); x.lineTo(px + (k + 1) * cs / 2, py + cs); x.closePath(); x.fill(); } }
+   311→      if (r === 11 && st.cells[r][c] === '.' && (st.cells[r - 1] && st.cells[r - 1][c]) !== '#') { x.fillStyle = '#22223a'; x.fillRect(px, py, cs, cs * 2 / 3); }
+   312→    }
+   313→  }
+   314→  // сетка
+   315→  x.strokeStyle = '#ffffff12'; x.lineWidth = 1;
+   316→  for (let c = 0; c <= w; c++) { x.beginPath(); x.moveTo(c * cs + .5, TOP); x.lineTo(c * cs + .5, TOP + ROWS * cs); x.stroke(); }
+   317→  for (let r = 0; r <= ROWS; r++) { x.beginPath(); x.moveTo(0, TOP + r * cs + .5); x.lineTo(w * cs, TOP + r * cs + .5); x.stroke(); }
+   318→  // завод (рисуем до сущностей)
+   319→  drawFactory(x, st.factory, cs, TOP, st);
+   320→  // сущности
+   321→  st.ents.forEach((e) => drawEnt(x, e, cs, TOP));
+   322→  // старт
+   323→  drawSpawn(x, st.spawn, cs, TOP);
+   324→  // курсор
+   325→  if (hover) { x.strokeStyle = '#ffd23f'; x.lineWidth = 2; x.strokeRect(hover.c * cs + 1, TOP + hover.r * cs + 1, cs - 2, cs - 2); }
+   326→  $('cellinfo').textContent = hover ? `колонка ${hover.c}, ряд ${hover.r}` : '';
+   327→}
+   328→function imgFit(x, im, cx, bottomY, maxW, maxH) {
+   329→  if (!im.complete || !im.naturalWidth) return false;
+   330→  const k = Math.min(maxW / im.naturalWidth, maxH / im.naturalHeight);
+   331→  const dw = im.naturalWidth * k, dh = im.naturalHeight * k;
+   332→  x.drawImage(im, cx - dw / 2, bottomY - dh, dw, dh);
+   333→  return true;
+   334→}
+   335→function drawEnt(x, e, cs, TOP) {
+   336→  const cx = e.c * cs + cs / 2, by = TOP + (e.r + 1) * cs;
+   337→  const map = { e: 'burmaldenets', t: 'burmaldenets', G: 'boss', bottle: 'checkushka', heart: 'heart', plush: 'plush' };
+   338→  if (!imgFit(x, IMG[map[e.t]], cx, by, e.t === 'G' ? cs * 1.8 : cs * .95, e.t === 'G' ? cs * 1.9 : cs * .95)) {
+   339→    x.fillStyle = e.t === 'G' ? '#ffd23f' : '#e63946';
+   340→    x.beginPath(); x.arc(cx, by - cs / 2, cs * .3, 0, 7); x.fill();
+   341→  }
+   342→  if (e.t === 't') { x.fillStyle = '#fff'; x.font = 'bold 9px Arial'; x.textAlign = 'center'; x.fillText('T', cx, by - cs - 1); }
+   343→}
+   344→function drawSpawn(x, c, cs, TOP) {
+   345→  const cx = c * cs + cs / 2, by = TOP + 11 * cs;
+   346→  imgFit(x, IMG.andrey, cx, by, cs, cs * 1.2);
+   347→  x.fillStyle = '#ffd23f'; x.font = 'bold 9px Arial'; x.textAlign = 'center';
+   348→  x.fillText('СТАРТ', cx, by - cs * 1.15);
+   349→}
+   350→function drawFactory(x, c, cs, TOP, st) {
+   351→  const cx = c * cs + cs / 2, by = TOP + 11 * cs;
+   352→  if (!imgFit(x, IMG.factory, cx, by, cs * 4, cs * 3.2)) {
+   353→    x.fillStyle = '#8f3b2d'; x.fillRect(c * cs, by - cs * 2, cs * 2, cs * 2);
+   354→  }
+   355→  x.fillStyle = '#9fe8a0'; x.font = 'bold 9px Arial'; x.textAlign = 'center';
+   356→  x.fillText('ЗАВОД', cx, by - cs * 3.1);
+   357→}
+   358→
+   359→// ---------- ввод ----------
+   360→let painting = false;
+   361→function cellAt(ev) {
+   362→  const rect = cv.getBoundingClientRect();
+   363→  const cs = zoom.cs, TOP = 14;
+   364→  const px = (ev.clientX - rect.left) * (cv.width / (window.devicePixelRatio || 1) / rect.width);
+   365→  const py = (ev.clientY - rect.top) * (cv.height / (window.devicePixelRatio || 1) / rect.height);
+   366→  const c = Math.floor(px / cs), r = Math.floor((py - TOP) / cs);
+   367→  const w = E[cur].cells[0].length;
+   368→  if (c < 0 || c >= w || r < 0 || r >= ROWS) return null;
+   369→  return { c, r };
+   370→}
+   371→function pushUndo() {
+   372→  const st = E[cur];
+   373→  st.undo.push(JSON.stringify({ cells: st.cells, ents: st.ents, spawn: st.spawn, factory: st.factory }));
+   374→  if (st.undo.length > 40) st.undo.shift();
+   375→}
+   376→function applyTool(c, r) {
+   377→  const st = E[cur];
+   378→  const w = st.cells[0].length;
+   379→  const entAt = (cc, rr) => st.ents.find((e) => e.c === cc && e.r === rr);
+   380→  if (tool === 'ground') {
+   381→    if (r < 11) { toast('Земля — только нижние ряды 11–12. Выше ставь кирпич или платформу.'); return; }
+   382→    if (st.cells[r][c] !== '#') { st.cells[11][c] = '#'; st.cells[12][c] = '#'; st.dirty = true; } // земля всегда 2 ряда, как в игре
+   383→  } else if (tool === 'B' || tool === '=' || tool === '^') {
+   384→    if (st.cells[r][c] !== tool) {
+   385→      if (r >= 11 && tool !== 'B' && st.cells[r][c] === '#') { toast('Сначала сотри землю ластиком.'); return; }
+   386→      st.cells[r][c] = tool; st.dirty = true;
+   387→    }
+   388→  } else if (tool === 'erase') {
+   389→    const e = entAt(c, r);
+   390→    if (e) { st.ents.splice(st.ents.indexOf(e), 1); st.dirty = true; }
+   391→    if (st.cells[r][c] !== '.') {
+   392→      if (r >= 11 && st.cells[r][c] === '#') { st.cells[11][c] = '.'; st.cells[12][c] = '.'; } // стираем яму насквозь
+   393→      else st.cells[r][c] = '.';
+   394→      st.dirty = true;
+   395→    }
+   396→  } else if (tool === 'spawn') {
+   397→    if (st.cells[10][c] !== '.') { toast('Клетка старта занята тайлом — сотри его.'); return; }
+   398→    if (st.spawn !== c) { st.spawn = c; st.dirty = true; }
+   399→  } else if (tool === 'factory') {
+   400→    if (st.factory !== c) { st.factory = c; st.dirty = true; }
+   401→  } else {
+   402→    // сущности
+   403→    if (r >= 11) { toast('В землю сущности не ставятся.'); return; }
+   404→    const e = entAt(c, r);
+   405→    if (e && e.t === tool) return;
+   406→    if (e) st.ents.splice(st.ents.indexOf(e), 1);
+   407→    st.ents.push({ t: tool, c, r: tool === 'G' ? Math.min(r, 9) : r });
+   408→    st.dirty = true;
+   409→  }
+   410→  draw(); buildTabs(); saveDrafts(); setStatus(pubAt);
+   411→}
+   412→cv.addEventListener('pointerdown', (ev) => {
+   413→  if (!E[cur]) return;
+   414→  const p = cellAt(ev); if (!p) return;
+   415→  pushUndo();
+   416→  painting = true;
+   417→  cv.setPointerCapture(ev.pointerId);
+   418→  applyTool(p.c, p.r);
+   419→});
+   420→cv.addEventListener('pointermove', (ev) => {
+   421→  const p = cellAt(ev);
+   422→  hover = p;
+   423→  if (painting && p) applyTool(p.c, p.r); else draw();
+   424→});
+   425→window.addEventListener('pointerup', () => { painting = false; });
+   426→cv.addEventListener('pointerleave', () => { hover = null; draw(); });
+   427→
+   428→// ---------- кнопки ----------
+   429→document.querySelectorAll('.tool[data-tool]').forEach((b) => {
+   430→  b.onclick = () => {
+   431→    document.querySelectorAll('.tool[data-tool]').forEach((z) => z.classList.remove('active'));
+   432→    b.classList.add('active');
+   433→    tool = b.dataset.tool;
+   434→  };
+   435→});
+   436→document.querySelector('.tool[data-tool="ground"]').classList.add('active');
+   437→
+   438→$('btn-undo').onclick = () => {
+   439→  const st = E[cur];
+   440→  const snap = st.undo.pop();
+   441→  if (!snap) { toast('Отменять нечего'); return; }
+   442→  Object.assign(st, JSON.parse(snap));
+   443→  st.dirty = true; draw(); buildTabs(); saveDrafts(); setStatus(pubAt);
+   444→};
+   445→document.addEventListener('keydown', (e) => {
+   446→  if ((e.ctrlKey || e.metaKey) && e.code === 'KeyZ') { e.preventDefault(); $('btn-undo').click(); }
+   447→});
+   448→$('zoom-in').onclick = () => { zoom.cs = Math.min(40, zoom.cs + 4); $('zoom-val').textContent = zoom.cs + 'px'; draw(); };
+   449→$('zoom-out').onclick = () => { zoom.cs = Math.max(10, zoom.cs - 4); $('zoom-val').textContent = zoom.cs + 'px'; draw(); };
+   450→$('lvlname').addEventListener('input', () => { E[cur].name = $('lvlname').value; E[cur].dirty = true; buildTabs(); saveDrafts(); setStatus(pubAt); });
+   451→
+   452→function buildPayload() {
+   453→  const levels = {};
+   454→  MAP_IDX.forEach(([i]) => { levels[i] = stateToDef(i); });
+   455→  return { levels };
+   456→}
+   457→async function publish() {
+   458→  for (const [i] of MAP_IDX) { const err = validateState(i); if (err) { toast(`Карта №${ORIGINALS[i].id}: ${err}`); cur = i; draw(); buildTabs(); return null; } }
+   459→  try {
+   460→    const r = await fetch(API, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(buildPayload()) });
+   461→    const j = await r.json();
+   462→    if (!j.ok) { toast('Ошибка публикации: ' + (j.error || r.status)); return null; }
+   463→    MAP_IDX.forEach(([i]) => { E[i].dirty = false; });
+   464→    pubAt = j.updatedAt || Date.now();
+   465→    saveDrafts();
+   466→    setStatus(pubAt);
+   467→    buildTabs();
+   468→    return j;
+   469→  } catch (e) { toast('Сервер недоступен: ' + e.message); return null; }
+   470→}
+   471→$('btn-publish').onclick = async () => { if (await publish()) toast('Опубликовано! Все игроки получат новые карты.', true); };
+   472→$('btn-test').onclick = async () => { if (await publish()) { toast('Опубликовано, открываю игру…', true); setTimeout(() => window.open('/game/index.html', '_blank'), 400); } };
+   473→$('btn-export').onclick = () => {
+   474→  const blob = new Blob([JSON.stringify(buildPayload())], { type: 'application/json' });
+   475→  const a = document.createElement('a');
+   476→  a.href = URL.createObjectURL(blob); a.download = 'maps-override.json'; a.click();
+   477→  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+   478→};
+   479→$('btn-reset-level').onclick = () => {
+   480→  E[cur] = defToState(ORIGINALS[cur]);
+   481→  E[cur].dirty = true;
+   482→  $('lvlname').value = E[cur].name;
+   483→  draw(); buildTabs(); saveDrafts(); setStatus(pubAt);
+   484→  toast('Карта возвращена к официальной (не забудь опубликовать)', true);
+   485→};
+   486→$('btn-reset-all').onclick = async () => {
+   487→  if (!confirm('Убрать ВСЕ опубликованные правки и вернуть официальные карты для всех игроков?')) return;
+   488→  try { await fetch(API, { method: 'DELETE' }); } catch (e) { toast('Сервер недоступен'); return; }
+   489→  MAP_IDX.forEach(([i]) => { E[i] = defToState(ORIGINALS[i]); });
+   490→  pubAt = null;
+   491→  $('lvlname').value = E[cur].name;
+   492→  saveDrafts(); setStatus(null); draw(); buildTabs();
+   493→  toast('Официальные карты восстановлены для всех.', true);
+   494→};
+   495→
+   496→// ---------- статус / загрузка ----------
+   497→function setStatus(updatedAt) {
+   498→  const el = $('status');
+   499→  const anyDirty = MAP_IDX.some(([i]) => E[i].dirty);
+   500→  if (anyDirty) {
+   501→    el.textContent = '⚠ Есть НЕОПУБЛИКОВАННЫЕ правки — черновик сохранён в браузере, но игроки его пока не видят. Нажми «ОПУБЛИКОВАТЬ».';
+   502→    el.classList.remove('none'); el.style.color = '#ffd23f';
+   503→  } else if (updatedAt) {
+   504→    el.textContent = 'Опубликовано: ' + new Date(updatedAt).toLocaleString('ru') + ' — игроки получают карты с сервера';
+   505→    el.classList.remove('none'); el.style.color = '';
+   506→  } else {
+   507→    el.textContent = 'Публикаций нет — у всех игроков официальные карты';
+   508→    el.classList.add('none'); el.style.color = '';
+   509→  }
+   510→}
+   511→async function boot() {
+   512→  let ov = null;
+   513→  try { const r = await fetch(API, { cache: 'no-store' }); const j = await r.json(); if (j && j.levels) ov = j; } catch (e) { /* нет API */ }
+   514→  MAP_IDX.forEach(([i]) => { E[i] = defToState((ov && ov.levels && ov.levels[i]) || ORIGINALS[i]); });
+   515→  // черновик браузера применяем, только если он не старше публикации с сервера
+   516→  const dr = loadDrafts();
+   517→  let appliedDraft = false;
+   518→  let hadDirtyDraft = false;
+   519→  if (dr) {
+   520→    const pubTs = ov && ov.updatedAt ? (new Date(ov.updatedAt).getTime() || 0) : 0;
+   521→    if (!pubTs || (dr.savedAt || 0) >= pubTs) {
+   522→      appliedDraft = applyDrafts(dr);
+   523→      hadDirtyDraft = appliedDraft && MAP_IDX.some(([i]) => E[i].dirty);
+   524→    } else {
+   525→      try { localStorage.removeItem(DRAFT_KEY); } catch (e) {}
+   526→      setTimeout(() => toast('На сервере публикация новее — старый черновик отброшен', true), 600);
+   527→    }
+   528→  }
+   529→  pubAt = (ov && ov.updatedAt) || null;
+   530→  cur = MAP_IDX[0][0];
+   531→  setStatus(pubAt);
+   532→  $('lvlname').value = E[cur].name;
+   533→  fitZoom(); buildTabs(); draw();
+   534→  if (hadDirtyDraft) toast('Черновик восстановлен — есть НЕОПУБЛИКОВАННЫЕ правки', true);
+   535→  else if (appliedDraft) toast('Черновик восстановлен из браузера', true);
+   536→  if (ov) toast('Загружены ОПУБЛИКОВАННЫЕ карты (редактируешь их)', true);
+   537→  window.ADMIN = { E, stateToDef, defToState, publish, buildPayload, paint: (c, r, t) => { tool = t; applyTool(c, r); }, get cur() { return cur; } };
+   538→}
+   539→window.addEventListener('resize', () => { fitZoom(); draw(); });
+   540→boot();
+   541→
+   542→</script>
+   543→</body>
+   544→</html>
+   545→

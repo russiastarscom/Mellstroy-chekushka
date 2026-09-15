@@ -5,8 +5,9 @@ const UI = (() => {
   const $ = (id) => document.getElementById(id);
   const cb = {}; // колбэки от Game
 
-  const SCREENS = ['gate', 'menu', 'levels', 'pause', 'gameover', 'complete', 'ending', 'indev', 'tooyoung'];
+  const SCREENS = ['gate', 'menu', 'levels', 'pause', 'gameover', 'complete', 'ending', 'indev', 'tooyoung', 'sound'];
   let currentScreen = 'menu';
+  let soundReturn = 'menu'; // куда возвращаться с экрана звука (меню или пауза)
 
   // ---------- экраны ----------
   function showScreen(name) {
@@ -189,8 +190,18 @@ const UI = (() => {
   // ---------- Звук ----------
   function updateSoundButtons() {
     const label = 'ЗВУК: ' + (Audio8.isEnabled() ? 'ВКЛ' : 'ВЫКЛ');
-    $('btn-sound').textContent = label;
-    $('btn-pause-sound').textContent = label;
+    if ($('btn-sound')) $('btn-sound').textContent = '🔊 НАСТРОЙКИ ЗВУКА';
+    if ($('btn-pause-sound')) $('btn-pause-sound').textContent = label;
+    if ($('btn-sound-toggle')) $('btn-sound-toggle').textContent = label;
+  }
+
+  function syncSoundSliders() {
+    const v = Audio8.getVolumes();
+    const m = $('snd-music'), s = $('snd-sfx');
+    if (m) { m.value = Math.round(v.musicVol * 100); m.style.setProperty('--fill', m.value + '%'); }
+    if (s) { s.value = Math.round(v.sfxVol * 100); s.style.setProperty('--fill', s.value + '%'); }
+    if ($('snd-music-val')) $('snd-music-val').textContent = Math.round(v.musicVol * 100) + '%';
+    if ($('snd-sfx-val')) $('snd-sfx-val').textContent = Math.round(v.sfxVol * 100) + '%';
   }
 
   // ---------- Кнопка запуска: играть / продолжить с сохранённого уровня ----------
@@ -231,8 +242,27 @@ const UI = (() => {
     $('btn-levels').addEventListener('click', () => { Audio8.resume(); Audio8.sfx.click(); buildLevelsGrid(cb.getProgress()); showScreen('levels'); });
     $('btn-levels-back').addEventListener('click', () => { Audio8.sfx.click(); showScreen('menu'); });
 
-    $('btn-sound').addEventListener('click', () => { Audio8.setEnabled(!Audio8.isEnabled()); updateSoundButtons(); Audio8.sfx.click(); });
-    $('btn-pause-sound').addEventListener('click', () => { Audio8.setEnabled(!Audio8.isEnabled()); updateSoundButtons(); Audio8.sfx.click(); });
+    $('btn-sound').addEventListener('click', () => { Audio8.resume(); Audio8.sfx.click(); soundReturn = 'menu'; syncSoundSliders(); showScreen('sound'); });
+    $('btn-pause-sound').addEventListener('click', () => { Audio8.sfx.click(); soundReturn = 'pause'; syncSoundSliders(); showScreen('sound'); });
+    $('btn-sound-toggle').addEventListener('click', () => { Audio8.setEnabled(!Audio8.isEnabled()); updateSoundButtons(); Audio8.sfx.click(); });
+    $('btn-sound-back').addEventListener('click', () => { Audio8.sfx.click(); showScreen(soundReturn); });
+
+    // слайдеры громкости — настройки хранятся в прогрессе игрока
+    const bindVol = (id, key) => {
+      const el = $(id);
+      if (!el) return;
+      el.addEventListener('input', () => {
+        el.style.setProperty('--fill', el.value + '%');
+        const v = Number(el.value) / 100;
+        const cur = Audio8.getVolumes();
+        Audio8.setVolumes(key === 'music' ? v : cur.musicVol, key === 'sfx' ? v : cur.sfxVol);
+        if ($('snd-music-val')) $('snd-music-val').textContent = $('snd-music').value + '%';
+        if ($('snd-sfx-val')) $('snd-sfx-val').textContent = $('snd-sfx').value + '%';
+        if (cb.setSoundPrefs) cb.setSoundPrefs(Audio8.getVolumes());
+      });
+    };
+    bindVol('snd-music', 'music');
+    bindVol('snd-sfx', 'sfx');
 
     $('btn-pause').addEventListener('click', () => { Audio8.sfx.click(); cb.onPause(); });
     $('btn-resume').addEventListener('click', () => { Audio8.sfx.click(); cb.onResume(); });

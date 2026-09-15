@@ -8,16 +8,19 @@ const Audio8 = (() => {
   let enabled = true;
   let musicTimer = null;
   let step = 0;
+  let musicVol = 1, sfxVol = 1;   // 0..1 — настройки игрока (меню)
+  let customTrack = null;          // URL фоновой музыки с сервера (админ-панель)
+  let audioEl = null;              // HTML-плеер для серверного трека
 
   function ensure() {
     if (ctx) return true;
     try {
       ctx = new (window.AudioContext || window.webkitAudioContext)();
       master = ctx.createGain();
-      master.gain.value = 0.5;
+      master.gain.value = sfxVol;
       master.connect(ctx.destination);
       musicGain = ctx.createGain();
-      musicGain.gain.value = 0.16;
+      musicGain.gain.value = 0.16 * musicVol;
       musicGain.connect(master);
     } catch (e) { ctx = null; return false; }
     return true;
@@ -115,11 +118,22 @@ const Audio8 = (() => {
   function startMusic() {
     if (!ensure()) return;
     stopMusic();
+    // серверный трек из админ-панели — играем файл вместо чиптюна
+    if (customTrack) {
+      try {
+        if (!audioEl) { audioEl = new Audio(); audioEl.loop = true; }
+        if (audioEl.getAttribute('src') !== customTrack) audioEl.src = customTrack;
+        audioEl.volume = Math.max(0, Math.min(1, musicVol * 0.9));
+        const p = audioEl.play(); if (p && p.catch) p.catch(() => {});
+      } catch (e) { /* без файла — тихо */ }
+      return;
+    }
     step = 0;
     musicTimer = setInterval(musicTick, STEP_MS);
   }
   function stopMusic() {
     if (musicTimer) { clearInterval(musicTimer); musicTimer = null; }
+    if (audioEl) { try { audioEl.pause(); } catch (e) {} }
   }
 
   function setEnabled(v) {
@@ -127,5 +141,22 @@ const Audio8 = (() => {
     if (!enabled) stopMusic();
   }
 
-  return { sfx, resume, startMusic, stopMusic, setEnabled, isEnabled: () => enabled };
+  // Фоновая музыка из админ-панели (для всех игроков)
+  function setCustomMusic(url) {
+    customTrack = url || null;
+    if (!customTrack && audioEl) { try { audioEl.pause(); } catch (e) {} }
+  }
+
+  // Громкость из меню: музыка 0..1, эффекты 0..1
+  function setVolumes(mv, sv) {
+    if (typeof mv === 'number') musicVol = Math.max(0, Math.min(1, mv));
+    if (typeof sv === 'number') sfxVol = Math.max(0, Math.min(1, sv));
+    if (master) master.gain.value = sfxVol;
+    if (musicGain) musicGain.gain.value = 0.16 * musicVol;
+    if (audioEl) audioEl.volume = Math.max(0, Math.min(1, musicVol * 0.9));
+  }
+  function getVolumes() { return { musicVol, sfxVol }; }
+
+  return { sfx, resume, startMusic, stopMusic, setEnabled, isEnabled: () => enabled,
+           setCustomMusic, setVolumes, getVolumes, hasCustom: () => !!customTrack };
 })();
