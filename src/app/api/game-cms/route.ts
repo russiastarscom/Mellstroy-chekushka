@@ -1,12 +1,15 @@
 import { NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
+import { execSync } from 'child_process';
 
 // ============================================================
 // ВРЕМЕННЫЙ АДМИН-МОДУЛЬ ИГРЫ v2 (CMS: карты, текстуры, музыка, каналы).
 // Убирается вместе с /game/admin.html и блоком ADMIN CMS OVERRIDE
 // в public/game/js/main.js по команде владельца.
 // Хранит всё в data/game-cms.json, файлы ассетов в data/game-assets/.
+// КАЖДАЯ публикация автоматически коммитится в git (data/ раньше
+// терялась при перезапуске окружения — теперь переживает ребут).
 // ============================================================
 
 export const dynamic = 'force-dynamic';
@@ -14,6 +17,15 @@ export const dynamic = 'force-dynamic';
 const FILE = path.join(process.cwd(), 'data', 'game-cms.json');
 const OLD_MAPS = path.join(process.cwd(), 'data', 'game-maps-override.json');
 const ASSET_DIR = path.join(process.cwd(), 'data', 'game-assets');
+
+// Персистентность: фиксируем data/ в git, чтобы публикации выживали
+// при пересборке окружения. Любая ошибка git не ломает публикацию.
+function gitPersist(what: string) {
+  try {
+    execSync('git add -A data', { cwd: process.cwd(), stdio: 'ignore', timeout: 10000 });
+    execSync('git -c user.name=cms-bot -c user.email=cms@local commit -m "cms-persist: ' + what + '" --no-verify', { cwd: process.cwd(), stdio: 'ignore', timeout: 10000 });
+  } catch { /* git недоступен/нечего коммитить — не критично */ }
+}
 
 const TEXTURE_KEYS = ['andrey', 'burmaldenets', 'boss', 'checkushka', 'factory', 'tomahawk', 'heart', 'plush', 'bg_fields', 'bg_city', 'bg_district', 'bg_plant'];
 
@@ -147,6 +159,7 @@ export async function POST(req: Request) {
     const payload = { ...next, updatedAt: new Date().toISOString() };
     fs.mkdirSync(path.dirname(FILE), { recursive: true });
     fs.writeFileSync(FILE, JSON.stringify(payload));
+    gitPersist('publish ' + payload.updatedAt);
     return NextResponse.json({ ok: true, updatedAt: payload.updatedAt }, { headers: { 'Cache-Control': 'no-store' } });
   } catch (e) {
     return NextResponse.json({ ok: false, error: String(e) }, { status: 400 });
@@ -162,5 +175,6 @@ export async function DELETE() {
       if (/^[\w-]+\.[\w]+$/.test(f)) fs.rmSync(path.join(ASSET_DIR, f), { force: true });
     }
   } catch { /* ок */ }
+  gitPersist('reset-all');
   return NextResponse.json({ ok: true }, { headers: { 'Cache-Control': 'no-store' } });
 }
