@@ -88,6 +88,22 @@
   .tex .trow { display: flex; gap: 6px; }
   .tex .badge { display: inline-block; background: #2a6a3a; color: #fff; font-size: 10px; padding: 2px 7px; border-radius: 8px; margin-left: 6px; vertical-align: middle; }
 
+  /* ---------- ОБЪЕКТЫ (скриптуемые) ---------- */
+  #objlist { padding: 12px 14px 4px; display: flex; flex-direction: column; gap: 12px; }
+  .objcard { background: #1a1a2b; border: 1px solid #2c2c46; border-radius: 12px; padding: 12px; }
+  .objcard .orow { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; }
+  .objcard input, .objcard select { background: #17172b; border: 1px solid #3a3a5a; color: #fff; border-radius: 7px; padding: 8px; font-size: 13px; }
+  .objcard input.emoji { width: 56px; text-align: center; font-size: 18px; }
+  .objcard input.nm { width: 150px; font-weight: bold; }
+  .objcard input.dim { width: 64px; }
+  .objcard .prev { width: 74px; height: 74px; flex: 0 0 auto; display: flex; align-items: center; justify-content: center; background: repeating-conic-gradient(#22223a 0 25%, #1a1a2e 0 50%) 0 0/14px 14px; border-radius: 8px; overflow: hidden; }
+  .objcard .prev img { max-width: 100%; max-height: 100%; image-rendering: pixelated; }
+  .objcard .prev span { font-size: 30px; }
+  .objcard textarea.script { width: 100%; min-height: 130px; background: #12121f; border: 1px solid #3a3a5a; color: #d7e4ff; border-radius: 8px; padding: 9px; font: 12px/1.5 'Courier New', monospace; resize: vertical; white-space: pre; }
+  .objcard .apinote { color: #6a6a85; font-size: 11px; line-height: 1.55; margin-top: 6px; }
+  .objcard .apinote b { color: #9fd8b4; font-weight: bold; }
+  .objcard label.chk { color: #9fe8a0; font-size: 12px; display: flex; gap: 5px; align-items: center; cursor: pointer; }
+
   /* ---------- МУЗЫКА ---------- */
   .mus-wrap { padding: 12px 14px; }
   .track { display: flex; gap: 8px; align-items: center; background: #1a1a2b; border: 1px solid #2c2c46; border-radius: 10px; padding: 9px 10px; margin-bottom: 8px; flex-wrap: wrap; }
@@ -146,6 +162,7 @@
   <button data-mode="maps" class="active">🗺 КАРТЫ</button>
   <button data-mode="dialogs">💬 РАЗГОВОРЫ</button>
   <button data-mode="textures">🖼 ТЕКСТУРЫ</button>
+  <button data-mode="objects">🧩 ОБЪЕКТЫ</button>
   <button data-mode="music">🎵 МУЗЫКА</button>
   <button data-mode="socials">📢 КАНАЛЫ</button>
 </div>
@@ -168,6 +185,7 @@
     <button class="tool" data-tool="plush" title="Гора плюшек (+3 снаряда)"><b>🧸</b>плюшки</button>
     <button class="tool" data-tool="spawn" title="Старт Андрея"><b>🚩</b>старт</button>
     <button class="tool" data-tool="factory" title="Завод (выход)"><b>🏭</b>завод</button>
+    <span id="custom-tools" style="display:contents"></span>
     <div class="sep"></div>
     <button class="tool" id="btn-undo" title="Отменить (Ctrl+Z)"><b>↩</b>отмена</button>
     <div id="zoombox"><button id="zoom-out">−</button><span id="zoom-val"></span><button id="zoom-in">+</button></div>
@@ -245,6 +263,13 @@
 <div class="pane" id="pane-textures">
   <div class="note" style="padding-top:12px">PNG с прозрачным фоном для персонажей. Картинка вписывается в слот целиком — лучше заранее обрезать лишние поля. Текстура применяется для ВСЕХ игроков после «ОПУБЛИКОВАТЬ».</div>
   <div id="texgrid"></div>
+</div>
+
+<!-- ================= ОБЪЕКТЫ (скриптуемые) ================= -->
+<div class="pane" id="pane-objects">
+  <div class="note" style="padding-top:12px">Свои объекты: загрузи PNG и задай поведение JS-скриптом (шаблоны — подставятся сами). Объект появится кнопкой в редакторе карт — кликай по карте, чтобы ставить. Всё — для всех игроков после «ОПУБЛИКОВАТЬ».</div>
+  <div id="objlist"></div>
+  <div style="padding:4px 14px 12px"><button class="addline" id="btn-obj-add">+ СОЗДАТЬ ОБЪЕКТ</button></div>
 </div>
 
 <!-- ================= МУЗЫКА ================= -->

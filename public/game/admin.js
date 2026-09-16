@@ -15,8 +15,9 @@ const CMS = {
   textures: {},        // key -> {id,url}
   music: { active: null, tracks: [] },
   socials: [],
+  objects: [],         // кастомные объекты: {id,name,emoji,w,h,tex,texId,script,character}
 };
-let introDirty = false, socialsDirty = false, texturesDirty = false, musicDirty = false;
+let introDirty = false, socialsDirty = false, texturesDirty = false, musicDirty = false, objectsDirty = false;
 let mapsListDirty = false; // состав списка карт менялся (добавление/удаление) — нужна перепубликация
 let pubAt = null;
 let mode = 'maps';
@@ -47,6 +48,16 @@ const SOC_PRESETS = [
   ['tg', 'Telegram'], ['yt', 'YouTube'], ['tt', 'TikTok'], ['vk', 'ВКонтакте'],
   ['tw', 'Twitch'], ['ds', 'Discord'], ['other', 'Другое'],
 ];
+
+// Шаблоны скриптов кастомных объектов (исполняются каждый кадр: obj, api, dt)
+const OBJ_TEMPLATES = {
+  collect: { label: '🍾 Предмет (подбор = чекушки)', code: '// Предмет: подбор даёт чекушки\nobj.collect = 1;\n// лёгкое покачивание:\nobj.y += Math.sin(obj.t * 3) * 0.3;' },
+  static: { label: '🗿 Декорация (просто стоит)', code: '// Декорация — ничего не делает.\n// Пример покачивания: obj.y += Math.sin(obj.t * 3) * 0.3;' },
+  danger: { label: '⚠ Ловушка (урон при касании)', code: '// Ловушка: касается игрок — получает урон\nobj.dangerous = true;' },
+  enemy: { label: '👊 Враг (ходит, убивается прыжком)', code: '// Враг: ходит, опасен, убивается прыжком сверху (и плюшкой)\n// ВАЖНО: настройки задаются ОДИН РАЗ (иначе урон будет сбрасываться!)\nif (!obj.data.init) {\n  obj.data.init = true;\n  obj.hp = 2; obj.maxHp = 2;\n  obj.stompable = true; obj.dangerous = true;\n  obj.data.speed = 60;\n}\nobj.vx = obj.data.speed * obj.dir;\napi.gravity(obj, dt);\nif (api.solid(obj)) obj.dir = -obj.dir;' },
+  boss: { label: '👑 Вождь (босс 6 HP, прыгает)', code: '// Вождь: 6 HP, опасен, убивается прыжком и плюшками\n// Настройки — ОДИН РАЗ, физика — каждый кадр\nif (!obj.data.init) {\n  obj.data.init = true;\n  obj.hp = 6; obj.maxHp = 6;\n  obj.stompable = true; obj.dangerous = true;\n  obj.data.speed = 70;\n}\nobj.vx = obj.data.speed * obj.dir;\napi.gravity(obj, dt);\nif (api.solid(obj)) obj.dir = -obj.dir;\n// каждые 4 секунды прыжок в сторону игрока\nif (Math.floor(obj.t / 4) !== obj.data.jmp) {\n  obj.data.jmp = Math.floor(obj.t / 4);\n  obj.vy = -520;\n  obj.dir = (api.px > obj.x) ? 1 : -1;\n}' },
+  empty: { label: '📝 Пустой (напишу сам)', code: '// Свой код. Доступно каждый кадр:\n// obj — объект: x, y, w, h, vx, vy, hp, t (сек), dir, data (свои переменные)\n// api.gravity(obj, dt) — физика+коллизии;  api.solid(obj) — упёрся в стену\n// api.hurtPlayer(1); api.healPlayer(1); api.ammo(3); api.score(5);\n// api.sfx(\'coin\'); api.particles(x, y, \'star\', 10); api.shake(0.3);\n// api.px, api.py — координаты игрока; api.solidAt(px, py) — твёрдый ли тайл\n// СОВЕТ: одноразовые настройки делай через if (!obj.data.init) { ... }' },
+};
 
 const toastEl = $('toast');
 let toastTimer = null;
@@ -86,6 +97,10 @@ function defToState(def) {
   (def.plushes || []).forEach(([c, r]) => add('plush', c, r));
   (def.enemies || []).forEach(([t, c, r]) => add(t, c, (r === undefined || r === null) ? 10 : r));
   if (def.boss) add('G', def.boss.col, 9);
+  // кастомные объекты: def.custom = { 'obj-id': [[c,r],...] }
+  if (def.custom && typeof def.custom === 'object') {
+    Object.entries(def.custom).forEach(([id, list]) => (list || []).forEach(([c, r]) => add('@' + id, c, r)));
+  }
   return {
     cells, ents, undo: [], dirty: false,
     spawn: def.spawn?.c ?? 2, factory: def.factory?.c ?? (w - 6),
@@ -117,6 +132,7 @@ function stateToDef(m) {
   const w = st.cells[0].length;
   const ground = [], bricks = [], plats = [], spikes = [];
   const singles = [], hearts = [], plushes = [], enemies = [];
+  const custom = {};
   let bossCol = null;
   for (let r = 11; r < ROWS; r++) {
     let c = 0;
@@ -145,6 +161,10 @@ function stateToDef(m) {
     else if (e.t === 'plush') plushes.push([e.c, e.r]);
     else if (e.t === 'e' || e.t === 't') enemies.push([e.t, e.c, e.r]);
     else if (e.t === 'G') bossCol = e.c;
+    else if (e.t[0] === '@') {
+      const id = e.t.slice(1);
+      (custom[id] = custom[id] || []).push([e.c, e.r]);
+    }
   });
   const dlg = st.dialogs || { intro: [], outro: [], hints: [] };
   const def = {
@@ -156,6 +176,7 @@ function stateToDef(m) {
     spawn: { c: st.spawn }, factory: { c: st.factory },
   };
   if (plushes.length) def.plushes = plushes;
+  if (Object.keys(custom).length) def.custom = custom;
   if (bossCol !== null) def.boss = { col: bossCol };
   if (m.def && m.def.factoryLocked) def.factoryLocked = true;
   if (dlg.intro.length || dlg.outro.length) {
@@ -201,6 +222,7 @@ function saveDrafts() {
         socials: CMS.socials, socialsClean: !socialsDirty,
         textures: CMS.textures, texturesClean: !texturesDirty,
         musicActive: CMS.music.active, musicClean: !musicDirty,
+        objects: CMS.objects, objectsClean: !objectsDirty,
         listClean: !mapsListDirty,
       };
       localStorage.setItem(DRAFT_KEY, JSON.stringify(out));
@@ -261,6 +283,7 @@ function applyDrafts(d) {
   if (Array.isArray(d.socials)) { CMS.socials = d.socials; socialsDirty = !d.socialsClean; any = true; }
   if (d.textures && typeof d.textures === 'object') { CMS.textures = d.textures; texturesDirty = !d.texturesClean; any = true; }
   if (d.musicActive !== undefined) { CMS.music.active = d.musicActive; musicDirty = !d.musicClean; }
+  if (Array.isArray(d.objects)) { CMS.objects = d.objects; objectsDirty = !d.objectsClean; any = true; }
   if (d.listClean !== undefined) mapsListDirty = !d.listClean;
   return any;
 }
@@ -447,6 +470,19 @@ function imgFit(x, im, cx, bottomY, maxW, maxH) {
 }
 function drawEnt(x, e, cs, TOP) {
   const cx = e.c * cs + cs / 2, by = TOP + (e.r + 1) * cs;
+  // кастомный объект: своя текстура (или эмодзи-заглушка)
+  if (e.t[0] === '@') {
+    const o = CMS.objects.find((z) => z.id === e.t.slice(1));
+    const im = OBJ_IMG[e.t.slice(1)];
+    const box = Math.max(cs, cs * Math.min(2.2, Math.max(1, ((o && o.h) || 32) / 40))) * 1.05;
+    if (im && !imgFit(x, im, cx, by, box, box)) { /* пока не загрузилась — рисуем эмодзи */ }
+    if (!im || !im.complete || !im.naturalWidth) {
+      x.font = Math.floor(cs * 0.72) + 'px Arial';
+      x.textAlign = 'center';
+      x.fillText((o && o.emoji) || '🧩', cx, by - cs * 0.22);
+    }
+    return;
+  }
   const map = { e: 'burmaldenets', t: 'burmaldenets', G: 'boss', bottle: 'checkushka', heart: 'heart', plush: 'plush' };
   if (!imgFit(x, IMG[map[e.t]], cx, by, e.t === 'G' ? cs * 1.8 : cs * .95, e.t === 'G' ? cs * 1.9 : cs * .95)) {
     x.fillStyle = e.t === 'G' ? '#ffd23f' : '#e63946';
@@ -604,9 +640,14 @@ function dlgLineEditor(list, i, container, onChange) {
   top.className = 'line-top';
   const sel = document.createElement('select');
   sel.className = 'who';
-  WHO_LIST.forEach(([v, n]) => {
+  // базовые персонажи + кастомные объекты с флагом «говорит в диалогах»
+  const whos = WHO_LIST.concat(
+    CMS.objects.filter((o) => o.character).map((o) => ['@' + o.id, (o.emoji || '🧩') + ' ' + o.name])
+  );
+  whos.forEach(([v, n]) => {
     const o = document.createElement('option'); o.value = v; o.textContent = n; sel.appendChild(o);
   });
+  if (!whos.some(([v]) => v === (line.who || 'andrey'))) line.who = 'andrey';
   sel.value = line.who || 'andrey';
   sel.addEventListener('change', () => { line.who = sel.value; onChange(); });
   top.appendChild(sel);
@@ -765,6 +806,192 @@ function pickTexture(key, title) {
 }
 
 // ============================================================
+// РЕЖИМ ОБЪЕКТЫ: своя текстура + JS-скрипт = новый объект игры
+// ============================================================
+const OBJ_IMG = {}; // id -> Image (превью в редакторе карт)
+function objLoadImg(o) {
+  if (!o.tex) { delete OBJ_IMG[o.id]; return; }
+  if (OBJ_IMG[o.id] && OBJ_IMG[o.id].src === o.tex) return;
+  const im = new Image();
+  im.onload = () => { if (mode === 'maps' || mode === 'objects') draw(); };
+  im.src = o.tex;
+  OBJ_IMG[o.id] = im;
+}
+function objTouch() { objectsDirty = true; saveDrafts(); setStatus(); }
+
+function renderObjects() {
+  const box = $('objlist');
+  box.innerHTML = '';
+  CMS.objects.forEach(objLoadImg);
+  if (!CMS.objects.length) {
+    const e = document.createElement('div');
+    e.style.cssText = 'color:#55557a;font-size:12px;padding:4px 0 8px';
+    e.textContent = 'Объектов пока нет. Создай свой: PNG + скрипт — и он появится в редакторе карт кнопкой.';
+    box.appendChild(e);
+  }
+  CMS.objects.forEach((o) => {
+    const card = document.createElement('div');
+    card.className = 'objcard';
+
+    // строка 1: превью + имя + эмодзи + размеры + удалить
+    const r1 = document.createElement('div');
+    r1.className = 'orow';
+    const prev = document.createElement('div');
+    prev.className = 'prev';
+    const setPrev = () => {
+      prev.innerHTML = '';
+      if (o.tex) {
+        const im = document.createElement('img');
+        im.src = o.tex;
+        im.onerror = () => { im.remove(); prev.innerHTML = '<span>' + (o.emoji || '🧩') + '</span>'; };
+        prev.appendChild(im);
+      } else prev.innerHTML = '<span>' + (o.emoji || '🧩') + '</span>';
+    };
+    setPrev();
+    r1.appendChild(prev);
+    const nm = document.createElement('input');
+    nm.className = 'nm'; nm.value = o.name; nm.placeholder = 'Название';
+    nm.maxLength = 30;
+    nm.addEventListener('input', () => { o.name = nm.value; objTouch(); buildCustomTools(); });
+    r1.appendChild(nm);
+    const em = document.createElement('input');
+    em.className = 'emoji'; em.value = o.emoji || '🧩'; em.title = 'Иконка-кнопка в редакторе';
+    em.maxLength = 4;
+    em.addEventListener('input', () => { o.emoji = em.value; objTouch(); setPrev(); buildCustomTools(); });
+    r1.appendChild(em);
+    const wl = document.createElement('span');
+    wl.style.cssText = 'color:#8a8aa0;font-size:12px'; wl.textContent = 'размер';
+    r1.appendChild(wl);
+    const wi = document.createElement('input');
+    wi.className = 'dim'; wi.type = 'number'; wi.min = '8'; wi.max = '400'; wi.value = o.w; wi.title = 'Ширина, px';
+    wi.addEventListener('input', () => { o.w = Math.max(8, Math.min(400, Number(wi.value) || 32)); objTouch(); });
+    const xi = document.createElement('span');
+    xi.style.cssText = 'color:#8a8aa0'; xi.textContent = '×';
+    const hi = document.createElement('input');
+    hi.className = 'dim'; hi.type = 'number'; hi.min = '8'; hi.max = '400'; hi.value = o.h; hi.title = 'Высота, px';
+    hi.addEventListener('input', () => { o.h = Math.max(8, Math.min(400, Number(hi.value) || 32)); objTouch(); });
+    r1.appendChild(wi); r1.appendChild(xi); r1.appendChild(hi);
+    const up = document.createElement('button');
+    up.className = 'addline'; up.textContent = '⬆ PNG';
+    up.onclick = () => pickObjectTexture(o, setPrev);
+    r1.appendChild(up);
+    const chk = document.createElement('label');
+    chk.className = 'chk';
+    const chb = document.createElement('input');
+    chb.type = 'checkbox'; chb.checked = !!o.character;
+    chb.addEventListener('change', () => { o.character = chb.checked; objTouch(); renderAllDialogs(); });
+    chk.appendChild(chb);
+    chk.appendChild(document.createTextNode('🗣 говорит в диалогах'));
+    r1.appendChild(chk);
+    const del = document.createElement('button');
+    del.className = 'iconbtn del'; del.textContent = '✕'; del.title = 'Удалить объект';
+    del.onclick = () => {
+      const used = CMS.maps.filter((m) => m.ed && Array.isArray(m.ed.ents) && m.ed.ents.some((e) => e.t === '@' + o.id)).length;
+      if (!confirm('Удалить объект «' + o.name + '»?' + (used ? `\nОн стоит на ${used} карте(ах) — с карт он тоже уберётся при публикации.` : ''))) return;
+      CMS.objects.splice(CMS.objects.indexOf(o), 1);
+      delete OBJ_IMG[o.id];
+      objTouch();
+      renderObjects(); buildCustomTools(); renderAllDialogs();
+    };
+    r1.appendChild(del);
+    card.appendChild(r1);
+
+    // строка 2: шаблон скрипта
+    const r2 = document.createElement('div');
+    r2.className = 'orow';
+    const tplLbl = document.createElement('span');
+    tplLbl.style.cssText = 'color:#8a8aa0;font-size:12px';
+    tplLbl.textContent = 'Шаблон:';
+    r2.appendChild(tplLbl);
+    const tpl = document.createElement('select');
+    Object.entries(OBJ_TEMPLATES).forEach(([k, t]) => {
+      const opt = document.createElement('option');
+      opt.value = k; opt.textContent = t.label;
+      tpl.appendChild(opt);
+    });
+    const curTpl = Object.entries(OBJ_TEMPLATES).find(([, t]) => t.code === o.script);
+    tpl.value = curTpl ? curTpl[0] : 'empty';
+    const applyTpl = () => {
+      o.script = OBJ_TEMPLATES[tpl.value].code;
+      ta.value = o.script;
+      objTouch();
+    };
+    tpl.addEventListener('change', applyTpl);
+    r2.appendChild(tpl);
+    card.appendChild(r2);
+
+    // строка 3: код скрипта
+    const ta = document.createElement('textarea');
+    ta.className = 'script';
+    ta.value = o.script || OBJ_TEMPLATES.collect.code;
+    ta.spellcheck = false;
+    ta.addEventListener('input', () => { o.script = ta.value; objTouch(); });
+    card.appendChild(ta);
+
+    // подсказка по API
+    const note = document.createElement('div');
+    note.className = 'apinote';
+    note.innerHTML = 'Код выполняется каждый кадр: <b>obj</b> — объект (x, y, hp, t — время, data — свои переменные), <b>api</b> — игра, <b>dt</b> — секунды. Флаги: <b>obj.collect=1</b> подбор, <b>obj.dangerous=true</b> урон, <b>obj.stompable=true</b> убивается прыжком/плюшкой (плюс HP). <b>api.gravity(obj, dt)</b> — физика, <b>api.solid(obj)</b> — стена, <b>api.hurtPlayer/healPlayer/ammo/score/sfx/particles/shake</b>, <b>api.px/api.py</b> — игрок.';
+    card.appendChild(note);
+
+    box.appendChild(card);
+  });
+}
+
+function pickObjectTexture(o, setPrev) {
+  const inp = document.createElement('input');
+  inp.type = 'file';
+  inp.accept = 'image/png,image/jpeg,image/webp,image/gif';
+  inp.onchange = async () => {
+    const f = inp.files && inp.files[0];
+    if (!f) return;
+    if (f.size > 4.2e6) { toast('Слишком большой файл (макс 4 МБ)'); return; }
+    toast('Загружаю…');
+    const b64 = await fileToBase64(f);
+    const j = await uploadAsset('object', f.name, b64);
+    if (j) {
+      o.tex = j.url; o.texId = j.id;
+      objTouch();
+      renderObjects(); buildCustomTools();
+      toast('Текстура загружена! Не забудь ОПУБЛИКОВАТЬ.', true);
+    }
+  };
+  inp.click();
+}
+
+$('btn-obj-add').onclick = () => {
+  const n = CMS.objects.length + 1;
+  CMS.objects.push({
+    id: 'obj-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5),
+    name: 'Объект ' + n, emoji: '🧩', w: 32, h: 32,
+    tex: null, texId: null, script: OBJ_TEMPLATES.collect.code, character: false,
+  });
+  objTouch();
+  renderObjects(); buildCustomTools();
+  toast('Объект создан — загрузи PNG и выбери шаблон поведения', true);
+};
+
+// Кнопки кастомных объектов в тулбаре редактора карт (перед «отмена»)
+function buildCustomTools() {
+  const box = $('custom-tools');
+  if (!box) return;
+  box.innerHTML = '';
+  CMS.objects.forEach((o) => {
+    const b = document.createElement('button');
+    b.className = 'tool';
+    b.dataset.tool = '@' + o.id;
+    b.title = o.name + ' — кастомный объект';
+    b.innerHTML = `<b>${o.emoji || '🧩'}</b>${(o.name || '').slice(0, 10)}`;
+    b.onclick = () => {
+      document.querySelectorAll('.tool[data-tool]').forEach((z) => z.classList.remove('active'));
+      b.classList.add('active');
+      tool = '@' + o.id;
+    };
+    box.appendChild(b);
+  });
+}
+
+// ============================================================
 // РЕЖИМ МУЗЫКА
 // ============================================================
 function renderMusic() {
@@ -882,6 +1109,7 @@ document.querySelectorAll('#modes button').forEach((b) => {
     if (mode === 'maps') { fitZoom(); draw(); }
     if (mode === 'dialogs') { buildDlgMapSelect(); renderAllDialogs(); }
     if (mode === 'textures') renderTextures();
+    if (mode === 'objects') renderObjects();
     if (mode === 'music') renderMusic();
     if (mode === 'socials') renderSocials();
   };
@@ -892,12 +1120,13 @@ document.querySelectorAll('#modes button').forEach((b) => {
 // ============================================================
 function buildPayload() {
   return {
-    v: 3, // маркер формата: список карт управляет экраном «В разработке» и порядком уровней
+    v: 4, // маркер формата: список карт + кастомные объекты (скриптуемые)
     maps: CMS.maps.map((m) => ({ key: m.key, def: stateToDef(m) })),
     intro: { cutscene: CMS.intro.cutscene, outroAfterBoss: CMS.intro.outroAfterBoss },
     textures: CMS.textures,
     music: { active: CMS.music.active, tracks: CMS.music.tracks },
     socials: CMS.socials,
+    objects: CMS.objects,
   };
 }
 async function publish() {
@@ -910,7 +1139,7 @@ async function publish() {
     const j = await r.json();
     if (!j.ok) { toast('Ошибка публикации: ' + (j.error || r.status)); return null; }
     CMS.maps.forEach((m) => { m.ed.dirty = false; });
-    introDirty = socialsDirty = texturesDirty = musicDirty = mapsListDirty = false;
+    introDirty = socialsDirty = texturesDirty = musicDirty = mapsListDirty = objectsDirty = false;
     pubAt = j.updatedAt || Date.now();
     saveDrafts();
     setStatus();
@@ -935,7 +1164,7 @@ $('btn-reset-all').onclick = async () => {
 };
 
 function anyDirty() {
-  return introDirty || socialsDirty || texturesDirty || musicDirty || mapsListDirty || CMS.maps.some((m) => m.ed.dirty);
+  return introDirty || socialsDirty || texturesDirty || musicDirty || mapsListDirty || objectsDirty || CMS.maps.some((m) => m.ed.dirty);
 }
 function setStatus() {
   const el = $('status');
@@ -1002,6 +1231,7 @@ function serverMapsToCms(j) {
   if (j.textures && typeof j.textures === 'object') CMS.textures = j.textures;
   if (j.music && typeof j.music === 'object') CMS.music = { active: j.music.active || null, tracks: j.music.tracks || [] };
   if (Array.isArray(j.socials)) CMS.socials = j.socials;
+  if (Array.isArray(j.objects)) CMS.objects = j.objects;
 }
 async function boot() {
   let j = null;
@@ -1023,8 +1253,8 @@ async function boot() {
   }
   pubAt = (j && j.updatedAt) || null;
   setStatus();
-  fitZoom(); buildMapTabs(); syncMapOpts(); draw();
-  buildDlgMapSelect(); renderAllDialogs(); renderTextures(); renderMusic(); renderSocials();
+  fitZoom(); buildMapTabs(); buildCustomTools(); syncMapOpts(); draw();
+  buildDlgMapSelect(); renderAllDialogs(); renderTextures(); renderObjects(); renderMusic(); renderSocials();
   if (hadDirty) toast('Черновик восстановлен — есть НЕОПУБЛИКОВАННЫЕ правки', true);
   else if (applied) toast('Черновик восстановлен из браузера', true);
   if (j && j.updatedAt) toast('Загружено ОПУБЛИКОВАННОЕ (редактируешь его)', true);
@@ -1035,7 +1265,8 @@ async function boot() {
     get curMap() { return curMap; },
     paint: (c, r, t) => { tool = t; applyTool(c, r); },
     addMap, stateToDef, publish, buildPayload, switchMode, moveMap, indevToMap,
-    renderAll: { textures: renderTextures, music: renderMusic, socials: renderSocials, dialogs: renderAllDialogs },
+    renderAll: { textures: renderTextures, music: renderMusic, socials: renderSocials, dialogs: renderAllDialogs, objects: renderObjects },
+    buildCustomTools,
     get dirty() { return anyDirty(); },
   };
 }

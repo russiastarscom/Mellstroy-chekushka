@@ -961,6 +961,26 @@ const Sprites = (() => {
     });
   }
 
+  // Динамический слот (кастомные объекты из админ-панели): создаёт ключ
+  // спрайта с нуля — 'obj-<id>'. color — цвет заглушки, пока PNG не грузится.
+  function addSlot(key, { w, h, url, color, portrait }) {
+    if (!key || !url) return;
+    const img = new Image();
+    img.onload = () => {
+      store[key] = { img, fallback: null, w: w || 32, h: h || 32, bg: false, pr: portrait || null };
+    };
+    img.src = url;
+    // мгновенная заглушка, чтобы объект был виден даже до загрузки PNG
+    if (!store[key]) {
+      const [c, x] = mkCanvas(Math.max(8, Math.round(w || 32)), Math.max(8, Math.round(h || 32)));
+      x.fillStyle = color || '#9a4de6';
+      x.fillRect(0, 0, c.width, c.height);
+      x.fillStyle = 'rgba(255,255,255,.35)';
+      x.fillRect(0, 0, c.width, Math.max(2, c.height * 0.18));
+      store[key] = { img: null, fallback: c, w: w || 32, h: h || 32, bg: false, pr: portrait || null };
+    }
+  }
+
   function get(key) { return store[key]; }
 
   // Нарисовать спрайт (img или фолбэк) с флипом
@@ -1016,7 +1036,7 @@ const Sprites = (() => {
     x.drawImage(src, bx, py0, bw, hh, (canvas.width - dw) / 2, (canvas.height - dh) / 2, dw, dh);
   }
 
-  return { load, setCustom, get, draw, portrait, isReady: () => loaded, SLOTS: Object.keys(DEFS) };
+  return { load, setCustom, addSlot, get, draw, portrait, isReady: () => loaded, SLOTS: Object.keys(DEFS) };
 })();
 
 </script>
@@ -1033,7 +1053,7 @@ const TILE = 40;          // размер тайла
 function buildLevel(def) {
   const w = def.width;
   const grid = Array.from({ length: ROWS }, () => Array(w).fill('.'));
-  const spawns = { enemies: [], bottles: [], hearts: [], tomahawks: [], plushes: [] };
+  const spawns = { enemies: [], bottles: [], hearts: [], tomahawks: [], plushes: [], custom: [] };
 
   // земля (2 ряда внизу)
   (def.ground || []).forEach(([c0, c1]) => {
@@ -1064,6 +1084,12 @@ function buildLevel(def) {
   // враги: [тип, колонка] — спавн на землю (ряд 10), либо [тип, колонка, ряд] — на платформу
   (def.enemies || []).forEach(([type, c, r]) => spawns.enemies.push({ type, c, r: (r === undefined) ? 10 : r }));
   if (def.boss) spawns.enemies.push({ type: 'boss', c: def.boss.col, r: 9 });
+  // кастомные объекты из админ-панели: { 'obj-id': [[c,r],...] }
+  if (def.custom && typeof def.custom === 'object') {
+    Object.entries(def.custom).forEach(([type, list]) => {
+      (list || []).forEach(([c, r]) => spawns.custom.push({ type, c, r }));
+    });
+  }
 
   return {
     def, w, grid, spawns,
@@ -1721,6 +1747,97 @@ class HatShot {
 // триггером завершения уровня служит всё здание с запасом по краям.
 const GROUND_TOP = (ROWS - 2) * TILE; // верх земли — ряд 11 → y = 440
 
+// ============================================================
+// КАСТОМНЫЕ ОБЪЕКТЫ (админ-панель): своя текстура + JS-скрипт
+// ============================================================
+// Скрипт объекта — тело функции, исполняется КАЖДЫЙ КАДР:
+//   function(obj, api, dt) { ... }
+// obj — сам объект (x, y, w, h, vx, vy, hp, t, data…),
+// api — доступ к игре, dt — секунды с прошлого кадра.
+const CustomObjects = {
+  defs: new Map(),
+  runs: new Map(),
+  broken: new Set(),   // объекты с ошибкой в скрипте — чтобы не спамить консоль
+  set(list) {
+    this.defs.clear(); this.runs.clear(); this.broken.clear();
+    (list || []).forEach((o) => {
+      if (!o || !o.id) return;
+      this.defs.set(o.id, o);
+      try {
+        this.runs.set(o.id, new Function('obj', 'api', 'dt', '"use strict";\n' + String(o.script || '')));
+      } catch (e) {
+        this.broken.add(o.id);
+        console.warn('Объект «' + (o.name || o.id) + '»: ошибка в скрипте — ' + e.message);
+      }
+      if (o.tex) Sprites.addSlot('obj-' + o.id, { w: o.w, h: o.h, url: o.tex, color: '#9a4de6', portrait: o.character ? [0, 0.66] : null });
+    });
+  },
+  def(id) { return this.defs.get(id) || null; },
+  get list() { return Array.from(this.defs.values()); },
+};
+
+class CustomEnt {
+  constructor(type, c, r) {
+    const d = CustomObjects.def(type) || {};
+    this.type = type;
+    this.w = Math.max(8, Math.min(400, d.w || 32));
+    this.h = Math.max(8, Math.min(400, d.h || 32));
+    this.x = c * TILE + (TILE - this.w) / 2;
+    this.y = (r + 1) * TILE - this.h;      // стоит на дне клетки
+    this.vx = 0; this.vy = 0;
+    this.dir = -1;
+    this.t = 0;                             // время жизни (сек)
+    this.hp = 1; this.maxHp = 1;
+    this.dead = false; this.taken = false;
+    // флаги поведения — скрипт задаёт/меняет:
+    this.collect = 0;        // >0: касание игроком = подбор, +collect к чекушкам
+    this.dangerous = false;  // касание игроком = урон
+    this.stompable = false;  // убивается прыжком сверху и плюшкой
+    this.onGround = false; this.hitWall = false;
+    this.flash = 0;
+    this.data = {};          // переменные скрипта
+  }
+  hurt(game) {
+    this.hp--;
+    this.flash = 0.25;
+    if (this.hp <= 0) {
+      this.dead = true;
+      game.kills++;
+      game.spawnStars(this.x + this.w / 2, this.y + this.h / 2);
+    }
+  }
+  update(dt, level, game) {
+    this.t += dt;
+    if (this.flash > 0) this.flash -= dt;
+    // упал за пределы карты (например, в яму) — убираем
+    if (this.y > ROWS * TILE + 80) this.dead = true;
+    const run = CustomObjects.runs.get(this.type);
+    if (!run || CustomObjects.broken.has(this.type)) return;
+    try { run(this, game, dt); }
+    catch (e) {
+      CustomObjects.broken.add(this.type);
+      console.warn('Объект «' + this.type + '»: ошибка выполнения скрипта — ' + e.message);
+    }
+    if (this.hp > this.maxHp) this.maxHp = this.hp;
+  }
+  draw(ctx, camX) {
+    if (!Sprites.get('obj-' + this.type)) return;
+    ctx.fillStyle = 'rgba(0,0,0,.2)';
+    ctx.beginPath();
+    ctx.ellipse(this.x + this.w / 2 - camX, this.y + this.h + 2, Math.max(6, this.w * 0.4), 3, 0, 0, 7);
+    ctx.fill();
+    if (this.flash > 0) ctx.globalAlpha = 0.55;
+    Sprites.draw(ctx, 'obj-' + this.type, this.x - camX, this.y, this.w, this.h, this.dir > 0);
+    ctx.globalAlpha = 1;
+    if (this.maxHp > 1 && !this.dead) {
+      const bw = Math.max(30, this.w * 0.8);
+      const bx = this.x + this.w / 2 - bw / 2 - camX, by = this.y - 10;
+      ctx.fillStyle = '#00000090'; ctx.fillRect(bx - 1, by - 1, bw + 2, 6);
+      ctx.fillStyle = '#ff4757'; ctx.fillRect(bx, by, bw * Math.max(0, this.hp / this.maxHp), 4);
+    }
+  }
+}
+
 class FactoryExit {
   constructor(c, locked) {
     this.c = c;
@@ -1809,6 +1926,9 @@ const UI = (() => {
   // ---------- Диалоги (внизу экрана) ----------
   const WHO_PORTRAIT = { andrey: 'andrey', enemy: 'burmaldenets', boss: 'boss', radio: 'checkushka', narrator: null };
   const dlg = { lines: [], i: 0, typing: false, timer: null, resolve: null };
+
+  // Кастомные говорящие из админ-панели: who '@obj-id' → спрайт 'obj-obj-id'
+  function addSpeaker(who, spriteKey) { if (who && spriteKey) WHO_PORTRAIT[who] = spriteKey; }
 
   function dialogue(lines) {
     return new Promise((resolve) => {
@@ -2075,6 +2195,7 @@ const UI = (() => {
   return {
     init, showScreen, setHud, dialogue, cutscene,
     buildLevelsGrid, updateSoundButtons, updatePlayButton, showComplete,
+    addSpeaker,
   };
 })();
 
@@ -2126,6 +2247,7 @@ const Game = (() => {
   let player = null;
   let enemies = [], tomahawks = [], bottles = [], hearts = [], particles = [];
   let plushes = [], hatShots = [];
+  let customEnts = [];          // кастомные объекты из админ-панели (скриптуемые)
   let factory = null;
   let cam = 0, shake = 0;
   let bottlesGot = 0, kills = 0;
@@ -2145,6 +2267,29 @@ const Game = (() => {
     get kills() { return kills; },
     set kills(v) { kills = v; },
   };
+
+  // API для скриптов кастомных объектов (админ-панель)
+  const scriptApi = Object.create(api);
+  Object.assign(scriptApi, {
+    // гравитация + коллизии с тайлами (вызывай каждый кадр для «физических» объектов)
+    gravity(o, d) { o.vy = Math.min((o.vy || 0) + CONFIG.GRAVITY * d, 1100); moveEntity(o, level, d, false); },
+    // упёрся ли в стену на прошлом кадре
+    solid(o) { return !!o.hitWall; },
+    // твёрдый ли тайл в пиксельной точке
+    solidAt(px, py) { return isSolid(level, Math.floor(px / TILE), Math.floor(py / TILE)); },
+    // игрок и его координаты
+    get px() { return player ? player.x : 0; },
+    get py() { return player ? player.y : 0; },
+    playerNear(o, r = 60) { return player ? Math.abs(player.x - o.x) < r && Math.abs(player.y - o.y) < r : false; },
+    hurtPlayer(dir = 1) { if (player) player.hurt(dir, api); },
+    healPlayer(n = 1) { if (player && player.hp < CONFIG.PLAYER_HP) { player.hp += n; Audio8.sfx.heart(); } },
+    ammo(n = 1) { if (player) player.ammo = Math.min(9, player.ammo + n); },
+    score(n = 1) { bottlesGot += n; },
+    sfx(name = 'coin') { const f = Audio8.sfx[name]; if (f) f(); },
+    particles(x, y, kind = 'dust', n = 5) { for (let i = 0; i < n; i++) particles.push(mkParticle(x, y, kind)); },
+    shake(v = 0.2) { shake = Math.max(shake, v); },
+    get time() { return tGlobal; },
+  });
 
   // ---------- прогресс ----------
   const SAVE_KEY = 'melstroy_chekushka_v1';
@@ -2184,6 +2329,7 @@ const Game = (() => {
     level = buildLevel(def);
     enemies = []; tomahawks = []; bottles = []; hearts = []; particles = [];
     plushes = []; hatShots = [];
+    customEnts = [];
     bossRef = null;
     level.spawns.enemies.forEach(({ type, c, r }) => {
       if (type === 'e') enemies.push(new Walker(c, r));
@@ -2193,6 +2339,7 @@ const Game = (() => {
     level.spawns.bottles.forEach(({ c, r }) => bottles.push(new Bottle(c, r)));
     level.spawns.hearts.forEach(({ c, r }) => hearts.push(new HeartPickup(c, r)));
     (level.spawns.plushes || []).forEach(({ c, r }) => plushes.push(new PlushPickup(c, r)));
+    (level.spawns.custom || []).forEach(({ type, c, r }) => { if (CustomObjects.def(type)) customEnts.push(new CustomEnt(type, c, r)); });
     factory = new FactoryExit(level.factoryC, !!def.factoryLocked);
     player = new Player(level.spawnC);
     player.hp = CONFIG.PLAYER_HP;
@@ -2365,6 +2512,26 @@ const Game = (() => {
     });
     plushes = plushes.filter((p) => !p.taken);
 
+    // кастомные объекты (админ-панель): скрипт + взаимодействия с игроком
+    customEnts.forEach((o) => o.update(dt, level, scriptApi));
+    customEnts.forEach((o) => {
+      if (o.dead || o.taken) return;
+      if (!overlaps(player, o)) return;
+      const stomping = player.vy > 90 && (player.y + player.h) - o.y < 24;
+      if (o.collect > 0) {
+        o.taken = true;
+        bottlesGot += o.collect;
+        Audio8.sfx.coin();
+        scriptApi.particles(o.x + o.w / 2, o.y + o.h / 2, 'sparkle', 5);
+      } else if (stomping && o.stompable) {
+        o.hurt(api);
+        player.vy = -490;
+      } else if (o.dangerous) {
+        player.hurt(Math.sign(player.x - o.x) || 1, api);
+      }
+    });
+    customEnts = customEnts.filter((o) => !o.dead && !o.taken);
+
     // летящие плюшки — столкновения
     hatShots.forEach((s) => s.update(dt, level, api));
     hatShots.forEach((s) => {
@@ -2376,6 +2543,13 @@ const Game = (() => {
           if (e instanceof Boss) e.hitByHat(api);
           else e.stomp(api);
           break;
+        }
+      }
+      // плюшки бьют и скриптуемых объектов (вожди-кастомы и прочие stompable)
+      if (!s.dead) {
+        for (const o of customEnts) {
+          if (o.dead || o.taken || !o.stompable) continue;
+          if (overlaps(s, o)) { s.dead = true; o.hurt(api); break; }
         }
       }
     });
@@ -2521,6 +2695,7 @@ const Game = (() => {
     enemies.forEach((e) => e.draw(ctx, cam, tGlobal));
     tomahawks.forEach((t) => t.draw(ctx, cam));
     hatShots.forEach((s) => s.draw(ctx, cam));
+    customEnts.forEach((o) => o.draw(ctx, cam));
     if (player) player.draw(ctx, cam);
 
     // частицы
@@ -2691,6 +2866,17 @@ const Game = (() => {
   }
   // Применяет пакет из админ-панели: карты (сколько угодно, в любом порядке), разговоры, текстуры, музыку, каналы
   function applyCms(j) {
+    // кастомные объекты: текстуры + JS-скрипты (загружаем первыми — нужны картам)
+    if (Array.isArray(j.objects) && j.objects.length) {
+      CustomObjects.set(j.objects);
+      j.objects.forEach((o) => {
+        if (!o || !o.id) return;
+        if (o.character) {
+          CONFIG.NAMES['@' + o.id] = o.name || o.id;
+          UI.addSpeaker('@' + o.id, 'obj-' + o.id);
+        }
+      });
+    }
     if (Array.isArray(j.maps) && j.maps.length) {
       const intro = LEVELS[0];
       const defs = j.maps.map((m) => m && m.def).filter((d) => d && (d.type === 'map' || d.type === 'indev'));
@@ -2740,7 +2926,7 @@ const Game = (() => {
           if (r1.ok) cms = await r1.json();
         } catch (e) { /* нет файла */ }
       }
-      if (cms && (cms.maps || cms.levels || cms.textures || cms.music || cms.socials || cms.intro)) {
+      if (cms && (cms.maps || cms.levels || cms.textures || cms.music || cms.socials || cms.intro || cms.objects)) {
         applyCms(cms);
         return;
       }
@@ -2764,6 +2950,7 @@ const Game = (() => {
       startLevel, finishLevel,
       get player() { return player; },
       get enemies() { return enemies; },
+      get customEnts() { return customEnts; },
       get factory() { return factory; },
       get plushes() { return plushes; },
       get hatShots() { return hatShots; },

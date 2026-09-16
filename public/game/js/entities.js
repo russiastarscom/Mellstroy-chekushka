@@ -470,6 +470,97 @@ class HatShot {
 // триггером завершения уровня служит всё здание с запасом по краям.
 const GROUND_TOP = (ROWS - 2) * TILE; // верх земли — ряд 11 → y = 440
 
+// ============================================================
+// КАСТОМНЫЕ ОБЪЕКТЫ (админ-панель): своя текстура + JS-скрипт
+// ============================================================
+// Скрипт объекта — тело функции, исполняется КАЖДЫЙ КАДР:
+//   function(obj, api, dt) { ... }
+// obj — сам объект (x, y, w, h, vx, vy, hp, t, data…),
+// api — доступ к игре, dt — секунды с прошлого кадра.
+const CustomObjects = {
+  defs: new Map(),
+  runs: new Map(),
+  broken: new Set(),   // объекты с ошибкой в скрипте — чтобы не спамить консоль
+  set(list) {
+    this.defs.clear(); this.runs.clear(); this.broken.clear();
+    (list || []).forEach((o) => {
+      if (!o || !o.id) return;
+      this.defs.set(o.id, o);
+      try {
+        this.runs.set(o.id, new Function('obj', 'api', 'dt', '"use strict";\n' + String(o.script || '')));
+      } catch (e) {
+        this.broken.add(o.id);
+        console.warn('Объект «' + (o.name || o.id) + '»: ошибка в скрипте — ' + e.message);
+      }
+      if (o.tex) Sprites.addSlot('obj-' + o.id, { w: o.w, h: o.h, url: o.tex, color: '#9a4de6', portrait: o.character ? [0, 0.66] : null });
+    });
+  },
+  def(id) { return this.defs.get(id) || null; },
+  get list() { return Array.from(this.defs.values()); },
+};
+
+class CustomEnt {
+  constructor(type, c, r) {
+    const d = CustomObjects.def(type) || {};
+    this.type = type;
+    this.w = Math.max(8, Math.min(400, d.w || 32));
+    this.h = Math.max(8, Math.min(400, d.h || 32));
+    this.x = c * TILE + (TILE - this.w) / 2;
+    this.y = (r + 1) * TILE - this.h;      // стоит на дне клетки
+    this.vx = 0; this.vy = 0;
+    this.dir = -1;
+    this.t = 0;                             // время жизни (сек)
+    this.hp = 1; this.maxHp = 1;
+    this.dead = false; this.taken = false;
+    // флаги поведения — скрипт задаёт/меняет:
+    this.collect = 0;        // >0: касание игроком = подбор, +collect к чекушкам
+    this.dangerous = false;  // касание игроком = урон
+    this.stompable = false;  // убивается прыжком сверху и плюшкой
+    this.onGround = false; this.hitWall = false;
+    this.flash = 0;
+    this.data = {};          // переменные скрипта
+  }
+  hurt(game) {
+    this.hp--;
+    this.flash = 0.25;
+    if (this.hp <= 0) {
+      this.dead = true;
+      game.kills++;
+      game.spawnStars(this.x + this.w / 2, this.y + this.h / 2);
+    }
+  }
+  update(dt, level, game) {
+    this.t += dt;
+    if (this.flash > 0) this.flash -= dt;
+    // упал за пределы карты (например, в яму) — убираем
+    if (this.y > ROWS * TILE + 80) this.dead = true;
+    const run = CustomObjects.runs.get(this.type);
+    if (!run || CustomObjects.broken.has(this.type)) return;
+    try { run(this, game, dt); }
+    catch (e) {
+      CustomObjects.broken.add(this.type);
+      console.warn('Объект «' + this.type + '»: ошибка выполнения скрипта — ' + e.message);
+    }
+    if (this.hp > this.maxHp) this.maxHp = this.hp;
+  }
+  draw(ctx, camX) {
+    if (!Sprites.get('obj-' + this.type)) return;
+    ctx.fillStyle = 'rgba(0,0,0,.2)';
+    ctx.beginPath();
+    ctx.ellipse(this.x + this.w / 2 - camX, this.y + this.h + 2, Math.max(6, this.w * 0.4), 3, 0, 0, 7);
+    ctx.fill();
+    if (this.flash > 0) ctx.globalAlpha = 0.55;
+    Sprites.draw(ctx, 'obj-' + this.type, this.x - camX, this.y, this.w, this.h, this.dir > 0);
+    ctx.globalAlpha = 1;
+    if (this.maxHp > 1 && !this.dead) {
+      const bw = Math.max(30, this.w * 0.8);
+      const bx = this.x + this.w / 2 - bw / 2 - camX, by = this.y - 10;
+      ctx.fillStyle = '#00000090'; ctx.fillRect(bx - 1, by - 1, bw + 2, 6);
+      ctx.fillStyle = '#ff4757'; ctx.fillRect(bx, by, bw * Math.max(0, this.hp / this.maxHp), 4);
+    }
+  }
+}
+
 class FactoryExit {
   constructor(c, locked) {
     this.c = c;

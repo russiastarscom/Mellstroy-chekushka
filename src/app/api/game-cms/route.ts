@@ -32,6 +32,14 @@ const TEXTURE_KEYS = ['andrey', 'burmaldenets', 'boss', 'checkushka', 'factory',
 type TextureRef = { id: string; url: string };
 type Track = { id: string; name: string; url: string };
 type Social = { name: string; class: string; url: string };
+// Кастомный объект: своя текстура + JS-скрипт поведения (Task 17)
+type CustomObject = {
+  id: string; name: string; emoji: string;
+  w: number; h: number;
+  tex: string | null;       // URL текстуры (или null — цветная заглушка)
+  script: string;           // JS-код, исполняется каждый кадр
+  character: boolean;       // можно выбирать говорящим в диалогах
+};
 type Cms = {
   levels: Record<string, unknown> | null;
   v: number | null;
@@ -40,11 +48,12 @@ type Cms = {
   textures: Record<string, TextureRef> | null;
   music: { active: string | null; tracks: Track[] } | null;
   socials: Social[] | null;
+  objects: CustomObject[] | null;
   updatedAt: string;
 };
 
 function emptyCms(): Omit<Cms, 'updatedAt'> {
-  return { levels: null, v: null, maps: null, intro: null, textures: null, music: null, socials: null };
+  return { levels: null, v: null, maps: null, intro: null, textures: null, music: null, socials: null, objects: null };
 }
 
 function readCms(): Omit<Cms, 'updatedAt'> & { updatedAt: string | null } {
@@ -129,6 +138,25 @@ function validateCms(body: Record<string, unknown>): string | null {
     if (i.outroAfterBoss !== undefined && !Array.isArray(i.outroAfterBoss)) return 'intro.outroAfterBoss must be an array';
     if (Array.isArray(i.cutscene) && i.cutscene.length > 60) return 'intro.cutscene: too many lines';
   }
+  if (body.objects !== undefined && body.objects !== null) {
+    if (!Array.isArray(body.objects)) return 'objects must be an array';
+    if ((body.objects as unknown[]).length > 40) return 'too many objects (max 40)';
+    const ids = new Set<string>();
+    for (const o of body.objects as Record<string, unknown>[]) {
+      if (!o || typeof o !== 'object') return 'object: not an object';
+      if (typeof o.id !== 'string' || !/^obj-[\w-]{1,40}$/.test(o.id)) return `object: bad id "${o.id}"`;
+      if (ids.has(o.id)) return `object: duplicate id "${o.id}"`;
+      ids.add(o.id);
+      if (typeof o.name !== 'string' || !o.name.trim() || o.name.length > 30) return `object ${o.id}: name 1..30`;
+      if (typeof o.emoji !== 'string' || o.emoji.length > 8) return `object ${o.id}: emoji too long`;
+      if (typeof o.w !== 'number' || o.w < 8 || o.w > 400) return `object ${o.id}: width 8..400`;
+      if (typeof o.h !== 'number' || o.h < 8 || o.h > 400) return `object ${o.id}: height 8..400`;
+      if (o.tex !== null && typeof o.tex !== 'string') return `object ${o.id}: bad tex`;
+      if (typeof o.script !== 'string') return `object ${o.id}: bad script`;
+      if (o.script.length > 30000) return `object ${o.id}: script too long (max 30000)`;
+      if (typeof o.character !== 'boolean') return `object ${o.id}: bad character flag`;
+    }
+  }
   return null;
 }
 
@@ -156,6 +184,7 @@ export async function POST(req: Request) {
     if (body.textures !== undefined) next.textures = (body.textures as Cms['textures']) || null;
     if (body.music !== undefined) next.music = (body.music as Cms['music']) || null;
     if (body.socials !== undefined) next.socials = (body.socials as Cms['socials']) || null;
+    if (body.objects !== undefined) next.objects = (body.objects as Cms['objects']) || null;
     const payload = { ...next, updatedAt: new Date().toISOString() };
     fs.mkdirSync(path.dirname(FILE), { recursive: true });
     fs.writeFileSync(FILE, JSON.stringify(payload));

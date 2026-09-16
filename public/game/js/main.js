@@ -44,6 +44,7 @@ const Game = (() => {
   let player = null;
   let enemies = [], tomahawks = [], bottles = [], hearts = [], particles = [];
   let plushes = [], hatShots = [];
+  let customEnts = [];          // кастомные объекты из админ-панели (скриптуемые)
   let factory = null;
   let cam = 0, shake = 0;
   let bottlesGot = 0, kills = 0;
@@ -63,6 +64,29 @@ const Game = (() => {
     get kills() { return kills; },
     set kills(v) { kills = v; },
   };
+
+  // API для скриптов кастомных объектов (админ-панель)
+  const scriptApi = Object.create(api);
+  Object.assign(scriptApi, {
+    // гравитация + коллизии с тайлами (вызывай каждый кадр для «физических» объектов)
+    gravity(o, d) { o.vy = Math.min((o.vy || 0) + CONFIG.GRAVITY * d, 1100); moveEntity(o, level, d, false); },
+    // упёрся ли в стену на прошлом кадре
+    solid(o) { return !!o.hitWall; },
+    // твёрдый ли тайл в пиксельной точке
+    solidAt(px, py) { return isSolid(level, Math.floor(px / TILE), Math.floor(py / TILE)); },
+    // игрок и его координаты
+    get px() { return player ? player.x : 0; },
+    get py() { return player ? player.y : 0; },
+    playerNear(o, r = 60) { return player ? Math.abs(player.x - o.x) < r && Math.abs(player.y - o.y) < r : false; },
+    hurtPlayer(dir = 1) { if (player) player.hurt(dir, api); },
+    healPlayer(n = 1) { if (player && player.hp < CONFIG.PLAYER_HP) { player.hp += n; Audio8.sfx.heart(); } },
+    ammo(n = 1) { if (player) player.ammo = Math.min(9, player.ammo + n); },
+    score(n = 1) { bottlesGot += n; },
+    sfx(name = 'coin') { const f = Audio8.sfx[name]; if (f) f(); },
+    particles(x, y, kind = 'dust', n = 5) { for (let i = 0; i < n; i++) particles.push(mkParticle(x, y, kind)); },
+    shake(v = 0.2) { shake = Math.max(shake, v); },
+    get time() { return tGlobal; },
+  });
 
   // ---------- прогресс ----------
   const SAVE_KEY = 'melstroy_chekushka_v1';
@@ -102,6 +126,7 @@ const Game = (() => {
     level = buildLevel(def);
     enemies = []; tomahawks = []; bottles = []; hearts = []; particles = [];
     plushes = []; hatShots = [];
+    customEnts = [];
     bossRef = null;
     level.spawns.enemies.forEach(({ type, c, r }) => {
       if (type === 'e') enemies.push(new Walker(c, r));
@@ -111,6 +136,7 @@ const Game = (() => {
     level.spawns.bottles.forEach(({ c, r }) => bottles.push(new Bottle(c, r)));
     level.spawns.hearts.forEach(({ c, r }) => hearts.push(new HeartPickup(c, r)));
     (level.spawns.plushes || []).forEach(({ c, r }) => plushes.push(new PlushPickup(c, r)));
+    (level.spawns.custom || []).forEach(({ type, c, r }) => { if (CustomObjects.def(type)) customEnts.push(new CustomEnt(type, c, r)); });
     factory = new FactoryExit(level.factoryC, !!def.factoryLocked);
     player = new Player(level.spawnC);
     player.hp = CONFIG.PLAYER_HP;
@@ -283,6 +309,26 @@ const Game = (() => {
     });
     plushes = plushes.filter((p) => !p.taken);
 
+    // кастомные объекты (админ-панель): скрипт + взаимодействия с игроком
+    customEnts.forEach((o) => o.update(dt, level, scriptApi));
+    customEnts.forEach((o) => {
+      if (o.dead || o.taken) return;
+      if (!overlaps(player, o)) return;
+      const stomping = player.vy > 90 && (player.y + player.h) - o.y < 24;
+      if (o.collect > 0) {
+        o.taken = true;
+        bottlesGot += o.collect;
+        Audio8.sfx.coin();
+        scriptApi.particles(o.x + o.w / 2, o.y + o.h / 2, 'sparkle', 5);
+      } else if (stomping && o.stompable) {
+        o.hurt(api);
+        player.vy = -490;
+      } else if (o.dangerous) {
+        player.hurt(Math.sign(player.x - o.x) || 1, api);
+      }
+    });
+    customEnts = customEnts.filter((o) => !o.dead && !o.taken);
+
     // летящие плюшки — столкновения
     hatShots.forEach((s) => s.update(dt, level, api));
     hatShots.forEach((s) => {
@@ -294,6 +340,13 @@ const Game = (() => {
           if (e instanceof Boss) e.hitByHat(api);
           else e.stomp(api);
           break;
+        }
+      }
+      // плюшки бьют и скриптуемых объектов (вожди-кастомы и прочие stompable)
+      if (!s.dead) {
+        for (const o of customEnts) {
+          if (o.dead || o.taken || !o.stompable) continue;
+          if (overlaps(s, o)) { s.dead = true; o.hurt(api); break; }
         }
       }
     });
@@ -439,6 +492,7 @@ const Game = (() => {
     enemies.forEach((e) => e.draw(ctx, cam, tGlobal));
     tomahawks.forEach((t) => t.draw(ctx, cam));
     hatShots.forEach((s) => s.draw(ctx, cam));
+    customEnts.forEach((o) => o.draw(ctx, cam));
     if (player) player.draw(ctx, cam);
 
     // частицы
@@ -609,6 +663,17 @@ const Game = (() => {
   }
   // Применяет пакет из админ-панели: карты (сколько угодно, в любом порядке), разговоры, текстуры, музыку, каналы
   function applyCms(j) {
+    // кастомные объекты: текстуры + JS-скрипты (загружаем первыми — нужны картам)
+    if (Array.isArray(j.objects) && j.objects.length) {
+      CustomObjects.set(j.objects);
+      j.objects.forEach((o) => {
+        if (!o || !o.id) return;
+        if (o.character) {
+          CONFIG.NAMES['@' + o.id] = o.name || o.id;
+          UI.addSpeaker('@' + o.id, 'obj-' + o.id);
+        }
+      });
+    }
     if (Array.isArray(j.maps) && j.maps.length) {
       const intro = LEVELS[0];
       const defs = j.maps.map((m) => m && m.def).filter((d) => d && (d.type === 'map' || d.type === 'indev'));
@@ -658,7 +723,7 @@ const Game = (() => {
           if (r1.ok) cms = await r1.json();
         } catch (e) { /* нет файла */ }
       }
-      if (cms && (cms.maps || cms.levels || cms.textures || cms.music || cms.socials || cms.intro)) {
+      if (cms && (cms.maps || cms.levels || cms.textures || cms.music || cms.socials || cms.intro || cms.objects)) {
         applyCms(cms);
         return;
       }
@@ -682,6 +747,7 @@ const Game = (() => {
       startLevel, finishLevel,
       get player() { return player; },
       get enemies() { return enemies; },
+      get customEnts() { return customEnts; },
       get factory() { return factory; },
       get plushes() { return plushes; },
       get hatShots() { return hatShots; },

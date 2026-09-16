@@ -229,6 +229,26 @@ const Sprites = (() => {
     });
   }
 
+  // Динамический слот (кастомные объекты из админ-панели): создаёт ключ
+  // спрайта с нуля — 'obj-<id>'. color — цвет заглушки, пока PNG не грузится.
+  function addSlot(key, { w, h, url, color, portrait }) {
+    if (!key || !url) return;
+    const img = new Image();
+    img.onload = () => {
+      store[key] = { img, fallback: null, w: w || 32, h: h || 32, bg: false, pr: portrait || null };
+    };
+    img.src = url;
+    // мгновенная заглушка, чтобы объект был виден даже до загрузки PNG
+    if (!store[key]) {
+      const [c, x] = mkCanvas(Math.max(8, Math.round(w || 32)), Math.max(8, Math.round(h || 32)));
+      x.fillStyle = color || '#9a4de6';
+      x.fillRect(0, 0, c.width, c.height);
+      x.fillStyle = 'rgba(255,255,255,.35)';
+      x.fillRect(0, 0, c.width, Math.max(2, c.height * 0.18));
+      store[key] = { img: null, fallback: c, w: w || 32, h: h || 32, bg: false, pr: portrait || null };
+    }
+  }
+
   function get(key) { return store[key]; }
 
   // Нарисовать спрайт (img или фолбэк) с флипом
@@ -284,5 +304,5 @@ const Sprites = (() => {
     x.drawImage(src, bx, py0, bw, hh, (canvas.width - dw) / 2, (canvas.height - dh) / 2, dw, dh);
   }
 
-  return { load, setCustom, get, draw, portrait, isReady: () => loaded, SLOTS: Object.keys(DEFS) };
+  return { load, setCustom, addSlot, get, draw, portrait, isReady: () => loaded, SLOTS: Object.keys(DEFS) };
 })();

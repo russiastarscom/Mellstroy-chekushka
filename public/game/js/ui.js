@@ -39,6 +39,9 @@ const UI = (() => {
   const WHO_PORTRAIT = { andrey: 'andrey', enemy: 'burmaldenets', boss: 'boss', radio: 'checkushka', narrator: null };
   const dlg = { lines: [], i: 0, typing: false, timer: null, resolve: null };
 
+  // Кастомные говорящие из админ-панели: who '@obj-id' → спрайт 'obj-obj-id'
+  function addSpeaker(who, spriteKey) { if (who && spriteKey) WHO_PORTRAIT[who] = spriteKey; }
+
   function dialogue(lines) {
     return new Promise((resolve) => {
       dlg.lines = lines || [];
@@ -304,5 +307,6 @@ const UI = (() => {
   return {
     init, showScreen, setHud, dialogue, cutscene,
     buildLevelsGrid, updateSoundButtons, updatePlayButton, showComplete,
+    addSpeaker,
   };
 })();

@@ -10,7 +10,7 @@ const TILE = 40;          // размер тайла
 function buildLevel(def) {
   const w = def.width;
   const grid = Array.from({ length: ROWS }, () => Array(w).fill('.'));
-  const spawns = { enemies: [], bottles: [], hearts: [], tomahawks: [], plushes: [] };
+  const spawns = { enemies: [], bottles: [], hearts: [], tomahawks: [], plushes: [], custom: [] };
 
   // земля (2 ряда внизу)
   (def.ground || []).forEach(([c0, c1]) => {
@@ -41,6 +41,12 @@ function buildLevel(def) {
   // враги: [тип, колонка] — спавн на землю (ряд 10), либо [тип, колонка, ряд] — на платформу
   (def.enemies || []).forEach(([type, c, r]) => spawns.enemies.push({ type, c, r: (r === undefined) ? 10 : r }));
   if (def.boss) spawns.enemies.push({ type: 'boss', c: def.boss.col, r: 9 });
+  // кастомные объекты из админ-панели: { 'obj-id': [[c,r],...] }
+  if (def.custom && typeof def.custom === 'object') {
+    Object.entries(def.custom).forEach(([type, list]) => {
+      (list || []).forEach(([c, r]) => spawns.custom.push({ type, c, r }));
+    });
+  }
 
   return {
     def, w, grid, spawns,
