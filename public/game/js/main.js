@@ -72,11 +72,12 @@ const Game = (() => {
     gravity(o, d) { o.vy = Math.min((o.vy || 0) + CONFIG.GRAVITY * d, 1100); moveEntity(o, level, d, false); },
     // упёрся ли в стену на прошлом кадре
     solid(o) { return !!o.hitWall; },
+    // живые враги на карте: у обычных нет hp — убиваются e.stomp(api), у босса есть hp — бьётся e.hitByHat(api)
+    enemies() { return enemies.filter(e => !e.dead); },
+    // чекушки на карте: b.taken — подобрана, b.rect() — прямоугольник {x,y,w,h}
+    bottles() { return bottles; },
     // твёрдый ли тайл в пиксельной точке
     solidAt(px, py) { return isSolid(level, Math.floor(px / TILE), Math.floor(py / TILE)); },
-    // игрок и его координаты
-    get px() { return player ? player.x : 0; },
-    get py() { return player ? player.y : 0; },
     playerNear(o, r = 60) { return player ? Math.abs(player.x - o.x) < r && Math.abs(player.y - o.y) < r : false; },
     hurtPlayer(dir = 1) { if (player) player.hurt(dir, api); },
     healPlayer(n = 1) { if (player && player.hp < CONFIG.PLAYER_HP) { player.hp += n; Audio8.sfx.heart(); } },
@@ -85,7 +86,13 @@ const Game = (() => {
     sfx(name = 'coin') { const f = Audio8.sfx[name]; if (f) f(); },
     particles(x, y, kind = 'dust', n = 5) { for (let i = 0; i < n; i++) particles.push(mkParticle(x, y, kind)); },
     shake(v = 0.2) { shake = Math.max(shake, v); },
-    get time() { return tGlobal; },
+  });
+  // ВАЖНО: px/py/time — живые геттеры. Object.assign вызвал бы их ОДИН раз при
+  // загрузке (player ещё null → навсегда 0), поэтому только defineProperties.
+  Object.defineProperties(scriptApi, {
+    px: { get() { return player ? player.x : 0; } },
+    py: { get() { return player ? player.y : 0; } },
+    time: { get() { return tGlobal; } },
   });
 
   // ---------- прогресс ----------

@@ -484,7 +484,8 @@ function drawEnt(x, e, cs, TOP) {
     return;
   }
   const map = { e: 'burmaldenets', t: 'burmaldenets', G: 'boss', bottle: 'checkushka', heart: 'heart', plush: 'plush' };
-  if (!imgFit(x, IMG[map[e.t]], cx, by, e.t === 'G' ? cs * 1.8 : cs * .95, e.t === 'G' ? cs * 1.9 : cs * .95)) {
+  const spr = IMG[map[e.t]];   // неизвестный тип сущности не должен ломать весь редактор
+  if (!spr || !imgFit(x, spr, cx, by, e.t === 'G' ? cs * 1.8 : cs * .95, e.t === 'G' ? cs * 1.9 : cs * .95)) {
     x.fillStyle = e.t === 'G' ? '#ffd23f' : '#e63946';
     x.beginPath(); x.arc(cx, by - cs / 2, cs * .3, 0, 7); x.fill();
   }
