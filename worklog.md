@@ -362,3 +362,29 @@ Work Log:
 Stage Summary:
 - Публикации теперь НЕ пропадают: каждый «ОПУБЛИКОВАТЬ» автоматически коммитит data/ в git и переживает перезапуск окружения
 - Пропавшее содержимое восстановить с сервера НЕВОЗМОЖНО (не коммитилось); черновики карт/диалогов/каналов у пользователя восстановятся автоматически из его браузера при открытии панели; текстуры и музыку нужно перезалить и опубликовать заново
+
+---
+Task ID: 17
+Agent: Super Z (main)
+Task: Свои текстуры + скриптование через JS + новые объекты + говорящие персонажи (кастомные вожди с удалением)
+
+Work Log:
+- Найдено и исправлено попутно: роут /api/game-cms/upload ПРОПАЛ из репо (404) — загрузка текстур/музыки в панели была сломана; восстановлен (base64 → data/game-assets/, kind texture|music|object, sniff сигнатур png/jpg/webp/gif/mp3/ogg/wav/m4a, лимиты 4/4/10 МБ)
+- Сервер game-cms/route.ts: новое поле objects[] (CustomObject: id obj-*, name 1..30, emoji ≤8, w/h 8..400, tex|null, script ≤30000, character:bool) + валидация (макс 40, без дублей id) + POST/DELETE хранение; персистентность через gitPersist (см. 17-fix)
+- Игра sprites.js: Sprites.addSlot(key, {w,h,url,color,portrait}) — динамические спрайт-слоты 'obj-<id>' с мгновенной цветной заглушкой до загрузки PNG
+- Игра entities.js: реестр CustomObjects (defs/runs/broken) — компиляция скриптов new Function('obj','api','dt', '"use strict";'+script); класс CustomEnt (x,y,w,h,vx,vy,hp,maxHp,t,dir,collect,dangerous,stompable,flash,data,flash-эффект, HP-бар при maxHp>1, hurt(game), деспавн при падении за карту y>ROWS*TILE+80); ошибки компиляции/выполнения → broken + console.warn (без спама)
+- Игра levels.js: buildLevel разворачивает def.custom {objId: [[c,r],...]} → spawns.custom
+- Игра main.js: customEnts[]; scriptApi = Object.create(api) + gravity(o,dt) (гравитация+moveEntity), solid(o), solidAt(px,py), px/py, playerNear, hurtPlayer, healPlayer, ammo, score, sfx(name), particles(x,y,kind,n), shake, time; спавн из spawns.custom; update: скрипт → collect (подбор, sfx.coin, sparkle) / stomp+stompable (hurt + отскок -490) / dangerous (урон); плюшки бьют stompable-объекты; фильтрация dead/taken; отрисовка в основном слое; applyCms: CustomObjects.set(j.objects) + для character → CONFIG.NAMES['@id'] + UI.addSpeaker; GameDebug.customEnts
+- Игра ui.js: UI.addSpeaker(who, spriteKey) — WHO_PORTRAIT расширяется на лету (портрет из PNG объекта через Sprites.portrait)
+- Панель admin.html: вкладка 🧩 ОБЪЕКТЫ + pane + CSS (objcard: превью/имя/эмодзи/размеры/PNG/чекбокс «говорит в диалогах»/шаблон/textarea скрипта monospace/API-подсказка), span#custom-tools в тулбаре карт (display:contents)
+- Панель admin.js: CMS.objects + objectsDirty (черновики сохраняют objects+objectsClean; anyDirty; publish сбрасывает); OBJ_TEMPLATES 6 шаблонов (предмет/декорация/ловушка/враг 2HP/вождь 6HP с прыжком/пустой); renderObjects (CRUD, upload PNG kind:object, OBJ_IMG превью в редакторе); buildCustomTools — кнопки '@id' в тулбаре; drawEnt рисует '@' энты (PNG/эмодзи-фолбэк); defToState/stateToDef ↔ def.custom; dlgLineEditor: говорящие = WHO_LIST + character-объекты; buildPayload v:4 + objects; serverMapsToCms: j.objects; boot/renderAll/ADMIN-хуки
+- Грабли: (1) шаблоны задавали obj.hp каждый кадр → урон сбрасывался следующим кадром — фикс: одноразовая инициализация через if (!obj.data.init) {...} (обновлены шаблоны enemy/boss/empty, добавлен СОВЕТ в шаблон); (2) стомп казался неработающим из-за этого же + бочка уходила ходьбой в яму при тестах; (3) agent-browser eval не ждёт async-промисы надёжно — publish проверять GET'ом; диалог: первый клик завершает печать, а не листает
+- index.html пересобран (126.7 КБ), sw v17→v18→v19
+- E2E (agent-browser): панель — создание объекта кнопкой, upload PNG (curl+API), установка на карту paint(15,9,'@id'), stateToDef → def.custom, publish v:4 ✓; сервер: objects[1], git-коммит cms-persist ✓; игра — спавн бочки, collect-скрипт (подбор → HUD чекушки 1→2) ✓; босс-скрипт: hp=6/maxHp=6/stompable/dangerous, ходьба vx=±70, api.gravity (стоит на земле) ✓; стомп: hp 6→4 + отскок игрока vy=-490, урон не сбрасывается ✓; урон сбоку dangerous → player.hurt (до gameover при стоянии внутри) ✓; говорящий: character=true → реплика who '@obj-id' → спикер «Бочка» + портрет из своей PNG ✓; errors чистые
+- Тестовые данные удалены (DELETE reset, git-коммит cms-persist: reset-all); код закоммичен
+
+Stage Summary:
+- В панели есть полноценный конструктор НОВЫХ объектов: своя PNG-текстура + JS-скрипт (или готовый шаблон) → объект появляется кнопкой в редакторе карт, публикуется для всех и исполняется игрой у всех
+- Скрипт-API: obj (x,y,hp,t,data…), api.gravity/solid/solidAt/hurtPlayer/healPlayer/ammo/score/sfx/particles/shake/px/py, флаги collect/dangerous/stompable — покрывает предметы, ловушки, врагов и дополнительных вождей (боссов) со своим HP
+- Персонажи-объекты с флагом «говорит в диалогах» появляются в выпадашке «кто говорит» во всех редакторах разговоров — имя и портрет из их текстуры; можно добавлять/удалять сколько нужно
+- Пользователю: обновить index.html + sw.js (или весь ZIP); в панели новая вкладка «🧩 ОБЪЕКТЫ»
