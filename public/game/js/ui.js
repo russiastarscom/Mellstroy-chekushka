@@ -158,11 +158,22 @@ const UI = (() => {
     if (r) r();
   }
 
-  // ---------- Выбор уровня ----------
+  // ---------- Выбор уровня (с заголовками глав) ----------
   function buildLevelsGrid(progress) {
     const grid = $('levels-grid');
     grid.innerHTML = '';
+    let lastCh = -1;
     LEVELS.forEach((lv, i) => {
+      const ch = lv.chapter || 0;
+      if (ch !== lastCh) {
+        lastCh = ch;
+        const meta = CHAPTERS[ch] || { name: 'ГЛАВА', color: '#ffd23f' };
+        const head = document.createElement('div');
+        head.className = 'chapter-head';
+        head.style.setProperty('--chc', meta.color);
+        head.textContent = meta.name;
+        grid.appendChild(head);
+      }
       const isLast = lv.type === 'indev';
       const done = progress.done[i];
       const unlocked = isLast ? true : i < progress.unlocked;
@@ -233,9 +244,26 @@ const UI = (() => {
     showScreen('complete');
   }
 
+  // ---------- Конфетти на счастливой концовке ----------
+  function buildConfetti() {
+    const box = $('confetti');
+    if (!box || box.children.length) return;
+    const colors = ['#ffd23f', '#ff4757', '#2ed573', '#7ad0ff', '#c77dff', '#ffb347'];
+    for (let i = 0; i < 44; i++) {
+      const p = document.createElement('i');
+      p.style.left = Math.random() * 100 + '%';
+      p.style.background = colors[i % colors.length];
+      p.style.animationDelay = (Math.random() * 4) + 's';
+      p.style.animationDuration = (3.5 + Math.random() * 3) + 's';
+      p.style.width = p.style.height = (6 + Math.random() * 8) + 'px';
+      box.appendChild(p);
+    }
+  }
+
   // ---------- Инициализация ----------
   function init(callbacks) {
     Object.assign(cb, callbacks);
+    buildConfetti();
 
     $('btn-play').addEventListener('click', () => { Audio8.resume(); Audio8.sfx.click(); cb.onPlay(); });
 

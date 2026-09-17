@@ -321,3 +321,42 @@ html, body {
   width: 20px; height: 20px; border-radius: 50%;
   background: #fff; border: 3px solid var(--accent);
 }
+
+/* ---------- Главы в выборе карт (60 уровней!) ---------- */
+#screen-levels { justify-content: flex-start; overflow-y: auto; padding: 3vmin 3vmin 5vmin; }
+#screen-levels::-webkit-scrollbar { width: 8px; }
+#screen-levels::-webkit-scrollbar-thumb { background: #2c2c4e; border-radius: 4px; }
+#screen-levels .screen-title { flex: 0 0 auto; }
+#screen-levels .big-btn { flex: 0 0 auto; }
+#levels-grid { width: min(94%, 760px); }
+.chapter-head {
+  grid-column: 1 / -1;
+  font-weight: bold;
+  font-size: clamp(13px, 2.6vmin, 20px);
+  letter-spacing: 2px;
+  color: var(--chc, #ffd23f);
+  text-shadow: 2px 2px 0 #000;
+  padding: 2.2vmin 0 0.6vmin;
+  border-bottom: 2px solid var(--chc, #ffd23f);
+  margin-bottom: 1vmin;
+  text-align: left;
+}
+.chapter-head:first-child { padding-top: 0; }
+
+/* ---------- Счастливая концовка: конфетти ---------- */
+.ending-title.happy { color: #ffd23f; text-shadow: 4px 4px 0 #000, 0 0 24px #ffd23f66; }
+#confetti { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+#confetti i {
+  position: absolute;
+  top: -4vh;
+  display: block;
+  border-radius: 2px;
+  opacity: .9;
+  animation-name: confetti-fall;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+@keyframes confetti-fall {
+  0%   { transform: translateY(-4vh) rotate(0deg); }
+  100% { transform: translateY(110vh) rotate(720deg); }
+}

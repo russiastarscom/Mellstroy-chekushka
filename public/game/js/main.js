@@ -135,10 +135,13 @@ const Game = (() => {
     plushes = []; hatShots = [];
     customEnts = [];
     bossRef = null;
-    level.spawns.enemies.forEach(({ type, c, r }) => {
+    level.spawns.enemies.forEach(({ type, c, r, hp }) => {
       if (type === 'e') enemies.push(new Walker(c, r));
       else if (type === 't') enemies.push(new Thrower(c, r));
-      else if (type === 'boss') { const b = new Boss(c); enemies.push(b); bossRef = b; }
+      else if (type === 'f') enemies.push(new Flyer(c, r === undefined ? 6 : r));
+      else if (type === 'j') enemies.push(new Jumper(c, r));
+      else if (type === 'a') enemies.push(new Armored(c, r));
+      else if (type === 'boss') { const b = new Boss(c, { hp, big: hp >= 10 }); enemies.push(b); bossRef = b; }
     });
     level.spawns.bottles.forEach(({ c, r }) => bottles.push(new Bottle(c, r)));
     level.spawns.hearts.forEach(({ c, r }) => hearts.push(new HeartPickup(c, r)));
@@ -214,7 +217,8 @@ const Game = (() => {
     for (let i = 0; i < 26; i++) particles.push(mkParticle(bossRef.x + bossRef.w / 2, bossRef.y + bossRef.h / 2, 'star'));
     if (factory) factory.unlock();
     frozen = true;
-    UI.dialogue(DIALOGUES.outroAfterBoss).then(() => {
+    const outro = (LEVELS[levelIndex] && LEVELS[levelIndex].bossOutro) || DIALOGUES.outroAfterBoss;
+    UI.dialogue(outro).then(() => {
       frozen = false;
     });
   }
@@ -243,6 +247,29 @@ const Game = (() => {
     if (state !== 'playing' || frozen) { input.jumpPressed = false; return; }
 
     player.update(dt, input, level, api);
+
+    // ---------- сыпучие платформы: триггер под ногами + обрушение ----------
+    if (player.onGround) {
+      const fr = Math.floor((player.y + player.h + 2) / TILE);
+      const c0 = Math.floor(player.x / TILE), c1 = Math.floor((player.x + player.w - 1) / TILE);
+      for (let c = c0; c <= c1; c++) {
+        if (tileAt(level, c, fr) === 'C' && !level.crumble.has(c + ',' + fr)) {
+          level.crumble.set(c + ',' + fr, { t: 0, broken: false });
+          Audio8.sfx.crumble();
+        }
+      }
+    }
+    level.crumble.forEach((st, k) => {
+      st.t += dt;
+      if (!st.broken && st.t > 0.45) {
+        st.broken = true; st.t = 0;
+        Audio8.sfx.crumble();
+        const [cc, rr] = k.split(',').map(Number);
+        spawnDust(cc * TILE + 20, rr * TILE + 20, 6);
+      } else if (st.broken && st.t > 2.6) {
+        level.crumble.delete(k);
+      }
+    });
 
     // ---------- плюшки: бросок ----------
     if (player.shootCd > 0) player.shootCd -= dt;
@@ -345,6 +372,7 @@ const Game = (() => {
         if (overlaps(s, e)) {
           s.dead = true;
           if (e instanceof Boss) e.hitByHat(api);
+          else if (e.armor) e.die(api);
           else e.stomp(api);
           break;
         }
@@ -389,7 +417,26 @@ const Game = (() => {
     bg_city: ['#9fb4c7', '#6b7a8c'],
     bg_district: ['#e8875a', '#4a3a52'],
     bg_plant: ['#1c2a4a', '#0d1424'],
+    bg_snow: ['#a8d4f0', '#e8f2fa'],
+    bg_desert: ['#ffd9a0', '#e8a75a'],
+    bg_sky: ['#8ec9f0', '#cfe8ff'],
+    bg_volcano: ['#e8703a', '#3a1f2b'],
+    bg_final: ['#2a1f3a', '#0d1424'],
   };
+
+  // Темы тайлов: цвета земли/платформ/шипов/жидкости по фону уровня
+  const THEMES = {
+    bg_fields:   { ground: '#7a4a2b', dark: '#63391f', top: '#3fa34d', top2: '#54c15f', brick: '#9e5a3c', brickD: '#7a4029', plat: '#8b5a2b', platT: '#a9714b', platD: '#5d3a1a', spike: '#8d99ae', crumb: '#b8a888', haz: '#3e7cb8', haz2: '#6db3e8' },
+    bg_city:     { ground: '#6e6a63', dark: '#585450', top: '#7da35a', top2: '#93bd6d', brick: '#8a8378', brickD: '#6b655c', plat: '#7a746b', platT: '#948d82', platD: '#575248', spike: '#8d99ae', crumb: '#b8a888', haz: '#3e7cb8', haz2: '#6db3e8' },
+    bg_district: { ground: '#7a4a2b', dark: '#63391f', top: '#8f9a4a', top2: '#adb566', brick: '#9e5a3c', brickD: '#7a4029', plat: '#8b5a2b', platT: '#a9714b', platD: '#5d3a1a', spike: '#8d99ae', crumb: '#b8a888', haz: '#3e7cb8', haz2: '#6db3e8' },
+    bg_plant:    { ground: '#4a3f45', dark: '#3a3136', top: '#5a6e50', top2: '#6e8560', brick: '#5f4a52', brickD: '#47363d', plat: '#544750', platT: '#6d5e68', platD: '#38303b', spike: '#8d99ae', crumb: '#8a7f92', haz: '#63d471', haz2: '#a8f0a8' },
+    bg_snow:     { ground: '#7186a8', dark: '#5a6d8c', top: '#f0f6fb', top2: '#ffffff', brick: '#93a8c9', brickD: '#7488a8', plat: '#8296b5', platT: '#a5b8d4', platD: '#5f7290', spike: '#bfe3ff', crumb: '#d5e5f5', haz: '#2f6fb0', haz2: '#6db3e8' },
+    bg_desert:   { ground: '#c98f4e', dark: '#a8733c', top: '#e8b86a', top2: '#f5d089', brick: '#b57f45', brickD: '#946330', plat: '#b0813f', platT: '#d0a05c', platD: '#8a5f2c', spike: '#6f8a4f', crumb: '#e0c088', haz: '#e8622a', haz2: '#ffa25c' },
+    bg_sky:      { ground: '#9aa7c7', dark: '#7e8aad', top: '#ffffff', top2: '#f0f6ff', brick: '#b0bcdc', brickD: '#8e9abc', plat: '#a2b0d2', platT: '#c4d0ec', platD: '#7e8aad', spike: '#8d99ae', crumb: '#e8eefc', haz: '#63d471', haz2: '#a8f0a8' },
+    bg_volcano:  { ground: '#5a3a3a', dark: '#462c2c', top: '#8a4a3a', top2: '#a85c48', brick: '#6a4440', brickD: '#523432', plat: '#634041', platT: '#7e5454', platD: '#4a2f30', spike: '#9aa4b2', crumb: '#a08484', haz: '#ff7a2a', haz2: '#ffc25c' },
+    bg_final:    { ground: '#41415f', dark: '#333349', top: '#5c5c85', top2: '#7070a0', brick: '#4f4f74', brickD: '#3c3c58', plat: '#4a4a6e', platT: '#60608e', platD: '#35354e', spike: '#8d99ae', crumb: '#8c8cb0', haz: '#63d471', haz2: '#a8f0a8' },
+  };
+  function theme(bgKey) { return THEMES[bgKey] || THEMES.bg_fields; }
 
   function drawBackground(bgKey) {
     const spr = Sprites.get(bgKey);
@@ -412,41 +459,55 @@ const Game = (() => {
     const viewW = VIEW_W / ZOOM;
     const c0 = Math.max(0, Math.floor(cam / TILE) - 1);
     const c1 = Math.min(level.w - 1, Math.ceil((cam + viewW) / TILE) + 1);
+    const T = theme(LEVELS[levelIndex].bg);
     for (let r = 0; r < ROWS; r++) {
       for (let c = c0; c <= c1; c++) {
         const t = level.grid[r][c];
         if (t === '.') continue;
-        const x = c * TILE - cam, y = r * TILE;
+        let x = c * TILE - cam, y = r * TILE;
         if (t === '#') {
-          const grass = !TILE_SOLID.has(level.grid[r - 1]?.[c] || '.');
-          ctx.fillStyle = '#7a4a2b';
+          const grass = !TILE_SOLID.has(tileAt(level, c, r - 1));
+          ctx.fillStyle = T.ground;
           ctx.fillRect(x, y, TILE, TILE);
-          ctx.fillStyle = '#63391f';
+          ctx.fillStyle = T.dark;
           ctx.fillRect(x + 4, y + 14, 8, 6);
           ctx.fillRect(x + 24, y + 26, 10, 6);
           if (grass) {
-            ctx.fillStyle = '#3fa34d';
+            ctx.fillStyle = T.top;
             ctx.fillRect(x, y, TILE, 12);
-            ctx.fillStyle = '#54c15f';
+            ctx.fillStyle = T.top2;
             ctx.fillRect(x, y, TILE, 5);
           }
         } else if (t === 'B') {
-          ctx.fillStyle = '#9e5a3c';
+          ctx.fillStyle = T.brick;
           ctx.fillRect(x, y, TILE, TILE);
-          ctx.fillStyle = '#7a4029';
+          ctx.fillStyle = T.brickD;
           ctx.fillRect(x, y + 19, TILE, 2);
           ctx.fillRect(x, y, 2, TILE);
           ctx.fillRect(x + 19, y + 19, 2, 21);
           ctx.fillRect(x + 39, y, 1, TILE);
         } else if (t === '=') {
-          ctx.fillStyle = '#8b5a2b';
+          ctx.fillStyle = T.plat;
           ctx.fillRect(x, y, TILE, 16);
-          ctx.fillStyle = '#a9714b';
+          ctx.fillStyle = T.platT;
           ctx.fillRect(x, y, TILE, 6);
-          ctx.fillStyle = '#5d3a1a';
+          ctx.fillStyle = T.platD;
+          ctx.fillRect(x, y + 14, TILE, 2);
+        } else if (t === 'C') {
+          // сыпучая платформа: трясётся после триггера, исчезает после обрушения
+          const st = level.crumble && level.crumble.get(c + ',' + r);
+          if (st && st.broken) continue;
+          if (st) x += Math.sin(tGlobal * 42) * 2.2;
+          ctx.fillStyle = T.crumb;
+          ctx.fillRect(x, y, TILE, 16);
+          ctx.fillStyle = '#00000022';
+          ctx.fillRect(x + 8, y + 3, 2, 10);
+          ctx.fillRect(x + 22, y + 5, 2, 9);
+          ctx.fillRect(x + 33, y + 2, 2, 11);
+          ctx.fillStyle = '#00000045';
           ctx.fillRect(x, y + 14, TILE, 2);
         } else if (t === '^') {
-          ctx.fillStyle = '#8d99ae';
+          ctx.fillStyle = T.spike;
           for (let i = 0; i < 2; i++) {
             ctx.beginPath();
             ctx.moveTo(x + i * 20, y + 40);
@@ -455,6 +516,48 @@ const Game = (() => {
             ctx.closePath();
             ctx.fill();
           }
+        } else if (t === 'L') {
+          // жидкость: полынья / лава / кислота — волнует поверхность и пузырится
+          const wave = Math.sin(tGlobal * 3 + c * 1.7) * 3;
+          ctx.fillStyle = T.haz;
+          ctx.fillRect(x, y + 10 + wave, TILE, TILE - 10 - wave + 4);
+          ctx.fillStyle = T.haz2;
+          ctx.fillRect(x, y + 10 + wave, TILE, 4);
+          const bb = (tGlobal * 1.3 + c * 0.7) % 1;
+          ctx.fillStyle = T.haz2;
+          ctx.globalAlpha = 0.7 * (1 - bb);
+          ctx.fillRect(x + 8 + (c % 3) * 8, y + 34 - bb * 18, 4, 4);
+          ctx.globalAlpha = 1;
+        } else if (t === 'v') {
+          // батут: стойка + пружина + площадка
+          ctx.fillStyle = '#3a3a46';
+          ctx.fillRect(x + 8, y + 28, 4, 12);
+          ctx.fillRect(x + 28, y + 28, 4, 12);
+          ctx.fillStyle = '#9e9e9e';
+          for (let i = 0; i < 3; i++) ctx.fillRect(x + 12, y + 22 + i * 3, 16, 2);
+          const pulse = 0.5 + Math.sin(tGlobal * 5 + c) * 0.5;
+          ctx.fillStyle = `rgb(${200 + pulse * 40}, ${60 + pulse * 30}, 60)`;
+          ctx.fillRect(x + 6, y + 14, 28, 7);
+          ctx.fillStyle = '#ffd23f';
+          ctx.fillRect(x + 6, y + 14, 28, 2);
+        } else if (t === 'S') {
+          // пила: крутится, полутело над землёй
+          const cx = x + 20, cy = y + 26, R = 24;
+          ctx.save();
+          ctx.translate(cx, cy);
+          ctx.rotate(tGlobal * 9);
+          ctx.fillStyle = '#b8c2cc';
+          for (let i = 0; i < 8; i++) {
+            ctx.rotate(Math.PI / 4);
+            ctx.beginPath();
+            ctx.moveTo(R - 6, -5); ctx.lineTo(R + 5, 0); ctx.lineTo(R - 6, 5);
+            ctx.closePath(); ctx.fill();
+          }
+          ctx.fillStyle = '#8d99ae';
+          ctx.beginPath(); ctx.arc(0, 0, R - 6, 0, 7); ctx.fill();
+          ctx.fillStyle = '#5a6472';
+          ctx.beginPath(); ctx.arc(0, 0, 7, 0, 7); ctx.fill();
+          ctx.restore();
         }
       }
     }
@@ -759,6 +862,7 @@ const Game = (() => {
       get plushes() { return plushes; },
       get hatShots() { return hatShots; },
       get boss() { return bossRef; },
+      get level() { return level; },
     };
     requestAnimationFrame((t) => { lastT = t; requestAnimationFrame(loop); });
   }

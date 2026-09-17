@@ -338,6 +338,45 @@ html, body {
   background: #fff; border: 3px solid var(--accent);
 }
 
+/* ---------- Главы в выборе карт (60 уровней!) ---------- */
+#screen-levels { justify-content: flex-start; overflow-y: auto; padding: 3vmin 3vmin 5vmin; }
+#screen-levels::-webkit-scrollbar { width: 8px; }
+#screen-levels::-webkit-scrollbar-thumb { background: #2c2c4e; border-radius: 4px; }
+#screen-levels .screen-title { flex: 0 0 auto; }
+#screen-levels .big-btn { flex: 0 0 auto; }
+#levels-grid { width: min(94%, 760px); }
+.chapter-head {
+  grid-column: 1 / -1;
+  font-weight: bold;
+  font-size: clamp(13px, 2.6vmin, 20px);
+  letter-spacing: 2px;
+  color: var(--chc, #ffd23f);
+  text-shadow: 2px 2px 0 #000;
+  padding: 2.2vmin 0 0.6vmin;
+  border-bottom: 2px solid var(--chc, #ffd23f);
+  margin-bottom: 1vmin;
+  text-align: left;
+}
+.chapter-head:first-child { padding-top: 0; }
+
+/* ---------- Счастливая концовка: конфетти ---------- */
+.ending-title.happy { color: #ffd23f; text-shadow: 4px 4px 0 #000, 0 0 24px #ffd23f66; }
+#confetti { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+#confetti i {
+  position: absolute;
+  top: -4vh;
+  display: block;
+  border-radius: 2px;
+  opacity: .9;
+  animation-name: confetti-fall;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+@keyframes confetti-fall {
+  0%   { transform: translateY(-4vh) rotate(0deg); }
+  100% { transform: translateY(110vh) rotate(720deg); }
+}
+
 </style>
 </head>
 <body>
@@ -494,11 +533,12 @@ html, body {
     </div>
   </div>
 
-  <!-- Финал -->
+  <!-- Финал (счастливая концовка) -->
   <div id="screen-ending" class="screen hidden">
+    <div id="confetti"></div>
     <div class="ending-inner">
-      <div class="ending-title">ПРОДОЛЖЕНИЕ<br>СЛЕДУЕТ...</div>
-      <p class="screen-text">Андрей отбил заводы «Мировая чекушка», но бурмалденцы<br>ушли в закат с последней партией «Двойной чекушки»...</p>
+      <div class="ending-title happy">ЧЕКУШКА<br>СВОБОДНА!</div>
+      <p class="screen-text">Андрей вернул мировую чекушку народу — от Буримовки<br>до самого неба. Бурмалденцы ушли работать на завод —<br>честно, по совести и с обедом. Все счастливы. 60 уровней позади!</p>
       <div class="ending-subscribe">ПОДПИШИСЬ НА НАШИ СОЦСЕТИ,<br>ЧТОБЫ БЫТЬ В КУРСЕ!</div>
       <div id="socials"></div>
       <button id="btn-ending-menu" class="big-btn small">В МЕНЮ</button>
@@ -648,6 +688,8 @@ const Audio8 = (() => {
     win:    () => seq([[523, 0.12], [659, 0.12], [784, 0.12], [1047, 0.25], [784, 0.1], [1047, 0.4]], 'square', 0.16),
     lose:   () => seq([[392, 0.2], [330, 0.2], [262, 0.2], [196, 0.4]], 'sawtooth', 0.16),
     locked: () => tone(160, 0.15, 'square', 0.12, 120),
+    spring: () => tone(240, 0.2, 'square', 0.16, 950),
+    crumble: () => { noise(0.12, 0.1); tone(120, 0.1, 'square', 0.08, 60); },
   };
 
   // ---------- Музыка: простой чиптюн-луп ----------
@@ -749,10 +791,18 @@ const Sprites = (() => {
     tomahawk:     { file: 'image/tomahawk.png',     w: 20,  h: 20  },
     heart:        { file: 'image/heart.png',        w: 26,  h: 24  },
     plush:        { file: 'image/plush.png',        w: 36,  h: 32  },
+    flyer:        { file: 'image/flyer.png',        w: 60,  h: 52  },
+    jumper:       { file: 'image/jumper.png',       w: 52,  h: 72  },
+    armored:      { file: 'image/armored.png',      w: 56,  h: 64  },
     bg_fields:    { file: 'image/bg_fields.png',    bg: true },
     bg_city:      { file: 'image/bg_city.png',      bg: true },
     bg_district:  { file: 'image/bg_district.png',  bg: true },
     bg_plant:     { file: 'image/bg_plant.png',     bg: true },
+    bg_snow:      { file: 'image/bg_snow.png',      bg: true },
+    bg_desert:    { file: 'image/bg_desert.png',    bg: true },
+    bg_sky:       { file: 'image/bg_sky.png',       bg: true },
+    bg_volcano:   { file: 'image/bg_volcano.png',   bg: true },
+    bg_final:     { file: 'image/bg_final.png',     bg: true },
   };
 
   const store = {}; // key -> {img, fallback, w, h}
@@ -917,9 +967,67 @@ const Sprites = (() => {
     return c;
   }
 
+  // ---------- ЗАГЛУШКИ: новые враги глав 1-3 ----------
+  function fbFlyer() {   // Летун — крылатый бурмалденец
+    const [c, x] = mkCanvas(60, 52);
+    const S = 4, W = 15, H = 13;
+    px(x, 0, 2, 4, 1, '#3a3a46', S);              // крыло Л
+    px(x, 11, 2, 4, 1, '#3a3a46', S);             // крыло П
+    px(x, 1, 3, 2, 1, '#55555f', S);
+    px(x, 12, 3, 2, 1, '#55555f', S);
+    px(x, 6, 0, 3, 1, '#e63946', S);              // перья
+    px(x, 5, 2, 5, 1, '#c1272d', S);              // повязка
+    px(x, 5, 3, 5, 2, '#c68642', S);              // лицо
+    px(x, 8, 3, 1, 1, '#1a1a1a', S);              // глаз
+    px(x, 5, 5, 5, 3, '#a9714b', S);              // торс
+    px(x, 4, 6, 1, 2, '#c68642', S);              // руки
+    px(x, 10, 6, 1, 2, '#c68642', S);
+    px(x, 5, 8, 5, 2, '#8b5a2b', S);              // набедренная
+    px(x, 5, 10, 2, 2, '#c68642', S);             // ноги
+    px(x, 8, 10, 2, 2, '#c68642', S);
+    return c;
+  }
+  function fbJumper() {  // Прыгун — бурмалденец на пружинах
+    const [c, x] = mkCanvas(52, 72);
+    const S = 4, W = 13, H = 18;
+    px(x, 5, 0, 3, 1, '#e63946', S);              // перья
+    px(x, 4, 2, 5, 1, '#c1272d', S);              // повязка
+    px(x, 4, 3, 5, 2, '#c68642', S);              // лицо
+    px(x, 7, 3, 1, 1, '#1a1a1a', S);              // глаз
+    px(x, 4, 5, 5, 4, '#a9714b', S);              // торс
+    px(x, 3, 5, 1, 3, '#c68642', S);              // руки
+    px(x, 9, 5, 1, 3, '#c68642', S);
+    px(x, 4, 9, 5, 2, '#8b5a2b', S);              // набедренная
+    px(x, 6, 11, 1, 5, '#9e9e9e', S);             // пружина
+    for (let i = 0; i < 3; i++) px(x, 5, 11 + i * 2, 3, 1, '#7a7a85', S);
+    px(x, 4, 16, 5, 1, '#3a3a46', S);             // база
+    return c;
+  }
+  function fbArmored() { // Щитоносец — бурмалденец со щитом
+    const [c, x] = mkCanvas(56, 64);
+    const S = 4, W = 14, H = 16;
+    px(x, 8, 0, 3, 1, '#e63946', S);              // перья
+    px(x, 7, 2, 5, 1, '#c1272d', S);              // повязка
+    px(x, 7, 3, 5, 2, '#c68642', S);              // лицо
+    px(x, 10, 3, 1, 1, '#1a1a1a', S);             // глаз
+    px(x, 7, 5, 5, 4, '#a9714b', S);              // торс
+    px(x, 2, 2, 4, 12, '#795548', S);             // щит-створка
+    px(x, 2, 2, 4, 1, '#9e9e9e', S);              // оковка
+    px(x, 2, 13, 4, 1, '#9e9e9e', S);
+    px(x, 3, 7, 2, 2, '#ffd23f', S);              // заклёпка
+    px(x, 12, 5, 2, 3, '#c68642', S);             // рука сзади
+    px(x, 7, 9, 5, 2, '#8b5a2b', S);              // набедренная
+    px(x, 7, 11, 2, 4, '#c68642', S);             // ноги
+    px(x, 10, 11, 2, 4, '#c68642', S);
+    px(x, 7, 15, 2, 1, '#5d4037', S);             // мокасины
+    px(x, 10, 15, 2, 1, '#5d4037', S);
+    return c;
+  }
+
   const FALLBACKS = {
     andrey: fbAndrey, burmaldenets: fbEnemy, boss: fbBoss, checkushka: fbBottle,
     factory: fbFactory, tomahawk: fbTomahawk, heart: fbHeart, plush: fbPlush,
+    flyer: fbFlyer, jumper: fbJumper, armored: fbArmored,
   };
 
   // ---------- Загрузка ----------
@@ -1044,8 +1152,9 @@ const Sprites = (() => {
 // ============================================================
 // Уровни и сюжет
 // Легенда тайлов: '#' земля, 'B' кирпич, '=' платформа (можно спрыгнуть),
-// '^' шипы, 'c' чекушка, 'H' сердечко, 'e' бурмалденец, 't' метатель,
-// 'G' вождь-босс, 'F' завод (выход), 'P' старт
+// 'C' сыпучая платформа (обрушается), '^' шипы, 'L' жидкость (полынья/лава/кислота),
+// 'v' батут, 'S' пила, 'c' чекушка, 'H' сердечко, 'e' бурмалденец, 't' метатель,
+// 'f' летун, 'j' прыгун, 'a' щитоносец, 'G' вождь-босс, 'F' завод (выход), 'P' старт
 // ============================================================
 const ROWS = 13;          // высота карты в тайлах
 const TILE = 40;          // размер тайла
@@ -1067,10 +1176,29 @@ function buildLevel(def) {
   (def.plats || []).forEach(([c, r, len]) => {
     for (let i = 0; i < len; i++) if (r >= 0 && r < ROWS && c + i < w) grid[r][c + i] = '=';
   });
+  // сыпучие платформы [c, r, len] — обрушаются, когда на них постояли
+  (def.crumble || []).forEach(([c, r, len]) => {
+    for (let i = 0; i < len; i++) if (r >= 0 && r < ROWS && c + i < w) grid[r][c + i] = 'C';
+  });
   // шипы [c0, c1] — на земле (ряд 10), либо [c0, c1, ряд] — например на платформе
   (def.spikes || []).forEach(([c0, c1, r]) => {
     const row = (r === undefined || r === null) ? 10 : r;
     if (row >= 0 && row < ROWS) for (let c = c0; c <= c1; c++) grid[row][c] = '^';
+  });
+  // жидкость [c0, c1] — дно ям (ряд 12), либо [c0, c1, ряд]
+  (def.liquids || []).forEach(([c0, c1, r]) => {
+    const row = (r === undefined || r === null) ? 12 : r;
+    if (row >= 0 && row < ROWS) for (let c = c0; c <= c1; c++) grid[row][c] = 'L';
+  });
+  // батуты [c] — на земле (ряд 10), либо [c, ряд]
+  (def.springs || []).forEach(([c, r]) => {
+    const row = (r === undefined || r === null) ? 10 : r;
+    if (row >= 0 && row < ROWS) grid[row][c] = 'v';
+  });
+  // пилы [c] — в земле (ряд 10), либо [c, ряд]
+  (def.saws || []).forEach(([c, r]) => {
+    const row = (r === undefined || r === null) ? 10 : r;
+    if (row >= 0 && row < ROWS) grid[row][c] = 'S';
   });
   // чекушка
   (def.bottles?.runs || []).forEach(([c0, c1, r]) => {
@@ -1079,11 +1207,11 @@ function buildLevel(def) {
   (def.bottles?.singles || []).forEach(([c, r]) => spawns.bottles.push({ c, r }));
   // сердечки
   (def.hearts || []).forEach(([c, r]) => spawns.hearts.push({ c, r }));
-  // плюшки (боеприпас для стрельбы по боссу)
+  // плюшки (боеприпас для стрельбы по боссу и щитоносцам)
   (def.plushes || []).forEach(([c, r]) => spawns.plushes.push({ c, r }));
   // враги: [тип, колонка] — спавн на землю (ряд 10), либо [тип, колонка, ряд] — на платформу
   (def.enemies || []).forEach(([type, c, r]) => spawns.enemies.push({ type, c, r: (r === undefined) ? 10 : r }));
-  if (def.boss) spawns.enemies.push({ type: 'boss', c: def.boss.col, r: 9 });
+  if (def.boss) spawns.enemies.push({ type: 'boss', c: def.boss.col, r: 9, hp: def.boss.hp });
   // кастомные объекты из админ-панели: { 'obj-id': [[c,r],...] }
   if (def.custom && typeof def.custom === 'object') {
     Object.entries(def.custom).forEach(([type, list]) => {
@@ -1093,11 +1221,22 @@ function buildLevel(def) {
 
   return {
     def, w, grid, spawns,
+    crumble: new Map(),          // состояние сыпучих платформ 'c,r' -> {t, broken}
     spawnC: def.spawn?.c ?? 2,
     factoryC: def.factory?.c ?? w - 6,
     hints: def.hints || [],
   };
 }
+
+// ============================================================
+// ГЛАВЫ (для экрана выбора карт)
+// ============================================================
+const CHAPTERS = [
+  { name: 'ПРОЛОГ • БУРИМОВКА',        color: '#ff6b6b' },
+  { name: 'ГЛАВА 1 • ЛЕДЯНОЙ ПЕРЕВАЛ', color: '#7ad0ff' },
+  { name: 'ГЛАВА 2 • ПУСТЫНЯ СМУТЫ',   color: '#ffb347' },
+  { name: 'ГЛАВА 3 • НЕБЕСНЫЙ ЗАВОД',  color: '#c77dff' },
+];
 
 // ============================================================
 // ДИАЛОГИ
@@ -1108,27 +1247,461 @@ const DIALOGUES = {
     { who: 'andrey', text: 'Полка ПУСТАЯ?! БЛ***, ЧТО ЗА БЕСПРЕДЕЛ?! Я конечно всё понимаю, но НЕ ДО ТОЙ ЖЕ СТЕПЕНИ — я просто в а**е!' },
     { who: 'radio', text: 'Срочные новости! Племя бурмалденцев захватило все заводы «Мировая чекушка» и вывезло запасы в Буримовку! Повторяем: ВСЁ, б***, вывезли!' },
     { who: 'andrey', text: 'Ну всё, х*й с ними. Верну чекушку народу. Без обид, ребзя — но будет больно.' },
-    { who: 'narrator', text: 'И Андрей пошёл. Четыре карты. Орда бурмалденцев. Мат, томагавки и ноль трезвых. 18+ — предупреждали же.' },
+    { who: 'narrator', text: 'И Андрей пошёл. Четыре района Буримовки, а дальше — ТРИ ЗЕМЛИ: Ледяной перевал, Пустыня смуты и Небесный завод. Орда бурмалденцев. Мат, томагавки и ноль трезвых. 18+ — предупреждали же.' },
   ],
   outroAfterBoss: [
     { who: 'boss', text: 'Ты сильный воин... Держи перо. И чекушку держи. Мы в отпуск, доигрались, б***...' },
     { who: 'andrey', text: 'Завод наш. Чекушка свободна. Каждому — по чекушке. Ну, почти каждому. Самым красивым — по две.' },
   ],
+  // ---- Счастливая концовка (после большого босса главы 3) ----
+  happyAfterBoss: [
+    { who: 'boss', text: 'Всё-всё, сдаюсь, чужак! Ты реально сильный. Забирай заводы, забирай чекушку... Мы, б***, в отпуск. НАВСЕГДА.' },
+    { who: 'andrey', text: 'Не в отпуск, а на РАБОТУ. Заводам нужны руки. С понедельника — на разлив. Зарплата — чекушками, обед — газировкой.' },
+    { who: 'boss', text: 'Согласен, б***. Только одно условие — бочку компота в цех. Не для себя. Для мальцов.' },
+    { who: 'andrey', text: 'Дил. Вырастим поколение, которое будет пить компот и уважать старших. А чекушку — по праздникам.' },
+  ],
+  happyOutro: [
+    { who: 'andrey', text: 'Заводы наши. Чекушка свободна — от Буримовки до самого неба. Каждому по чекушке, и пусть никто не уйдёт обиженным.' },
+    { who: 'radio', text: 'Срочные новости! Мировая чекушка снова у народа! Буримовка празднует третий день! Вождь официально трудоустроен!' },
+    { who: 'narrator', text: 'СЧАСТЛИВАЯ КОНЦОВКА. Андрей вернул мировую чекушку народу. Даже бурмалденцы довольны — у них теперь официальная работа, обед и премия. Все живут долго и счастливо. Ну, почти все.' },
+  ],
 };
 
 // ============================================================
-// УРОВНИ
+// МЕТАДАННЫЕ ГЛАВ: темы, имена уровней, диалоги
+// ============================================================
+const CHAPTER_META = {
+  1: {
+    bg: () => 'bg_snow',
+    pit: 2,
+    bossHp: { mid: 4, fin: 6 },
+    names: [
+      'Морозный старт', 'Снежные поля', 'Замёрзший ручей', 'Сосулькин лес',
+      'Хрустальный пруд', 'Полярная станция', 'Вьюжный коридор', 'Ледяные качели',
+      'Снежные дюны', 'Логово снежного шамана', 'Белая метель', 'Каток Буримовки',
+      'Сосулькин навес', 'Трамплин вьюги', 'Снежный обвал', 'Тропа оленей',
+      'Ледниковый гребень', 'Вечная мерзлота', 'Перевал Бурмалденов', 'Логово Вождя Снегов',
+    ],
+    intro: [
+      { who: 'narrator', text: 'ГЛАВА 1. ЛЕДЯНОЙ ПЕРЕВАЛ. Вождь ушёл «в отпуск», а склады мировой чекушки увезли через заснеженный перевал.' },
+      { who: 'andrey', text: 'Минус тридцать за бортом, а мне не до мороженого. Чекушка не должна мёрзнуть — она должна ПИТЬСЯ!' },
+      { who: 'enemy', text: 'Это снежное владение племени, чужак! Ступай прочь, а то заморозим твои кеды!' },
+      { who: 'andrey', text: 'Кеды не трогать — кеды святое. Ну, погнали, мороз.' },
+    ],
+    outro0: [
+      { who: 'andrey', text: 'Первый снег пройден. Чекушка где-то за метелью. Не зря я шапку-ушанку купил на распродаже.' },
+    ],
+    midBossIntro: [
+      { who: 'boss', text: 'Стой, чужак! Я — Шаман Снежного племени! Я варьгу вам, б***, всю зиму устрою! Иди сюда, поговорить хочу... КУЛАКАМИ!' },
+      { who: 'andrey', text: 'Шаман с плюшками? Ладно. Лечу тебя плюшками — тёпленькие, с собой принёс.' },
+    ],
+    midBossOutro: [
+      { who: 'andrey', text: 'Шаман оттаял. Метель осталась позади — но чекушка всё ещё дальше. Судя по запаху — в жаркие края.' },
+    ],
+    finIntro: [
+      { who: 'boss', text: 'Я — Вождь Снегов! За мной — весь лёд перевала! И ВСЯ чекушка ледяная! Тебе, б***, крышка!' },
+      { who: 'andrey', text: 'Ледяная чекушка — это уже почти лимонад. Грех не забрать. Ну, поехали.' },
+    ],
+    finOutro: [
+      { who: 'andrey', text: 'Снежное племя сдало позиции. Караван с чекушкой ушел через пустыню. Смело — там жара под пятьдесят.' },
+    ],
+    pool: [
+      [
+        { who: 'enemy', text: 'Замёрзнешь тут, чужак! Снегу тебе по кеды!' },
+        { who: 'andrey', text: 'Я из Буримовки. У нас в феврале и того хуже — оттепель, а потом снова минус. Закалка!' },
+      ],
+      [
+        { who: 'enemy', text: 'Кто идёт по нашему снегу?! Чужак! Ату его, б***!' },
+        { who: 'andrey', text: 'Ату-кать будете потом. Где склад? Показывай пальцем, не бойся.' },
+      ],
+      [
+        { who: 'andrey', text: 'Красота какая — снежинки, ёлки... А посередине — следы саней с чекушкой. Значит, иду верно.' },
+        { who: 'enemy', text: 'Иди-иди! Там дальше горы — ледяные! С их тебя сгребут!' },
+      ],
+      [
+        { who: 'enemy', text: 'Наши летуны уже в небе! Бойся крылатых, чужак!' },
+        { who: 'andrey', text: 'Крылатых сбиваю прыжком сверху. Проверено на голубях Буримовки.' },
+      ],
+      [
+        { who: 'andrey', text: 'Батуты среди снега? Ну у вас и логистика, б***. Ладно, воспользовался — удобно.' },
+        { who: 'enemy', text: 'Это не логистика! Это НАША ГОРДОСТЬ! Не прыгай на ней!' },
+      ],
+      [
+        { who: 'enemy', text: 'Сыпучий лёд не выдержит тебя! Провалишься в полынью!' },
+        { who: 'andrey', text: 'Значит, стоять на нём нельзя. Бегать — можно. Бегать я умею.' },
+      ],
+    ],
+    hints: [
+      [0, 'Новая глава! Прыгай по снегу и собирай чекушку'],
+      [2, 'Сыпучий лёд (треснутые плиты) ломается — не стой на нём!'],
+      [5, 'Батут подбрасывает до облаков!'],
+      [8, 'Летунов сбивай прыжком сверху!'],
+    ],
+  },
+
+  2: {
+    bg: () => 'bg_desert',
+    pit: 3,
+    bossHp: { mid: 5, fin: 8 },
+    names: [
+      'Жаркий приём', 'Барханы', 'Кактусовый лабиринт', 'Оазис без чекушки',
+      'Каньон смуты', 'Песчаная буря', 'Пирамида Бурма-Тута', 'Скорпионья тропа',
+      'Знойный коридор', 'Логово Кочевого вождя', 'Караванная тропа', 'Мираж',
+      'Солёное озеро', 'Гремучие дюны', 'Раскалённый склон', 'Дорога скелетов',
+      'Лавовые трещины', 'Ущелье эха', 'Дно высохшего моря', 'Трон Вождя Песков',
+    ],
+    intro: [
+      { who: 'narrator', text: 'ГЛАВА 2. ПУСТЫНЯ СМУТЫ. Караван бурмалденцев с мировой чекушкой уходит в пески. Жара +50, теней нет, компот кончился.' },
+      { who: 'andrey', text: 'Пятьдесят в тени. А тени НЕТ. Ну и ладно, чекушке жарка не нужна... СТОП. НУЖНА?! Холодильник где?! ПОГНАЛИ!' },
+      { who: 'enemy', text: 'Пустыня съест тебя, чужак! Вместе с кедами! Мы даже не потеем от таких, как ты!' },
+      { who: 'andrey', text: 'Мои кеды по Сахарам бегали. Не на тех напали, кактусы вы пустынные.' },
+    ],
+    outro0: [
+      { who: 'andrey', text: 'Первые дюны позади. Песок в кедах, чекушка в песке, враги в песке. Песок везде, б***.' },
+    ],
+    midBossIntro: [
+      { who: 'boss', text: 'Я — Кочевой вождь! Мой народ гоняет караваны через ВСЕ пески! Твоя чекушка уже в трёх мирах отсюда!' },
+      { who: 'andrey', text: 'Мировая — значит для всех. Понимаешь? НАРОД-НАЯ. Ну, держись, караванщик.' },
+    ],
+    midBossOutro: [
+      { who: 'andrey', text: 'Кочевой вождь подбился. Караван пуст. Остался главный трюк племени — небесный завод. Туда мне ещё долететь.' },
+    ],
+    finIntro: [
+      { who: 'boss', text: 'Я — Вождь Песков! Пустыня — МОЯ! Каждый кактус, каждый песок — МОЙ! А чекушка — ТРОЙНАЯ, для Шефа!' },
+      { who: 'andrey', text: 'Тройная?! Так вот куда девается классика... Пески, отойди. Работаю.' },
+    ],
+    finOutro: [
+      { who: 'andrey', text: 'Пустыня кончилась. Дальше — облака. Бурмалденцы реально построили завод в небе. Уважаю, но отберу.' },
+    ],
+    pool: [
+      [
+        { who: 'enemy', text: 'Жарко тут, а? Тебе — тем более! Вали домой, чужак!' },
+        { who: 'andrey', text: 'В Буримовке сейчас +5 и дождь. Я тут почти на курорте. С томагавками.' },
+      ],
+      [
+        { who: 'enemy', text: 'Наши пилы — в каждом каньоне! Не лезь, порежешься!' },
+        { who: 'andrey', text: 'Видел. Оценил. Обойду — я гибкий.' },
+      ],
+      [
+        { who: 'andrey', text: 'Лава под ногами, солнце над головой. Кто вас вообще нанимал охранять чекушку в таком климате?' },
+        { who: 'enemy', text: 'Вождь! Он сказал — работать! Вот мы и работаем, б***!' },
+      ],
+      [
+        { who: 'enemy', text: 'Щитоносцы идут! Сверху их не пробьёшь, чужак!' },
+        { who: 'andrey', text: 'Сверху — нет. Плюшкой — да. А плюшки у меня с собой. Грелись в песке.' },
+      ],
+      [
+        { who: 'andrey', text: 'Пирамида Бурма-Тута. Написано: «Тут нет чекушки». Значит, ЕСТЬ. Классика логики.' },
+        { who: 'enemy', text: 'Там ловушки! Пилы! Пустоты! НЕ ХОДИ ТУДА!' },
+      ],
+      [
+        { who: 'enemy', text: 'Устанешь в песках, чужак! Брось эту затею!' },
+        { who: 'andrey', text: 'Я за чекушкой зимой на лыжах ходил. Пески — это отдых. Продолжаем.' },
+      ],
+    ],
+    hints: [
+      [0, 'Новая глава! Лава и смола убивают насквозь — не падай!'],
+      [4, 'Щитоносцев сверху не убить — кидай плюшки (X)!'],
+      [9, 'Босс! Кидай плюшки или прыгай сверху!'],
+    ],
+  },
+
+  3: {
+    bg: (idx) => (idx >= 14 ? 'bg_volcano' : 'bg_sky'),
+    pit: 3,
+    bossHp: { mid: 6, fin: 12 },
+    names: [
+      'Взлётная полоса', 'Облачные поля', 'Лифт на небеса', 'Цех №7',
+      'Воздушные шары', 'Громоотвод', 'Конвейер', 'Ангар дирижаблей',
+      'Паровая башня', 'Цех летунов', 'Мост через кратер', 'Котельная небес',
+      'Склад облаков', 'Вулканический двор', 'Труба №1', 'Плазменный цех',
+      'Крыша мира', 'Тронный зал', 'Парадная лестница', 'МИРОВАЯ ЧЕКУШКА',
+    ],
+    intro: [
+      { who: 'narrator', text: 'ГЛАВА 3. НЕБЕСНЫЙ ЗАВОД. Бурмалденцы спрятали всю мировую чекушку на летающем заводе над вулканом. Правит там ШЕФ ВСЕХ БУРМАЛДЕНОВ.' },
+      { who: 'andrey', text: 'Небесный завод. Даже красиво, если бы не одно НО — ЧЕКУШКА ВСЁ ЕЩЁ У НИХ.' },
+      { who: 'boss', text: 'Кто посмел подняться в моё небо?! Тут даже птицы сдают лицензию! Вали вниз, чужак!' },
+      { who: 'andrey', text: 'Я сверху приземляюсь только на чужие томагавки. Готовьте лужайку — сажусь. ПЛОХО.' },
+    ],
+    outro0: [
+      { who: 'andrey', text: 'Взлётная полоса — наша. Цеха впереди, чекушка где-то в главном зале. Всё ближе, б***.' },
+    ],
+    midBossIntro: [
+      { who: 'boss', text: 'Я — Старший летун цеха! Мои крылья быстрее твоих кед! С неба тебя скину — проверим, как ты летаешь!' },
+      { who: 'andrey', text: 'Летун, значит. А я — приземлённый человек. Классика: плюшки и обаяние.' },
+    ],
+    midBossOutro: [
+      { who: 'andrey', text: 'Старший летун уволен. Плохо летал. Остался сам ШЕФ — и вся мировая чекушка в одном зале.' },
+    ],
+    finIntro: [
+      { who: 'boss', text: 'СТОП! Я — ШЕФ ВСЕХ БУРМАЛДЕНОВ! Отец вождя! Дед шамана! У меня ВСЯ мировая чекушка, чужак! НЕ ДОТОПЛЕШЬ!' },
+      { who: 'andrey', text: 'Двенадцать жизней? Видел я таких. Мировая чекушка — она для НАРОДА. И я пришёл за ней. ЗАКОНЧИМ ЭТО.' },
+    ],
+    pool: [
+      [
+        { who: 'enemy', text: 'Ты на высоте три километра, чужак! Головокружит?' },
+        { who: 'andrey', text: 'Мне не головокружительно. Мне ВЕСЕЛО. Чекушка близко!' },
+      ],
+      [
+        { who: 'enemy', text: 'Наши облака сыпучие! Наступишь — провалишься в небыль!' },
+        { who: 'andrey', text: 'Как лёд на перевале, только в небе. Логистика у вас сквозная, уважаю.' },
+      ],
+      [
+        { who: 'andrey', text: 'Конвейер, трубы, пар. Это не завод, это санаторий для томагавков.' },
+        { who: 'enemy', text: 'НЕ СМЕЙ ШУТИТЬ ПРО НАШ ЗАВОД! Он строился ТРИ ГОДА, б***!' },
+      ],
+      [
+        { who: 'enemy', text: 'Кислота из труб! Она ШИПИТ, чужак! Аж СЛЕЗКИ!' },
+        { who: 'andrey', text: 'Прыгать выше научился ещё на перевале. Шипи дальше.' },
+      ],
+      [
+        { who: 'andrey', text: 'Мост через кратер. Красиво. Романтично. Горячо. Бежим!' },
+        { who: 'enemy', text: 'Он РЕАЛЬНО бежит через кратер?! Он что, дурак?!' },
+      ],
+      [
+        { who: 'enemy', text: 'Шеф всё слышит! Он уже ЗДЕСЬ, б***!' },
+        { who: 'andrey', text: 'Пусть слышит. Скажи ему: иду по лестнице. Никуда не спешу. Чекушка сама к мне в руки придёт.' },
+      ],
+    ],
+    hints: [
+      [0, 'Финальная глава! Кислота шипит — не касайся!'],
+      [9, 'Босс-летун! Прыгай сверху или плюшки (X)!'],
+      [16, 'Шеф близко. Соберись, б***!'],
+    ],
+  },
+};
+
+// ============================================================
+// ГЕНЕРАТОР УРОВНЕЙ (детерминированный, по seed главы)
+// ============================================================
+function mulberry32(seed) {
+  let a = seed >>> 0;
+  return function () {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+// Один сгенерированный уровень главы ch (0..19)
+function genLevelDef(ch, idx, id) {
+  const M = CHAPTER_META[ch];
+  const isBossMid = idx === 9, isBossFin = idx === 19;
+  const rng = mulberry32(ch * 7919 + idx * 104729 + 5);
+  const d = idx;
+  const R = (a, b) => a + Math.floor(rng() * (b - a + 1));
+
+  const def = {
+    id, name: M.names[idx], type: 'map', bg: M.bg(idx), chapter: ch,
+    ground: [], plats: [], bricks: [], spikes: [], springs: [], saws: [],
+    crumble: [], liquids: [],
+    bottles: { runs: [], singles: [] }, hearts: [], plushes: [], enemies: [],
+    spawn: { c: 2 }, factory: { c: 0 },
+  };
+
+  // ---------- БОССОВЫЕ АРЕНЫ (10-й и 20-й уровень главы) ----------
+  if (isBossMid || isBossFin) {
+    const w = 90;
+    def.width = w;
+    def.ground = [[0, w - 1]];
+    def.plats = [[24, 8, 3], [42, 8, 3], [56, 8, 4]];
+    def.spikes = [[18, 19], [64, 65]];
+    def.bottles.runs = [[8, 10, 10], [36, 38, 10], [50, 52, 10], [70, 72, 10], [24, 26, 7], [42, 44, 7]];
+    def.hearts = [[25, 7], [57, 7]];
+    def.plushes = [[20, 10], [40, 10], [55, 10], [62, 10]];
+    def.enemies = [['e', 14], ['e', 30], ['t', 48], ['e', 60]];
+    if (ch >= 2) def.enemies.push(['j', 34]);
+    if (ch === 2 && isBossFin) def.enemies.push(['a', 50]);
+    if (ch === 3) { def.enemies.push(['f', 36, 5], ['a', 46]); }
+    def.boss = { col: 76, hp: isBossFin ? M.bossHp.fin : M.bossHp.mid };
+    def.factoryLocked = true;
+    def.factory = { c: w - 5 };
+    def.hints = [{ c: 30, text: 'Плюшки! Подбирай — кидай по вождю (X)' }];
+    def.dialogue = { intro: isBossFin ? M.finIntro : M.midBossIntro, outro: isBossFin ? M.finOutro : M.midBossOutro };
+    if (isBossFin) {
+      if (ch === 3) {
+        def.bg = 'bg_final';
+        def.name = M.names[19];
+        def.boss.hp = 12;
+        def.bossOutro = DIALOGUES.happyAfterBoss;
+        def.dialogue.outro = DIALOGUES.happyOutro;
+        def.hints = [{ c: 30, text: 'ШЕФ ВСЕХ БУРМАЛДЕНОВ! Плюшки (X) + прыжки сверху!' }];
+      }
+      def.plats.push([68, 6, 3]);
+    }
+    return def;
+  }
+
+  // ---------- ОБЫЧНЫЕ УРОВНИ ----------
+  const w = Math.min(170, 92 + d * 3 + R(0, 9));
+  def.width = w;
+  def.factory = { c: w - 4 };
+  const busy = new Set();          // занятые колонки ряда 10 (препятствия)
+  const mark = (c0, c1) => { for (let c = c0; c <= c1; c++) busy.add(c); };
+
+  // земля: стартовая площадка → сегменты с ямами → финальная площадка
+  const pitMax = M.pit + Math.min(2, Math.floor(d / 5));
+  const startPad = R(6, 8);
+  def.ground.push([0, startPad]);
+  let c = startPad + 1;
+  const pits = [], segs = [];
+  while (true) {
+    if (w - c < 22) break;                       // остаток целиком станет финальной площадкой
+    let pitW = (c > startPad + 5 && rng() < 0.6) ? R(2, pitMax) : 0;
+    if (pitW && c + pitW > w - 14) pitW = 0;
+    if (pitW) { pits.push([c, c + pitW - 1, pitW]); c += pitW; }
+    const seg = R(5, 12);
+    def.ground.push([c, c + seg - 1]);
+    segs.push([c, c + seg - 1]);
+    c += seg;
+    if (w - c < 8) {                             // добиваем хвост землёй до края
+      def.ground[def.ground.length - 1][1] = w - 1;
+      segs[segs.length - 1][1] = w - 1;
+      c = w;
+      break;
+    }
+  }
+  if (c < w) { def.ground.push([c, w - 1]); segs.push([c, w - 1]); }
+
+  // сегменты для препятствий/врагов: не трогаем зону завода и старт
+  const placeSegs = segs.filter(g => g[1] < w - 10 && g[0] > 8);
+
+  // жидкость в ямах
+  pits.forEach(([p0, p1]) => def.liquids.push([p0, p1]));
+
+  // сыпучие мосты через широкие ямы (со 2-й половины главы)
+  pits.forEach(([p0, p1, pw]) => {
+    if (pw >= 4 && d >= 4 && rng() < 0.6) def.crumble.push([p0, 10, pw]);
+  });
+
+  // батуты: у широких ям + случайные
+  const springCount = ch === 1 ? (idx >= 3 ? R(1, 2) : 0) : (ch === 2 ? (idx >= 2 ? R(1, 3) : 0) : R(2, 3));
+  let placed = 0;
+  pits.forEach(([p0, p1, pw]) => {
+    if (pw >= 4 && placed < springCount && !busy.has(p0 - 1)) {
+      def.springs.push([p0 - 1]); mark(p0 - 1, p0 - 1); placed++;
+    }
+  });
+  for (let i = placed; i < springCount && placeSegs.length; i++) {
+    const g = placeSegs[R(0, placeSegs.length - 1)];
+    const sc = R(g[0] + 1, Math.max(g[0] + 1, g[1] - 1));
+    if (!busy.has(sc)) { def.springs.push([sc]); mark(sc, sc); }
+  }
+
+  // пилы в земле
+  const sawCount = ch === 1 ? (d >= 6 ? R(0, 2) : 0) : ch === 2 ? (d >= 3 ? R(1, 3) : 0) : R(1, 4);
+  for (let i = 0; i < sawCount && placeSegs.length; i++) {
+    const g = placeSegs[R(0, placeSegs.length - 1)];
+    const sc = R(g[0] + 1, Math.max(g[0] + 1, g[1] - 1));
+    if (!busy.has(sc) && !busy.has(sc - 1) && !busy.has(sc + 1)) { def.saws.push([sc]); mark(sc - 1, sc + 1); }
+  }
+
+  // шипы
+  const spikeCount = Math.min(6, Math.floor(d / 3) + (rng() < 0.5 ? 1 : 0));
+  for (let i = 0; i < spikeCount && placeSegs.length; i++) {
+    const g = placeSegs[R(0, placeSegs.length - 1)];
+    const sc = R(g[0] + 1, Math.max(g[0] + 1, g[1] - 2));
+    if (!busy.has(sc) && !busy.has(sc + 1)) {
+      const wide = (d >= 6 && rng() < 0.4) ? 2 : 1;
+      def.spikes.push([sc, sc + wide - 1]); mark(sc, sc + wide);
+    }
+  }
+
+  // платформы (ряд 8 в основном, ряд 6 — только рядом с рядом 8)
+  const platCount = 3 + Math.floor(d / 3) + R(0, 2);
+  const row8Plats = [];
+  for (let i = 0; i < platCount && segs.length; i++) {
+    const g = segs[R(0, segs.length - 1)];
+    const pc = R(g[0], Math.max(g[0], g[1] - 4));
+    const len = R(3, 5);
+    let pr = 8;
+    if (rng() < 0.3 && row8Plats.some(([pc8]) => Math.abs(pc8 - pc) <= 5)) pr = 6;
+    def.plats.push([pc, pr, len]);
+    if (pr === 8) row8Plats.push([pc, len]);
+  }
+
+  // враги
+  const pool = ['e', 'e'];
+  if (d >= 2 || ch >= 2) pool.push('t');
+  if ((ch === 1 && d >= 5) || (ch === 2 && d >= 2) || ch === 3) pool.push('j', 'e');
+  if ((ch === 1 && d >= 8) || (ch === 2 && d >= 5) || (ch === 3 && d >= 2)) pool.push('f');
+  if ((ch === 2 && d >= 8) || (ch === 3 && d >= 6)) pool.push('a');
+  const eCount = Math.min(13, 3 + Math.floor(d * 0.55));
+  let hasArmored = false;
+  for (let i = 0; i < eCount; i++) {
+    const type = pool[R(0, pool.length - 1)];
+    if (type === 'f') {
+      def.enemies.push(['f', R(12, w - 14), R(4, 6)]);
+      continue;
+    }
+    if (type === 'a') hasArmored = true;
+    if (rng() < 0.25 && def.plats.length) {
+      const [pc, pr, len] = def.plats[R(0, def.plats.length - 1)];
+      def.enemies.push([type, pc + R(0, len - 1), pr - 1]);
+    } else if (placeSegs.length) {
+      const g = placeSegs[R(0, placeSegs.length - 1)];
+      const ec = R(Math.max(g[0], 10), Math.max(g[0] + 1, g[1] - 1));
+      if (!busy.has(ec)) { def.enemies.push([type, ec]); mark(ec, ec); }
+    }
+  }
+  if (hasArmored) { def.plushes.push([R(12, Math.max(13, w - 20)), 10], [R(12, Math.max(13, w - 20)), 10]); }
+
+  // чекушки: ряды на земле, на платформах, дуги над ямами
+  segs.forEach(([g0, g1], si) => {
+    if (si === 0 || rng() < 0.85) {
+      const b0 = Math.min(g0 + 1, g1 - 2);
+      def.bottles.runs.push([b0, b0 + R(0, 2), 10]);
+    }
+  });
+  def.plats.forEach(([pc, pr, len]) => {
+    if (rng() < 0.7) def.bottles.singles.push([pc + Math.floor(len / 2), pr - 1]);
+  });
+  pits.forEach(([p0, p1]) => {
+    def.bottles.singles.push([p0, 8]);
+    if (p1 > p0) def.bottles.singles.push([p1, 8]);
+  });
+
+  // сердечки
+  const hCount = R(1, 2);
+  for (let i = 0; i < hCount; i++) {
+    if (def.plats.length) {
+      const [pc, pr, len] = def.plats[R(0, def.plats.length - 1)];
+      def.hearts.push([pc + Math.floor(len / 2), pr - 1]);
+    } else {
+      def.hearts.push([R(20, Math.max(21, w - 20)), 10]);
+    }
+  }
+
+  // подсказки и диалоги
+  def.hints = (M.hints || []).filter(([hIdx]) => hIdx === idx).map(([, text]) => ({ c: 6, text }));
+  if (idx === 0) {
+    def.dialogue = { intro: M.intro, outro: M.outro0 || null };
+  } else {
+    const pair = M.pool[idx % M.pool.length];
+    def.dialogue = { intro: pair, outro: null };
+  }
+  return def;
+}
+
+function genChapter(ch) {
+  const list = [];
+  for (let i = 0; i < 20; i++) list.push(genLevelDef(ch, i, 6 + (ch - 1) * 20 + i));
+  return list;
+}
+
+// ============================================================
+// УРОВНИ: пролог (оригинальные карты) + 3 главы по 20 новых
 // ============================================================
 const LEVELS = [
-  // ---------- 1. ВСТУПЛЕНИЕ (катсцена) ----------
+  // ---------- ПРОЛОГ ----------
   {
-    id: 1, name: 'Вступление', type: 'cutscene',
+    id: 1, name: 'Вступление', type: 'cutscene', chapter: 0,
     cutscene: DIALOGUES.intro,
   },
 
-  // ---------- 2. КАРТА 1: Поля Буримовки ----------
   {
-    id: 2, name: 'Поля Буримовки', type: 'map', bg: 'bg_fields', width: 130,
+    id: 2, name: 'Поля Буримовки', type: 'map', bg: 'bg_fields', width: 130, chapter: 0,
     ground: [[0, 29], [33, 69], [73, 129]],
     plats: [
       [9, 8, 4], [21, 8, 3], [37, 8, 4], [41, 6, 3], [55, 8, 3],
@@ -1161,9 +1734,8 @@ const LEVELS = [
     },
   },
 
-  // ---------- 3. КАРТА 2: Улицы Буримовки ----------
   {
-    id: 3, name: 'Улицы Буримовки', type: 'map', bg: 'bg_city', width: 140,
+    id: 3, name: 'Улицы Буримовки', type: 'map', bg: 'bg_city', width: 140, chapter: 0,
     ground: [[0, 19], [23, 39], [43, 59], [63, 82], [86, 99], [103, 139]],
     plats: [
       [12, 8, 3], [27, 8, 3], [31, 6, 3], [47, 8, 4], [64, 8, 5],
@@ -1194,9 +1766,8 @@ const LEVELS = [
     },
   },
 
-  // ---------- 4. КАРТА 3: Заводской район ----------
   {
-    id: 4, name: 'Заводской район', type: 'map', bg: 'bg_district', width: 150,
+    id: 4, name: 'Заводской район', type: 'map', bg: 'bg_district', width: 150, chapter: 0,
     ground: [[0, 14], [18, 30], [34, 52], [56, 72], [76, 95], [99, 116], [120, 133], [137, 149]],
     plats: [
       [14, 8, 5], [24, 8, 3], [31, 8, 4], [40, 6, 3], [44, 8, 3], [52, 8, 5],
@@ -1230,9 +1801,8 @@ const LEVELS = [
     },
   },
 
-  // ---------- 5. КАРТА 4: Главный завод (босс) ----------
   {
-    id: 5, name: 'Главный завод', type: 'map', bg: 'bg_plant', width: 100, boss: true,
+    id: 5, name: 'Главный завод', type: 'map', bg: 'bg_plant', width: 100, boss: true, chapter: 0,
     ground: [[0, 99]],
     plats: [[20, 8, 3], [38, 8, 3], [60, 8, 4], [68, 8, 4], [76, 8, 4]],
     bricks: [[54, 9, 54, 10], [88, 9, 88, 10]],
@@ -1263,10 +1833,12 @@ const LEVELS = [
     },
   },
 
-  // ---------- 6. В РАЗРАБОТКЕ ----------
-  {
-    id: 6, name: 'В разработке', type: 'indev',
-  },
+  // ---------- ГЛАВА 1: ЛЕДЯНОЙ ПЕРЕВАЛ (20 новых уровней) ----------
+  ...genChapter(1),
+  // ---------- ГЛАВА 2: ПУСТЫНЯ СМУТЫ (20 новых уровней) ----------
+  ...genChapter(2),
+  // ---------- ГЛАВА 3: НЕБЕСНЫЙ ЗАВОД (20 новых уровней + счастливая концовка) ----------
+  ...genChapter(3),
 ];
 
 // Катсцены: фон для каждой реплики вступления
@@ -1287,12 +1859,24 @@ function isSolid(level, c, r) {
 }
 function isPlat(level, c, r) {
   if (c < 0 || c >= level.w || r < 0 || r >= ROWS) return false;
-  return level.grid[r][c] === '=';
+  const t = level.grid[r][c];
+  if (t === '=') return true;
+  // сыпучая платформа: твёрдая, пока не обрушилась
+  if (t === 'C') {
+    const st = level.crumble && level.crumble.get(c + ',' + r);
+    return !(st && st.broken);
+  }
+  return false;
 }
 function isSpike(level, c, r) {
   if (c < 0 || c >= level.w || r < 0 || r >= ROWS) return false;
   return level.grid[r][c] === '^';
 }
+function tileAt(level, c, r) {
+  if (c < 0 || c >= level.w || r < 0 || r >= ROWS) return '.';
+  return level.grid[r][c];
+}
+function isLiquid(level, c, r) { return tileAt(level, c, r) === 'L'; }
 
 // Движение с разрешением коллизий по тайлам
 function moveEntity(ent, level, dt, ignorePlats = false) {
@@ -1387,8 +1971,9 @@ class Player {
       Audio8.sfx.jump();
       game.spawnDust(this.x + this.w / 2, this.y + this.h, 4);
     }
-    // короткий прыжок при отпускании
-    if (!input.jumpHeld && this.vy < -260) this.vy = -260;
+    // короткий прыжок при отпускании (батут не режем — у него свой импульс-таймер)
+    this.springT = Math.max(0, (this.springT || 0) - dt);
+    if (!input.jumpHeld && this.springT <= 0 && this.vy < -260) this.vy = -260;
 
     this.vy = Math.min(this.vy + CONFIG.GRAVITY * dt, 1100);
     moveEntity(this, level, dt, this.dropTimer > 0);
@@ -1415,6 +2000,44 @@ class Player {
       const r = Math.floor((this.y + this.h - 4) / TILE);
       for (let c = c0; c <= c1; c++) {
         if (isSpike(level, c, r)) { this.hurt(c * TILE + 20 < this.x + this.w / 2 ? 1 : -1, game, true); break; }
+      }
+    }
+
+    // жидкость (полынья/лава/кислота): касание = урон + респавн, как падение в яму
+    if (this.invuln <= 0) {
+      const c0 = Math.floor((this.x + 4) / TILE), c1 = Math.floor((this.x + this.w - 4) / TILE);
+      const r0 = Math.floor((this.y + 8) / TILE), r1 = Math.floor((this.y + this.h - 1) / TILE);
+      outer: for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) {
+        if (isLiquid(level, c, r)) { game.playerFell(); return; }
+      }
+    }
+
+    // пилы: круглая пила в тайле — задевание с любой стороны
+    if (this.invuln <= 0) {
+      const c0 = Math.floor((this.x - 10) / TILE), c1 = Math.floor((this.x + this.w + 10) / TILE);
+      const r0 = Math.floor((this.y - 10) / TILE), r1 = Math.floor((this.y + this.h + 10) / TILE);
+      for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) {
+        if (tileAt(level, c, r) !== 'S') continue;
+        const sx = c * TILE + 20, sy = r * TILE + 26, R = 24;
+        const nx = Math.max(this.x, Math.min(sx, this.x + this.w));
+        const ny = Math.max(this.y, Math.min(sy, this.y + this.h));
+        if ((nx - sx) * (nx - sx) + (ny - sy) * (ny - sy) < R * R) {
+          this.hurt(sx < this.x + this.w / 2 ? 1 : -1, game, true); break;
+        }
+      }
+    }
+
+    // батут: приземлился/наступил — подброс (тайл батута в клетке ног или под ногами)
+    if (this.onGround && this.vy === 0) {
+      const sc0 = Math.floor((this.x + 4) / TILE), sc1 = Math.floor((this.x + this.w - 4) / TILE);
+      const srA = Math.floor((this.y + this.h - 2) / TILE), srB = Math.floor((this.y + this.h + 2) / TILE);
+      for (let c = sc0; c <= sc1; c++) {
+        if (tileAt(level, c, srA) === 'v' || tileAt(level, c, srB) === 'v') {
+          this.vy = -1180; this.onGround = false; this.squash = -0.4; this.springT = 0.6;
+          Audio8.sfx.spring();
+          game.spawnDust(this.x + this.w / 2, this.y + this.h, 6);
+          break;
+        }
       }
     }
 
@@ -1565,16 +2188,122 @@ class Tomahawk {
 }
 
 // ============================================================
-// ВОЖДЬ БУРМАЛДЕНОВ (босс)
+// ЛЕТУН — крылатый бурмалденец (патрулирует по воздуху, синус)
+// ============================================================
+class Flyer {
+  constructor(colC, r = 6) {
+    this.w = 44; this.h = 38;
+    this.x = colC * TILE + (TILE - this.w) / 2;
+    this.y = r * TILE;
+    this.baseY = r * TILE;
+    this.vx = -95; this.vy = 0;
+    this.t = Math.random() * 6;
+    this.dead = false;
+  }
+  update(dt, level, game) {
+    this.t += dt;
+    this.x += this.vx * dt;
+    this.y = this.baseY + Math.sin(this.t * 3.2) * 24;
+    // разворот у стен и краёв карты
+    const fc = Math.floor((this.vx > 0 ? this.x + this.w + 4 : this.x - 4) / TILE);
+    const fr = Math.floor((this.y + this.h / 2) / TILE);
+    if (fc <= 0 || fc >= level.w - 1 || isSolid(level, fc, fr) || isLiquid(level, fc, fr)) this.vx = -this.vx;
+  }
+  stomp(game) {
+    this.dead = true;
+    Audio8.sfx.stomp();
+    game.spawnStars(this.x + this.w / 2, this.y + 8);
+    game.kills++;
+  }
+  draw(ctx, camX) {
+    const flap = Math.sin(this.t * 14) * 3;
+    Sprites.draw(ctx, 'flyer', this.x - camX, this.y - flap, this.w + 14, this.h + 12, this.vx > 0);
+  }
+}
+
+// ============================================================
+// ПРЫГУН — бурмалденец на пружинах (периодически скачет)
+// ============================================================
+class Jumper extends Walker {
+  constructor(colC, r = 10) {
+    super(colC, r);
+    this.w = 36; this.h = 52;
+    this.vx = -52;
+    this.jumpT = 0.9 + Math.random() * 1.2;
+  }
+  flip() { this.vx = -Math.sign(this.vx || this.dir) * 52; this.dir = Math.sign(this.vx); }
+  update(dt, level, game) {
+    super.update(dt, level, game);
+    if (this.onGround) {
+      this.jumpT -= dt;
+      if (this.jumpT <= 0) {
+        this.jumpT = 1.2 + Math.random() * 1.2;
+        this.vy = -640;
+        game.spawnDust(this.x + this.w / 2, this.y + this.h, 3);
+      }
+    }
+  }
+  draw(ctx, camX) {
+    ctx.fillStyle = 'rgba(0,0,0,.25)';
+    ctx.beginPath();
+    ctx.ellipse(this.x + this.w / 2 - camX, this.y + this.h + 3, 14, 4, 0, 0, 7);
+    ctx.fill();
+    const sq = this.onGround ? 0 : (this.vy < 0 ? -4 : 3);
+    Sprites.draw(ctx, 'jumper', this.x - camX - 3, this.y - sq, this.w + 12, this.h + 14, this.vx > 0);
+  }
+}
+
+// ============================================================
+// ЩИТОНОСЕЦ — бронированный: сверху не убить, только плюшкой
+// ============================================================
+class Armored extends Walker {
+  constructor(colC, r = 10) {
+    super(colC, r);
+    this.w = 38; this.h = 50;
+    this.vx = -26;
+    this.armor = true;      // плюшка убивает (die), прыжок сверху — нет
+    this.flash = 0;
+  }
+  flip() { this.vx = -Math.sign(this.vx || this.dir) * 26; this.dir = Math.sign(this.vx); }
+  stomp(game) {
+    // броня: прыжок сверху ничего не даёт (игрок просто отскакивает)
+    if (this.flash <= 0) { this.flash = 0.35; Audio8.sfx.locked(); game.spawnDust(this.x + this.w / 2, this.y, 3); }
+  }
+  die(game) {
+    this.dead = true;
+    Audio8.sfx.stomp();
+    game.spawnStars(this.x + this.w / 2, this.y + 8);
+    game.kills++;
+  }
+  update(dt, level, game) {
+    super.update(dt, level, game);
+    if (this.flash > 0) this.flash -= dt;
+  }
+  draw(ctx, camX) {
+    ctx.fillStyle = 'rgba(0,0,0,.25)';
+    ctx.beginPath();
+    ctx.ellipse(this.x + this.w / 2 - camX, this.y + this.h + 3, 15, 4, 0, 0, 7);
+    ctx.fill();
+    if (this.flash > 0) ctx.globalAlpha = 0.6;
+    const bob = Math.abs(Math.sin(this.walkT)) * 2;
+    Sprites.draw(ctx, 'armored', this.x - camX - 5, this.y - bob, this.w + 14, this.h + 14, this.vx > 0);
+    ctx.globalAlpha = 1;
+  }
+}
+
+// ============================================================
+// ВОЖДЬ БУРМАЛДЕНОВ (босс) — параметры настраиваются уровнем
 // ============================================================
 class Boss {
-  constructor(colC) {
-    this.w = 66; this.h = 84;
-    this.x = colC * TILE + 7;
-    this.y = 8 * TILE;
+  constructor(colC, opts = {}) {
+    this.w = opts.big ? 84 : 66;
+    this.h = opts.big ? 104 : 84;
+    this.x = colC * TILE + (TILE - this.w) / 2;
+    this.y = 8 * TILE + (opts.big ? -14 : 0);
     this.vx = -70; this.vy = 0;
     this.dir = -1;
-    this.hp = 6; this.maxHp = 6;
+    this.hp = opts.hp || 6; this.maxHp = this.hp;
+    this.big = !!opts.big;
     this.dead = false;
     this.invuln = 0;
     this.chargeT = 5;
@@ -1583,7 +2312,7 @@ class Boss {
     this.walkT = 0;
     this.hurtFlash = 0;
   }
-  get speed() { return 70 + (this.maxHp - this.hp) * 22; }
+  get speed() { return 70 + (this.maxHp - this.hp) * (this.big ? 11 : 22); }
 
   update(dt, level, game) {
     if (this.invuln > 0) this.invuln -= dt;
@@ -2046,11 +2775,22 @@ const UI = (() => {
     if (r) r();
   }
 
-  // ---------- Выбор уровня ----------
+  // ---------- Выбор уровня (с заголовками глав) ----------
   function buildLevelsGrid(progress) {
     const grid = $('levels-grid');
     grid.innerHTML = '';
+    let lastCh = -1;
     LEVELS.forEach((lv, i) => {
+      const ch = lv.chapter || 0;
+      if (ch !== lastCh) {
+        lastCh = ch;
+        const meta = CHAPTERS[ch] || { name: 'ГЛАВА', color: '#ffd23f' };
+        const head = document.createElement('div');
+        head.className = 'chapter-head';
+        head.style.setProperty('--chc', meta.color);
+        head.textContent = meta.name;
+        grid.appendChild(head);
+      }
       const isLast = lv.type === 'indev';
       const done = progress.done[i];
       const unlocked = isLast ? true : i < progress.unlocked;
@@ -2121,9 +2861,26 @@ const UI = (() => {
     showScreen('complete');
   }
 
+  // ---------- Конфетти на счастливой концовке ----------
+  function buildConfetti() {
+    const box = $('confetti');
+    if (!box || box.children.length) return;
+    const colors = ['#ffd23f', '#ff4757', '#2ed573', '#7ad0ff', '#c77dff', '#ffb347'];
+    for (let i = 0; i < 44; i++) {
+      const p = document.createElement('i');
+      p.style.left = Math.random() * 100 + '%';
+      p.style.background = colors[i % colors.length];
+      p.style.animationDelay = (Math.random() * 4) + 's';
+      p.style.animationDuration = (3.5 + Math.random() * 3) + 's';
+      p.style.width = p.style.height = (6 + Math.random() * 8) + 'px';
+      box.appendChild(p);
+    }
+  }
+
   // ---------- Инициализация ----------
   function init(callbacks) {
     Object.assign(cb, callbacks);
+    buildConfetti();
 
     $('btn-play').addEventListener('click', () => { Audio8.resume(); Audio8.sfx.click(); cb.onPlay(); });
 
@@ -2338,10 +3095,13 @@ const Game = (() => {
     plushes = []; hatShots = [];
     customEnts = [];
     bossRef = null;
-    level.spawns.enemies.forEach(({ type, c, r }) => {
+    level.spawns.enemies.forEach(({ type, c, r, hp }) => {
       if (type === 'e') enemies.push(new Walker(c, r));
       else if (type === 't') enemies.push(new Thrower(c, r));
-      else if (type === 'boss') { const b = new Boss(c); enemies.push(b); bossRef = b; }
+      else if (type === 'f') enemies.push(new Flyer(c, r === undefined ? 6 : r));
+      else if (type === 'j') enemies.push(new Jumper(c, r));
+      else if (type === 'a') enemies.push(new Armored(c, r));
+      else if (type === 'boss') { const b = new Boss(c, { hp, big: hp >= 10 }); enemies.push(b); bossRef = b; }
     });
     level.spawns.bottles.forEach(({ c, r }) => bottles.push(new Bottle(c, r)));
     level.spawns.hearts.forEach(({ c, r }) => hearts.push(new HeartPickup(c, r)));
@@ -2417,7 +3177,8 @@ const Game = (() => {
     for (let i = 0; i < 26; i++) particles.push(mkParticle(bossRef.x + bossRef.w / 2, bossRef.y + bossRef.h / 2, 'star'));
     if (factory) factory.unlock();
     frozen = true;
-    UI.dialogue(DIALOGUES.outroAfterBoss).then(() => {
+    const outro = (LEVELS[levelIndex] && LEVELS[levelIndex].bossOutro) || DIALOGUES.outroAfterBoss;
+    UI.dialogue(outro).then(() => {
       frozen = false;
     });
   }
@@ -2446,6 +3207,29 @@ const Game = (() => {
     if (state !== 'playing' || frozen) { input.jumpPressed = false; return; }
 
     player.update(dt, input, level, api);
+
+    // ---------- сыпучие платформы: триггер под ногами + обрушение ----------
+    if (player.onGround) {
+      const fr = Math.floor((player.y + player.h + 2) / TILE);
+      const c0 = Math.floor(player.x / TILE), c1 = Math.floor((player.x + player.w - 1) / TILE);
+      for (let c = c0; c <= c1; c++) {
+        if (tileAt(level, c, fr) === 'C' && !level.crumble.has(c + ',' + fr)) {
+          level.crumble.set(c + ',' + fr, { t: 0, broken: false });
+          Audio8.sfx.crumble();
+        }
+      }
+    }
+    level.crumble.forEach((st, k) => {
+      st.t += dt;
+      if (!st.broken && st.t > 0.45) {
+        st.broken = true; st.t = 0;
+        Audio8.sfx.crumble();
+        const [cc, rr] = k.split(',').map(Number);
+        spawnDust(cc * TILE + 20, rr * TILE + 20, 6);
+      } else if (st.broken && st.t > 2.6) {
+        level.crumble.delete(k);
+      }
+    });
 
     // ---------- плюшки: бросок ----------
     if (player.shootCd > 0) player.shootCd -= dt;
@@ -2548,6 +3332,7 @@ const Game = (() => {
         if (overlaps(s, e)) {
           s.dead = true;
           if (e instanceof Boss) e.hitByHat(api);
+          else if (e.armor) e.die(api);
           else e.stomp(api);
           break;
         }
@@ -2592,7 +3377,26 @@ const Game = (() => {
     bg_city: ['#9fb4c7', '#6b7a8c'],
     bg_district: ['#e8875a', '#4a3a52'],
     bg_plant: ['#1c2a4a', '#0d1424'],
+    bg_snow: ['#a8d4f0', '#e8f2fa'],
+    bg_desert: ['#ffd9a0', '#e8a75a'],
+    bg_sky: ['#8ec9f0', '#cfe8ff'],
+    bg_volcano: ['#e8703a', '#3a1f2b'],
+    bg_final: ['#2a1f3a', '#0d1424'],
   };
+
+  // Темы тайлов: цвета земли/платформ/шипов/жидкости по фону уровня
+  const THEMES = {
+    bg_fields:   { ground: '#7a4a2b', dark: '#63391f', top: '#3fa34d', top2: '#54c15f', brick: '#9e5a3c', brickD: '#7a4029', plat: '#8b5a2b', platT: '#a9714b', platD: '#5d3a1a', spike: '#8d99ae', crumb: '#b8a888', haz: '#3e7cb8', haz2: '#6db3e8' },
+    bg_city:     { ground: '#6e6a63', dark: '#585450', top: '#7da35a', top2: '#93bd6d', brick: '#8a8378', brickD: '#6b655c', plat: '#7a746b', platT: '#948d82', platD: '#575248', spike: '#8d99ae', crumb: '#b8a888', haz: '#3e7cb8', haz2: '#6db3e8' },
+    bg_district: { ground: '#7a4a2b', dark: '#63391f', top: '#8f9a4a', top2: '#adb566', brick: '#9e5a3c', brickD: '#7a4029', plat: '#8b5a2b', platT: '#a9714b', platD: '#5d3a1a', spike: '#8d99ae', crumb: '#b8a888', haz: '#3e7cb8', haz2: '#6db3e8' },
+    bg_plant:    { ground: '#4a3f45', dark: '#3a3136', top: '#5a6e50', top2: '#6e8560', brick: '#5f4a52', brickD: '#47363d', plat: '#544750', platT: '#6d5e68', platD: '#38303b', spike: '#8d99ae', crumb: '#8a7f92', haz: '#63d471', haz2: '#a8f0a8' },
+    bg_snow:     { ground: '#7186a8', dark: '#5a6d8c', top: '#f0f6fb', top2: '#ffffff', brick: '#93a8c9', brickD: '#7488a8', plat: '#8296b5', platT: '#a5b8d4', platD: '#5f7290', spike: '#bfe3ff', crumb: '#d5e5f5', haz: '#2f6fb0', haz2: '#6db3e8' },
+    bg_desert:   { ground: '#c98f4e', dark: '#a8733c', top: '#e8b86a', top2: '#f5d089', brick: '#b57f45', brickD: '#946330', plat: '#b0813f', platT: '#d0a05c', platD: '#8a5f2c', spike: '#6f8a4f', crumb: '#e0c088', haz: '#e8622a', haz2: '#ffa25c' },
+    bg_sky:      { ground: '#9aa7c7', dark: '#7e8aad', top: '#ffffff', top2: '#f0f6ff', brick: '#b0bcdc', brickD: '#8e9abc', plat: '#a2b0d2', platT: '#c4d0ec', platD: '#7e8aad', spike: '#8d99ae', crumb: '#e8eefc', haz: '#63d471', haz2: '#a8f0a8' },
+    bg_volcano:  { ground: '#5a3a3a', dark: '#462c2c', top: '#8a4a3a', top2: '#a85c48', brick: '#6a4440', brickD: '#523432', plat: '#634041', platT: '#7e5454', platD: '#4a2f30', spike: '#9aa4b2', crumb: '#a08484', haz: '#ff7a2a', haz2: '#ffc25c' },
+    bg_final:    { ground: '#41415f', dark: '#333349', top: '#5c5c85', top2: '#7070a0', brick: '#4f4f74', brickD: '#3c3c58', plat: '#4a4a6e', platT: '#60608e', platD: '#35354e', spike: '#8d99ae', crumb: '#8c8cb0', haz: '#63d471', haz2: '#a8f0a8' },
+  };
+  function theme(bgKey) { return THEMES[bgKey] || THEMES.bg_fields; }
 
   function drawBackground(bgKey) {
     const spr = Sprites.get(bgKey);
@@ -2615,41 +3419,55 @@ const Game = (() => {
     const viewW = VIEW_W / ZOOM;
     const c0 = Math.max(0, Math.floor(cam / TILE) - 1);
     const c1 = Math.min(level.w - 1, Math.ceil((cam + viewW) / TILE) + 1);
+    const T = theme(LEVELS[levelIndex].bg);
     for (let r = 0; r < ROWS; r++) {
       for (let c = c0; c <= c1; c++) {
         const t = level.grid[r][c];
         if (t === '.') continue;
-        const x = c * TILE - cam, y = r * TILE;
+        let x = c * TILE - cam, y = r * TILE;
         if (t === '#') {
-          const grass = !TILE_SOLID.has(level.grid[r - 1]?.[c] || '.');
-          ctx.fillStyle = '#7a4a2b';
+          const grass = !TILE_SOLID.has(tileAt(level, c, r - 1));
+          ctx.fillStyle = T.ground;
           ctx.fillRect(x, y, TILE, TILE);
-          ctx.fillStyle = '#63391f';
+          ctx.fillStyle = T.dark;
           ctx.fillRect(x + 4, y + 14, 8, 6);
           ctx.fillRect(x + 24, y + 26, 10, 6);
           if (grass) {
-            ctx.fillStyle = '#3fa34d';
+            ctx.fillStyle = T.top;
             ctx.fillRect(x, y, TILE, 12);
-            ctx.fillStyle = '#54c15f';
+            ctx.fillStyle = T.top2;
             ctx.fillRect(x, y, TILE, 5);
           }
         } else if (t === 'B') {
-          ctx.fillStyle = '#9e5a3c';
+          ctx.fillStyle = T.brick;
           ctx.fillRect(x, y, TILE, TILE);
-          ctx.fillStyle = '#7a4029';
+          ctx.fillStyle = T.brickD;
           ctx.fillRect(x, y + 19, TILE, 2);
           ctx.fillRect(x, y, 2, TILE);
           ctx.fillRect(x + 19, y + 19, 2, 21);
           ctx.fillRect(x + 39, y, 1, TILE);
         } else if (t === '=') {
-          ctx.fillStyle = '#8b5a2b';
+          ctx.fillStyle = T.plat;
           ctx.fillRect(x, y, TILE, 16);
-          ctx.fillStyle = '#a9714b';
+          ctx.fillStyle = T.platT;
           ctx.fillRect(x, y, TILE, 6);
-          ctx.fillStyle = '#5d3a1a';
+          ctx.fillStyle = T.platD;
+          ctx.fillRect(x, y + 14, TILE, 2);
+        } else if (t === 'C') {
+          // сыпучая платформа: трясётся после триггера, исчезает после обрушения
+          const st = level.crumble && level.crumble.get(c + ',' + r);
+          if (st && st.broken) continue;
+          if (st) x += Math.sin(tGlobal * 42) * 2.2;
+          ctx.fillStyle = T.crumb;
+          ctx.fillRect(x, y, TILE, 16);
+          ctx.fillStyle = '#00000022';
+          ctx.fillRect(x + 8, y + 3, 2, 10);
+          ctx.fillRect(x + 22, y + 5, 2, 9);
+          ctx.fillRect(x + 33, y + 2, 2, 11);
+          ctx.fillStyle = '#00000045';
           ctx.fillRect(x, y + 14, TILE, 2);
         } else if (t === '^') {
-          ctx.fillStyle = '#8d99ae';
+          ctx.fillStyle = T.spike;
           for (let i = 0; i < 2; i++) {
             ctx.beginPath();
             ctx.moveTo(x + i * 20, y + 40);
@@ -2658,6 +3476,48 @@ const Game = (() => {
             ctx.closePath();
             ctx.fill();
           }
+        } else if (t === 'L') {
+          // жидкость: полынья / лава / кислота — волнует поверхность и пузырится
+          const wave = Math.sin(tGlobal * 3 + c * 1.7) * 3;
+          ctx.fillStyle = T.haz;
+          ctx.fillRect(x, y + 10 + wave, TILE, TILE - 10 - wave + 4);
+          ctx.fillStyle = T.haz2;
+          ctx.fillRect(x, y + 10 + wave, TILE, 4);
+          const bb = (tGlobal * 1.3 + c * 0.7) % 1;
+          ctx.fillStyle = T.haz2;
+          ctx.globalAlpha = 0.7 * (1 - bb);
+          ctx.fillRect(x + 8 + (c % 3) * 8, y + 34 - bb * 18, 4, 4);
+          ctx.globalAlpha = 1;
+        } else if (t === 'v') {
+          // батут: стойка + пружина + площадка
+          ctx.fillStyle = '#3a3a46';
+          ctx.fillRect(x + 8, y + 28, 4, 12);
+          ctx.fillRect(x + 28, y + 28, 4, 12);
+          ctx.fillStyle = '#9e9e9e';
+          for (let i = 0; i < 3; i++) ctx.fillRect(x + 12, y + 22 + i * 3, 16, 2);
+          const pulse = 0.5 + Math.sin(tGlobal * 5 + c) * 0.5;
+          ctx.fillStyle = `rgb(${200 + pulse * 40}, ${60 + pulse * 30}, 60)`;
+          ctx.fillRect(x + 6, y + 14, 28, 7);
+          ctx.fillStyle = '#ffd23f';
+          ctx.fillRect(x + 6, y + 14, 28, 2);
+        } else if (t === 'S') {
+          // пила: крутится, полутело над землёй
+          const cx = x + 20, cy = y + 26, R = 24;
+          ctx.save();
+          ctx.translate(cx, cy);
+          ctx.rotate(tGlobal * 9);
+          ctx.fillStyle = '#b8c2cc';
+          for (let i = 0; i < 8; i++) {
+            ctx.rotate(Math.PI / 4);
+            ctx.beginPath();
+            ctx.moveTo(R - 6, -5); ctx.lineTo(R + 5, 0); ctx.lineTo(R - 6, 5);
+            ctx.closePath(); ctx.fill();
+          }
+          ctx.fillStyle = '#8d99ae';
+          ctx.beginPath(); ctx.arc(0, 0, R - 6, 0, 7); ctx.fill();
+          ctx.fillStyle = '#5a6472';
+          ctx.beginPath(); ctx.arc(0, 0, 7, 0, 7); ctx.fill();
+          ctx.restore();
         }
       }
     }
@@ -2962,6 +3822,7 @@ const Game = (() => {
       get plushes() { return plushes; },
       get hatShots() { return hatShots; },
       get boss() { return bossRef; },
+      get level() { return level; },
     };
     requestAnimationFrame((t) => { lastT = t; requestAnimationFrame(loop); });
   }

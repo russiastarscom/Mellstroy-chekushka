@@ -10,12 +10,24 @@ function isSolid(level, c, r) {
 }
 function isPlat(level, c, r) {
   if (c < 0 || c >= level.w || r < 0 || r >= ROWS) return false;
-  return level.grid[r][c] === '=';
+  const t = level.grid[r][c];
+  if (t === '=') return true;
+  // сыпучая платформа: твёрдая, пока не обрушилась
+  if (t === 'C') {
+    const st = level.crumble && level.crumble.get(c + ',' + r);
+    return !(st && st.broken);
+  }
+  return false;
 }
 function isSpike(level, c, r) {
   if (c < 0 || c >= level.w || r < 0 || r >= ROWS) return false;
   return level.grid[r][c] === '^';
 }
+function tileAt(level, c, r) {
+  if (c < 0 || c >= level.w || r < 0 || r >= ROWS) return '.';
+  return level.grid[r][c];
+}
+function isLiquid(level, c, r) { return tileAt(level, c, r) === 'L'; }
 
 // Движение с разрешением коллизий по тайлам
 function moveEntity(ent, level, dt, ignorePlats = false) {
@@ -110,8 +122,9 @@ class Player {
       Audio8.sfx.jump();
       game.spawnDust(this.x + this.w / 2, this.y + this.h, 4);
     }
-    // короткий прыжок при отпускании
-    if (!input.jumpHeld && this.vy < -260) this.vy = -260;
+    // короткий прыжок при отпускании (батут не режем — у него свой импульс-таймер)
+    this.springT = Math.max(0, (this.springT || 0) - dt);
+    if (!input.jumpHeld && this.springT <= 0 && this.vy < -260) this.vy = -260;
 
     this.vy = Math.min(this.vy + CONFIG.GRAVITY * dt, 1100);
     moveEntity(this, level, dt, this.dropTimer > 0);
@@ -138,6 +151,44 @@ class Player {
       const r = Math.floor((this.y + this.h - 4) / TILE);
       for (let c = c0; c <= c1; c++) {
         if (isSpike(level, c, r)) { this.hurt(c * TILE + 20 < this.x + this.w / 2 ? 1 : -1, game, true); break; }
+      }
+    }
+
+    // жидкость (полынья/лава/кислота): касание = урон + респавн, как падение в яму
+    if (this.invuln <= 0) {
+      const c0 = Math.floor((this.x + 4) / TILE), c1 = Math.floor((this.x + this.w - 4) / TILE);
+      const r0 = Math.floor((this.y + 8) / TILE), r1 = Math.floor((this.y + this.h - 1) / TILE);
+      outer: for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) {
+        if (isLiquid(level, c, r)) { game.playerFell(); return; }
+      }
+    }
+
+    // пилы: круглая пила в тайле — задевание с любой стороны
+    if (this.invuln <= 0) {
+      const c0 = Math.floor((this.x - 10) / TILE), c1 = Math.floor((this.x + this.w + 10) / TILE);
+      const r0 = Math.floor((this.y - 10) / TILE), r1 = Math.floor((this.y + this.h + 10) / TILE);
+      for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) {
+        if (tileAt(level, c, r) !== 'S') continue;
+        const sx = c * TILE + 20, sy = r * TILE + 26, R = 24;
+        const nx = Math.max(this.x, Math.min(sx, this.x + this.w));
+        const ny = Math.max(this.y, Math.min(sy, this.y + this.h));
+        if ((nx - sx) * (nx - sx) + (ny - sy) * (ny - sy) < R * R) {
+          this.hurt(sx < this.x + this.w / 2 ? 1 : -1, game, true); break;
+        }
+      }
+    }
+
+    // батут: приземлился/наступил — подброс (тайл батута в клетке ног или под ногами)
+    if (this.onGround && this.vy === 0) {
+      const sc0 = Math.floor((this.x + 4) / TILE), sc1 = Math.floor((this.x + this.w - 4) / TILE);
+      const srA = Math.floor((this.y + this.h - 2) / TILE), srB = Math.floor((this.y + this.h + 2) / TILE);
+      for (let c = sc0; c <= sc1; c++) {
+        if (tileAt(level, c, srA) === 'v' || tileAt(level, c, srB) === 'v') {
+          this.vy = -1180; this.onGround = false; this.squash = -0.4; this.springT = 0.6;
+          Audio8.sfx.spring();
+          game.spawnDust(this.x + this.w / 2, this.y + this.h, 6);
+          break;
+        }
       }
     }
 
@@ -288,16 +339,122 @@ class Tomahawk {
 }
 
 // ============================================================
-// ВОЖДЬ БУРМАЛДЕНОВ (босс)
+// ЛЕТУН — крылатый бурмалденец (патрулирует по воздуху, синус)
+// ============================================================
+class Flyer {
+  constructor(colC, r = 6) {
+    this.w = 44; this.h = 38;
+    this.x = colC * TILE + (TILE - this.w) / 2;
+    this.y = r * TILE;
+    this.baseY = r * TILE;
+    this.vx = -95; this.vy = 0;
+    this.t = Math.random() * 6;
+    this.dead = false;
+  }
+  update(dt, level, game) {
+    this.t += dt;
+    this.x += this.vx * dt;
+    this.y = this.baseY + Math.sin(this.t * 3.2) * 24;
+    // разворот у стен и краёв карты
+    const fc = Math.floor((this.vx > 0 ? this.x + this.w + 4 : this.x - 4) / TILE);
+    const fr = Math.floor((this.y + this.h / 2) / TILE);
+    if (fc <= 0 || fc >= level.w - 1 || isSolid(level, fc, fr) || isLiquid(level, fc, fr)) this.vx = -this.vx;
+  }
+  stomp(game) {
+    this.dead = true;
+    Audio8.sfx.stomp();
+    game.spawnStars(this.x + this.w / 2, this.y + 8);
+    game.kills++;
+  }
+  draw(ctx, camX) {
+    const flap = Math.sin(this.t * 14) * 3;
+    Sprites.draw(ctx, 'flyer', this.x - camX, this.y - flap, this.w + 14, this.h + 12, this.vx > 0);
+  }
+}
+
+// ============================================================
+// ПРЫГУН — бурмалденец на пружинах (периодически скачет)
+// ============================================================
+class Jumper extends Walker {
+  constructor(colC, r = 10) {
+    super(colC, r);
+    this.w = 36; this.h = 52;
+    this.vx = -52;
+    this.jumpT = 0.9 + Math.random() * 1.2;
+  }
+  flip() { this.vx = -Math.sign(this.vx || this.dir) * 52; this.dir = Math.sign(this.vx); }
+  update(dt, level, game) {
+    super.update(dt, level, game);
+    if (this.onGround) {
+      this.jumpT -= dt;
+      if (this.jumpT <= 0) {
+        this.jumpT = 1.2 + Math.random() * 1.2;
+        this.vy = -640;
+        game.spawnDust(this.x + this.w / 2, this.y + this.h, 3);
+      }
+    }
+  }
+  draw(ctx, camX) {
+    ctx.fillStyle = 'rgba(0,0,0,.25)';
+    ctx.beginPath();
+    ctx.ellipse(this.x + this.w / 2 - camX, this.y + this.h + 3, 14, 4, 0, 0, 7);
+    ctx.fill();
+    const sq = this.onGround ? 0 : (this.vy < 0 ? -4 : 3);
+    Sprites.draw(ctx, 'jumper', this.x - camX - 3, this.y - sq, this.w + 12, this.h + 14, this.vx > 0);
+  }
+}
+
+// ============================================================
+// ЩИТОНОСЕЦ — бронированный: сверху не убить, только плюшкой
+// ============================================================
+class Armored extends Walker {
+  constructor(colC, r = 10) {
+    super(colC, r);
+    this.w = 38; this.h = 50;
+    this.vx = -26;
+    this.armor = true;      // плюшка убивает (die), прыжок сверху — нет
+    this.flash = 0;
+  }
+  flip() { this.vx = -Math.sign(this.vx || this.dir) * 26; this.dir = Math.sign(this.vx); }
+  stomp(game) {
+    // броня: прыжок сверху ничего не даёт (игрок просто отскакивает)
+    if (this.flash <= 0) { this.flash = 0.35; Audio8.sfx.locked(); game.spawnDust(this.x + this.w / 2, this.y, 3); }
+  }
+  die(game) {
+    this.dead = true;
+    Audio8.sfx.stomp();
+    game.spawnStars(this.x + this.w / 2, this.y + 8);
+    game.kills++;
+  }
+  update(dt, level, game) {
+    super.update(dt, level, game);
+    if (this.flash > 0) this.flash -= dt;
+  }
+  draw(ctx, camX) {
+    ctx.fillStyle = 'rgba(0,0,0,.25)';
+    ctx.beginPath();
+    ctx.ellipse(this.x + this.w / 2 - camX, this.y + this.h + 3, 15, 4, 0, 0, 7);
+    ctx.fill();
+    if (this.flash > 0) ctx.globalAlpha = 0.6;
+    const bob = Math.abs(Math.sin(this.walkT)) * 2;
+    Sprites.draw(ctx, 'armored', this.x - camX - 5, this.y - bob, this.w + 14, this.h + 14, this.vx > 0);
+    ctx.globalAlpha = 1;
+  }
+}
+
+// ============================================================
+// ВОЖДЬ БУРМАЛДЕНОВ (босс) — параметры настраиваются уровнем
 // ============================================================
 class Boss {
-  constructor(colC) {
-    this.w = 66; this.h = 84;
-    this.x = colC * TILE + 7;
-    this.y = 8 * TILE;
+  constructor(colC, opts = {}) {
+    this.w = opts.big ? 84 : 66;
+    this.h = opts.big ? 104 : 84;
+    this.x = colC * TILE + (TILE - this.w) / 2;
+    this.y = 8 * TILE + (opts.big ? -14 : 0);
     this.vx = -70; this.vy = 0;
     this.dir = -1;
-    this.hp = 6; this.maxHp = 6;
+    this.hp = opts.hp || 6; this.maxHp = this.hp;
+    this.big = !!opts.big;
     this.dead = false;
     this.invuln = 0;
     this.chargeT = 5;
@@ -306,7 +463,7 @@ class Boss {
     this.walkT = 0;
     this.hurtFlash = 0;
   }
-  get speed() { return 70 + (this.maxHp - this.hp) * 22; }
+  get speed() { return 70 + (this.maxHp - this.hp) * (this.big ? 11 : 22); }
 
   update(dt, level, game) {
     if (this.invuln > 0) this.invuln -= dt;

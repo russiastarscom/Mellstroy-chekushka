@@ -17,10 +17,18 @@ const Sprites = (() => {
     tomahawk:     { file: 'image/tomahawk.png',     w: 20,  h: 20  },
     heart:        { file: 'image/heart.png',        w: 26,  h: 24  },
     plush:        { file: 'image/plush.png',        w: 36,  h: 32  },
+    flyer:        { file: 'image/flyer.png',        w: 60,  h: 52  },
+    jumper:       { file: 'image/jumper.png',       w: 52,  h: 72  },
+    armored:      { file: 'image/armored.png',      w: 56,  h: 64  },
     bg_fields:    { file: 'image/bg_fields.png',    bg: true },
     bg_city:      { file: 'image/bg_city.png',      bg: true },
     bg_district:  { file: 'image/bg_district.png',  bg: true },
     bg_plant:     { file: 'image/bg_plant.png',     bg: true },
+    bg_snow:      { file: 'image/bg_snow.png',      bg: true },
+    bg_desert:    { file: 'image/bg_desert.png',    bg: true },
+    bg_sky:       { file: 'image/bg_sky.png',       bg: true },
+    bg_volcano:   { file: 'image/bg_volcano.png',   bg: true },
+    bg_final:     { file: 'image/bg_final.png',     bg: true },
   };
 
   const store = {}; // key -> {img, fallback, w, h}
@@ -185,9 +193,67 @@ const Sprites = (() => {
     return c;
   }
 
+  // ---------- ЗАГЛУШКИ: новые враги глав 1-3 ----------
+  function fbFlyer() {   // Летун — крылатый бурмалденец
+    const [c, x] = mkCanvas(60, 52);
+    const S = 4, W = 15, H = 13;
+    px(x, 0, 2, 4, 1, '#3a3a46', S);              // крыло Л
+    px(x, 11, 2, 4, 1, '#3a3a46', S);             // крыло П
+    px(x, 1, 3, 2, 1, '#55555f', S);
+    px(x, 12, 3, 2, 1, '#55555f', S);
+    px(x, 6, 0, 3, 1, '#e63946', S);              // перья
+    px(x, 5, 2, 5, 1, '#c1272d', S);              // повязка
+    px(x, 5, 3, 5, 2, '#c68642', S);              // лицо
+    px(x, 8, 3, 1, 1, '#1a1a1a', S);              // глаз
+    px(x, 5, 5, 5, 3, '#a9714b', S);              // торс
+    px(x, 4, 6, 1, 2, '#c68642', S);              // руки
+    px(x, 10, 6, 1, 2, '#c68642', S);
+    px(x, 5, 8, 5, 2, '#8b5a2b', S);              // набедренная
+    px(x, 5, 10, 2, 2, '#c68642', S);             // ноги
+    px(x, 8, 10, 2, 2, '#c68642', S);
+    return c;
+  }
+  function fbJumper() {  // Прыгун — бурмалденец на пружинах
+    const [c, x] = mkCanvas(52, 72);
+    const S = 4, W = 13, H = 18;
+    px(x, 5, 0, 3, 1, '#e63946', S);              // перья
+    px(x, 4, 2, 5, 1, '#c1272d', S);              // повязка
+    px(x, 4, 3, 5, 2, '#c68642', S);              // лицо
+    px(x, 7, 3, 1, 1, '#1a1a1a', S);              // глаз
+    px(x, 4, 5, 5, 4, '#a9714b', S);              // торс
+    px(x, 3, 5, 1, 3, '#c68642', S);              // руки
+    px(x, 9, 5, 1, 3, '#c68642', S);
+    px(x, 4, 9, 5, 2, '#8b5a2b', S);              // набедренная
+    px(x, 6, 11, 1, 5, '#9e9e9e', S);             // пружина
+    for (let i = 0; i < 3; i++) px(x, 5, 11 + i * 2, 3, 1, '#7a7a85', S);
+    px(x, 4, 16, 5, 1, '#3a3a46', S);             // база
+    return c;
+  }
+  function fbArmored() { // Щитоносец — бурмалденец со щитом
+    const [c, x] = mkCanvas(56, 64);
+    const S = 4, W = 14, H = 16;
+    px(x, 8, 0, 3, 1, '#e63946', S);              // перья
+    px(x, 7, 2, 5, 1, '#c1272d', S);              // повязка
+    px(x, 7, 3, 5, 2, '#c68642', S);              // лицо
+    px(x, 10, 3, 1, 1, '#1a1a1a', S);             // глаз
+    px(x, 7, 5, 5, 4, '#a9714b', S);              // торс
+    px(x, 2, 2, 4, 12, '#795548', S);             // щит-створка
+    px(x, 2, 2, 4, 1, '#9e9e9e', S);              // оковка
+    px(x, 2, 13, 4, 1, '#9e9e9e', S);
+    px(x, 3, 7, 2, 2, '#ffd23f', S);              // заклёпка
+    px(x, 12, 5, 2, 3, '#c68642', S);             // рука сзади
+    px(x, 7, 9, 5, 2, '#8b5a2b', S);              // набедренная
+    px(x, 7, 11, 2, 4, '#c68642', S);             // ноги
+    px(x, 10, 11, 2, 4, '#c68642', S);
+    px(x, 7, 15, 2, 1, '#5d4037', S);             // мокасины
+    px(x, 10, 15, 2, 1, '#5d4037', S);
+    return c;
+  }
+
   const FALLBACKS = {
     andrey: fbAndrey, burmaldenets: fbEnemy, boss: fbBoss, checkushka: fbBottle,
     factory: fbFactory, tomahawk: fbTomahawk, heart: fbHeart, plush: fbPlush,
+    flyer: fbFlyer, jumper: fbJumper, armored: fbArmored,
   };
 
   // ---------- Загрузка ----------
