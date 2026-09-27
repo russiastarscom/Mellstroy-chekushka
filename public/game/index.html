@@ -1948,13 +1948,14 @@ class Player {
     this.flipTurns = 1;  // число оборотов (батут — двойное)
   }
 
-  // Старт сальто: в движении — передний переворот по направлению бега,
-  // с места — бэкфлип (классический «прыжок с переворотом»)
+  // Старт сальто: ТОЛЬКО в движении — передний переворот по направлению бега.
+  // Прыжок с места — без кувырка (по фидбеку игрока)
   startFlip(turns = 1, dur = 0.5) {
+    if (Math.abs(this.vx) <= 40) return;
     this.flipTurns = turns;
     this.flipDur = dur;
     this.flipT = dur;
-    this.flipDir = Math.abs(this.vx) > 40 ? (this.dir || 1) : -(this.dir || 1);
+    this.flipDir = this.dir || 1;
   }
 
   update(dt, input, level, game) {
