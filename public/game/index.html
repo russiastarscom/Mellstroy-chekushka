@@ -1901,7 +1901,9 @@ function moveEntity(ent, level, dt, ignorePlats = false) {
   ent.onGround = false;
   {
     const c0 = Math.floor(ent.x / TILE), c1 = Math.floor((ent.x + ent.w - 1) / TILE);
-    const r0 = Math.floor(ent.y / TILE), r1 = Math.floor((ent.y + ent.h - 1) / TILE);
+    // НОГИ: без «-1» — иначе стоящая сущность каждый чётный кадр на 0.6px
+    // проваливается в тайл (onGround мигает 0/1 → дрожит отрисовка, напр. Прыгун)
+    const r0 = Math.floor(ent.y / TILE), r1 = Math.floor((ent.y + ent.h) / TILE);
     if (ent.vy > 0) {
       for (let c = c0; c <= c1; c++) {
         if (isSolid(level, c, r1)) { ent.y = r1 * TILE - ent.h; ent.vy = 0; ent.onGround = true; break; }
@@ -2290,7 +2292,9 @@ class Jumper extends Walker {
     ctx.beginPath();
     ctx.ellipse(this.x + this.w / 2 - camX, this.y + this.h + 3, 14, 4, 0, 0, 7);
     ctx.fill();
-    const sq = this.onGround ? 0 : (this.vy < 0 ? -4 : 3);
+    // сквош пропорционален скорости (без порога по знаку — иначе дёрганье на земле и в апексе)
+    const k = this.vy * 0.008;
+    const sq = this.onGround ? 0 : (k < 0 ? Math.max(k, -4) : Math.min(k, 3));
     Sprites.draw(ctx, 'jumper', this.x - camX - 3, this.y - sq, this.w + 12, this.h + 14, this.vx > 0);
   }
 }
