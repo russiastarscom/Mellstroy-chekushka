@@ -239,6 +239,11 @@ function validateMap(m) {
 // Черновики (localStorage, автосохранение)
 // ============================================================
 const DRAFT_KEY = 'adminCmsDrafts_v2';
+// Ревизия официального списка уровней. ПОВЫШАТЬ при любом изменении официальных LEVELS
+// (добавление глав, правка слотов). Черновик панели без этого маркера или с другой ревизией
+// сделан ДО обновления официальных уровней — его список карт устарел и не должен
+// затирать новые официальные карты (иначе у пользователя «исчезают» 65 уровней).
+const OFFICIAL_REV = 'v2-65lvl';
 let saveTimer = null;
 function saveDrafts() {
   clearTimeout(saveTimer);
@@ -246,6 +251,7 @@ function saveDrafts() {
     try {
       const out = {
         savedAt: Date.now(),
+        officialRev: OFFICIAL_REV, // маркер версии официальных уровней, против которых сделан черновик
         maps: CMS.maps.map((m) => ({
           key: m.key, id: m.id, def: m.def ? JSON.parse(JSON.stringify(m.def)) : null,
           ed: { cells: m.ed.cells, ents: m.ed.ents, spawn: m.ed.spawn, factory: m.ed.factory, name: m.ed.name, bg: m.ed.bg, dialogs: m.ed.dialogs, isIndev: !!m.ed.isIndev, clean: !m.ed.dirty },
@@ -1321,7 +1327,15 @@ async function boot() {
   // черновик браузера применяем, только если он не старше публикации с сервера
   const dr = loadDrafts();
   let applied = false, hadDirty = false;
-  if (dr) {
+  if (dr && (!dr.officialRev || dr.officialRev !== OFFICIAL_REV)) {
+    // Черновик сделан ДО обновления официальных уровней: его список карт устарел
+    // (затирал бы новые официальные 65 уровней). Карты отбрасываем, остальное
+    // (текстуры/музыка/объекты/диалоги/соцсети/землетрясения) сохраняем.
+    const trimmed = Object.assign({}, dr, { maps: [], listV: 3, officialRev: OFFICIAL_REV, savedAt: Date.now() });
+    try { localStorage.setItem(DRAFT_KEY, JSON.stringify(trimmed)); } catch (e) {}
+    applied = applyDrafts(trimmed);
+    setTimeout(() => toast('Черновик карт от старой версии игры отброшен — загружены официальные уровни (' + MAP_LEVELS.length + ')', true), 500);
+  } else if (dr) {
     const pubTs = (j && j.updatedAt) ? (new Date(j.updatedAt).getTime() || 0) : 0;
     if (!pubTs || (dr.savedAt || 0) >= pubTs) {
       applied = applyDrafts(dr);
@@ -1333,6 +1347,8 @@ async function boot() {
   }
   pubAt = (j && j.updatedAt) || null;
   setStatus();
+  const rb = document.getElementById('rev-badge');
+  if (rb) rb.textContent = 'уровней: ' + MAP_LEVELS.length + ' • ревизия ' + OFFICIAL_REV;
   fitZoom(); buildMapTabs(); buildCustomTools(); syncMapOpts(); draw();
   buildDlgMapSelect(); renderAllDialogs(); renderTextures(); renderObjects(); renderMusic(); renderSocials(); renderQuake();
   if (hadDirty) toast('Черновик восстановлен — есть НЕОПУБЛИКОВАННЫЕ правки', true);
