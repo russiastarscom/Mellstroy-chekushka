@@ -690,6 +690,9 @@ const Audio8 = (() => {
     locked: () => tone(160, 0.15, 'square', 0.12, 120),
     spring: () => tone(240, 0.2, 'square', 0.16, 950),
     crumble: () => { noise(0.12, 0.1); tone(120, 0.1, 'square', 0.08, 60); },
+    // землетрясение: стартовый «бум» (низкий рокот) + короткие подрокотывания
+    quake:  () => { tone(85, 1.0, 'sawtooth', 0.18, 40); tone(55, 1.2, 'triangle', 0.2, 34); noise(1.1, 0.18); },
+    rumble: () => { tone(60, 0.45, 'sawtooth', 0.08, 42); noise(0.35, 0.06); },
   };
 
   // ---------- Музыка: простой чиптюн-луп ----------
@@ -2518,6 +2521,66 @@ class HatShot {
   }
 }
 
+// ============================================================
+// ОБЛОМКИ ЗЕМЛЕТРЯСЕНИЯ — камни с неба (спавнит Quake в main.js)
+// Падают, бьют игрока (с инвулном), прибивают мелких врагов,
+// разбиваются о землю/стены с пылью и звуком крошения.
+// ============================================================
+class QuakeDebris {
+  constructor(x, y, big = false) {
+    this.s = big ? 20 : 13;             // размер камня
+    this.w = this.s; this.h = this.s;
+    this.x = x; this.y = y;
+    this.vx = (Math.random() - 0.5) * 70;
+    this.vy = 40 + Math.random() * 90;
+    this.rot = Math.random() * 6.28;
+    this.rotSpd = (Math.random() < 0.5 ? -1 : 1) * (3 + Math.random() * 4);
+    this.big = big;
+    // рваный контур генерится ОДИН раз — камень не «мигает» гранями
+    this.pts = [];
+    const n = 7;
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2;
+      const rr = this.s * (0.38 + Math.random() * 0.16);
+      this.pts.push([Math.cos(a) * rr, Math.sin(a) * rr]);
+    }
+    this.dead = false;
+  }
+  update(dt, level, game) {
+    this.vy = Math.min(this.vy + CONFIG.GRAVITY * 0.6 * dt, 720);
+    moveEntity(this, level, dt);
+    this.rot += this.rotSpd * dt;
+    // удар о землю/стену/платформу — разбился
+    if (this.onGround || this.hitWall) {
+      this.dead = true;
+      game.spawnDust(this.x + this.s / 2, this.y + this.s, this.big ? 6 : 3);
+      Audio8.sfx.crumble();
+      return;
+    }
+    if (this.y > ROWS * TILE + 60) { this.dead = true; return; }
+    // задел игрока (инвулн после урона спасает, как у шипов)
+    const p = game.player;
+    if (p && p.invuln <= 0 && overlaps(this, p)) {
+      this.dead = true;
+      p.hurt(Math.sign(p.x - this.x) || 1, game);
+      return;
+    }
+  }
+  draw(ctx, camX) {
+    ctx.save();
+    ctx.translate(this.x + this.s / 2 - camX, this.y + this.s / 2);
+    ctx.rotate(this.rot);
+    ctx.fillStyle = this.big ? '#6b5847' : '#7d6a56';
+    ctx.beginPath();
+    this.pts.forEach(([px, py], i) => (i ? ctx.lineTo(px, py) : ctx.moveTo(px, py)));
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = 'rgba(0,0,0,.25)';
+    ctx.fillRect(-this.s * 0.22, -this.s * 0.05, this.s * 0.3, this.s * 0.26);
+    ctx.restore();
+  }
+}
+
 // Завод — выход с уровня. Стоит НА земле (не зарывается в тайлы!),
 // триггером завершения уровня служит всё здание с запасом по краям.
 const GROUND_TOP = (ROWS - 2) * TILE; // верх земли — ряд 11 → y = 440
@@ -3051,6 +3114,7 @@ const Game = (() => {
   let enemies = [], tomahawks = [], bottles = [], hearts = [], particles = [];
   let plushes = [], hatShots = [];
   let customEnts = [];          // кастомные объекты из админ-панели (скриптуемые)
+  let debris = [];              // камни с неба во время землетрясений
   let factory = null;
   let cam = 0, shake = 0;
   let bottlesGot = 0, kills = 0;
@@ -3092,6 +3156,8 @@ const Game = (() => {
     sfx(name = 'coin') { const f = Audio8.sfx[name]; if (f) f(); },
     particles(x, y, kind = 'dust', n = 5) { for (let i = 0; i < n; i++) particles.push(mkParticle(x, y, kind)); },
     shake(v = 0.2) { shake = Math.max(shake, v); },
+    // землетрясение: сила 0.3..1.6, длительность в секундах (для скриптов объектов)
+    quake(power = 1, dur = 4) { Quake.trigger(power, dur); },
   });
   // ВАЖНО: px/py/time — живые геттеры. Object.assign вызвал бы их ОДИН раз при
   // загрузке (player ещё null → навсегда 0), поэтому только defineProperties.
@@ -3117,6 +3183,7 @@ const Game = (() => {
     levelIndex = i;
     const def = LEVELS[i];
     if (!def) return;
+    Quake.reset(null); debris = [];   // никакого хвостового землетрясения с прошлого уровня
 
     // прогресс: запоминаем, на каком уровне игрок находится
     progress.cur = i;
@@ -3160,6 +3227,7 @@ const Game = (() => {
     bottlesGot = 0;
     kills = 0;
     cam = 0; shake = 0;
+    Quake.reset(def);                  // план автотолчков этого уровня
     camY = VIEW_H - VIEW_H / ZOOM; // сразу «прижата к полу»
     hudCache = { hp: -1, bottles: -1, hats: -1 };
     // сброс ввода — чтобы залипшая клавиша/кнопка не тянула Андрея после рестарта
@@ -3226,6 +3294,7 @@ const Game = (() => {
     const outro = (LEVELS[levelIndex] && LEVELS[levelIndex].bossOutro) || DIALOGUES.outroAfterBoss;
     UI.dialogue(outro).then(() => {
       frozen = false;
+      Quake.trigger(1.2, 3.5); // вождь рухнул — земля вздрогнула
     });
   }
 
@@ -3244,6 +3313,114 @@ const Game = (() => {
   }
   function spawnDust(x, y, n) { for (let i = 0; i < n; i++) particles.push(mkParticle(x, y, 'dust')); }
   function spawnStars(x, y) { for (let i = 0; i < 10; i++) particles.push(mkParticle(x, y, 'star')); }
+
+  // ---------- ЗЕМЛЕТРЯСЕНИЯ ----------
+  // Фазы: idle → warn (2с предупреждение: баннер + крошка с неба) →
+  // active (тряска + камни с неба) → after (затухающие афтершоки).
+  // Автотолчки — на картах глав 1-3 (пролог и арены боссов спокойные).
+  // Ручной запуск: scriptApi.quake(сила, сек) — скрипты объектов админки,
+  // GameDebug.quake(сила, сек) — консоль/тесты. После смерти босса — свой толчок.
+  const Quake = {
+    phase: 'idle',
+    t: 0, dur: 0, power: 1,
+    nextAt: 12,           // сек игры до следующего автотолчка
+    auto: false,          // включены ли автотолчки на этом уровне
+    spawnT: 0, rumbleT: 0, crumbT: 0,
+
+    reset(def) {
+      this.phase = 'idle'; this.t = 0; this.spawnT = 0; this.rumbleT = 0; this.crumbT = 0;
+      // автоземлетрясения: главы 1-3, обычные карты (не арены боссов)
+      this.auto = !!(def && def.type === 'map' && !def.boss && (def.chapter || 0) >= 1);
+      this.nextAt = 9 + Math.random() * 7;
+    },
+
+    trigger(power = 1, dur = 5) {
+      if (this.phase === 'warn' || this.phase === 'active') return; // не перезапускаем посреди
+      this.phase = 'warn';
+      this.t = 0;
+      this.power = Math.max(0.3, Math.min(1.6, power));
+      this.dur = Math.max(1.5, Math.min(12, dur));
+      Audio8.sfx.locked(); // тревожный «клац»
+    },
+
+    // смещение экрана от землетрясения (для рендера)
+    offset() {
+      if (this.phase === 'active') {
+        const A = 5.5 * this.power;
+        return {
+          x: Math.sin(tGlobal * 41) * A + Math.sin(tGlobal * 17.3) * A * 0.5,
+          y: Math.sin(tGlobal * 33.7 + 1.2) * A * 0.6,
+        };
+      }
+      if (this.phase === 'after') {
+        const k = Math.max(0, 1 - this.t / 2);
+        const A = 3.2 * this.power * k;
+        return { x: Math.sin(tGlobal * 31) * A, y: 0 };
+      }
+      return { x: 0, y: 0 };
+    },
+
+    update(dt) {
+      this.t += dt;
+      if (this.phase === 'idle') {
+        if (!this.auto) return;
+        this.nextAt -= dt;
+        if (this.nextAt <= 0) {
+          // сила и длина растут с номером главы
+          const ch = (LEVELS[levelIndex] && LEVELS[levelIndex].chapter) || 1;
+          this.trigger(0.55 + ch * 0.12 + Math.random() * 0.2, 4 + Math.random() * 3);
+          this.nextAt = 15 + Math.random() * 12;
+        }
+        return;
+      }
+      if (this.phase === 'warn') {
+        // телеграф: сверху сыплется крошка
+        this.crumbT -= dt;
+        if (this.crumbT <= 0) {
+          this.crumbT = 0.16;
+          const vx = VIEW_W / ZOOM;
+          const p = mkParticle(cam + Math.random() * vx, camY + 6 + Math.random() * 30, 'dust');
+          p.vy = 60;
+          particles.push(p);
+        }
+        if (this.t % 0.5 < dt) Audio8.sfx.rumble();
+        if (this.t >= 2) {
+          this.phase = 'active'; this.t = 0;
+          this.spawnT = 0.15; this.rumbleT = 0;
+          shake = Math.max(shake, 0.5 * this.power); // стартовый «бум»
+          Audio8.sfx.quake();
+        }
+        return;
+      }
+      if (this.phase === 'active') {
+        shake = Math.max(shake, 0.16 * this.power); // базовая тряска поверх синусоиды
+        this.rumbleT -= dt;
+        if (this.rumbleT <= 0) { this.rumbleT = 1.3; Audio8.sfx.rumble(); }
+        // камни с неба
+        this.spawnT -= dt;
+        if (this.spawnT <= 0) {
+          this.spawnT = Math.max(0.14, 0.55 / this.power) * (0.6 + Math.random() * 0.8);
+          const vx = VIEW_W / ZOOM;
+          const n = 1 + (Math.random() < 0.25 * this.power ? 1 : 0);
+          for (let i = 0; i < n; i++) {
+            debris.push(new QuakeDebris(cam + 30 + Math.random() * (vx - 60), camY - 30 - Math.random() * 60, Math.random() < 0.3 * this.power));
+          }
+        }
+        // пыль лезет из-под земли
+        if (Math.random() < dt * 9 * this.power) {
+          const vx = VIEW_W / ZOOM;
+          particles.push(mkParticle(cam + Math.random() * vx, camY + VIEW_H / ZOOM - 10 - Math.random() * 30, 'dust'));
+        }
+        if (this.t >= this.dur) { this.phase = 'after'; this.t = 0; }
+        return;
+      }
+      // after: афтершоки затухают (см. offset())
+      if (this.t >= 2) {
+        this.phase = 'idle'; this.t = 0;
+        if (this.auto) this.nextAt = 15 + Math.random() * 12;
+      }
+    },
+  };
 
   // ---------- обновление ----------
   function update(dt) {
@@ -3400,6 +3577,19 @@ const Game = (() => {
     // частицы
     particles.forEach((p) => { p.vy += p.g * dt; p.x += p.vx * dt; p.y += p.vy * dt; p.life -= dt; });
     particles = particles.filter((p) => p.life > 0);
+
+    // землетрясение: фазы + камни с неба
+    Quake.update(dt);
+    debris.forEach((d) => d.update(dt, level, api));
+    // обломки прибивают мелких врагов (боссу камень не страшен)
+    debris.forEach((d) => {
+      if (d.dead) return;
+      for (const e of enemies) {
+        if (e.dead || e instanceof Boss) continue;
+        if (overlaps(d, e)) { d.dead = true; e.stomp(api); break; }
+      }
+    });
+    debris = debris.filter((d) => !d.dead);
 
     // камера: горизонт + мягкое вертикальное слежение, всё в «приближенных» координатах
     const viewW = VIEW_W / ZOOM, viewH = VIEW_H / ZOOM;
@@ -3588,11 +3778,22 @@ const Game = (() => {
     if (!level) return;
 
     const def = LEVELS[levelIndex];
-    drawBackground(def.bg || 'bg_fields');
+    // фон трясётся с половинной амплитудой — эффект глубины
+    const qoBg = Quake.offset();
+    if (qoBg.x || qoBg.y) {
+      ctx.save();
+      ctx.translate(qoBg.x * 0.5, qoBg.y * 0.5);
+      drawBackground(def.bg || 'bg_fields');
+      ctx.restore();
+    } else {
+      drawBackground(def.bg || 'bg_fields');
+    }
 
     ctx.save();
     let sx = 0, sy = 0;
     if (shake > 0) { sx = (Math.random() - 0.5) * 12 * shake; sy = (Math.random() - 0.5) * 12 * shake; }
+    const qo = Quake.offset();
+    sx += qo.x; sy += qo.y;
     ctx.translate(sx, sy);
     // приближение: мир рисуется крупнее, камера следит за Андреем
     ctx.scale(ZOOM, ZOOM);
@@ -3620,6 +3821,21 @@ const Game = (() => {
     });
 
     ctx.restore();
+
+    // —— землетрясение: пульсирующая рамка + баннер-предупреждение (экранное пространство) ——
+    if (Quake.phase === 'warn' || Quake.phase === 'active') {
+      const pulse = 0.13 + 0.1 * Math.sin(tGlobal * 9);
+      ctx.strokeStyle = `rgba(255,70,40,${pulse})`;
+      ctx.lineWidth = 14;
+      ctx.strokeRect(7, 7, VIEW_W - 14, VIEW_H - 14);
+      if (Quake.phase === 'warn' && Math.floor(tGlobal * 5) % 2 === 0) {
+        ctx.fillStyle = '#ff5028';
+        ctx.font = 'bold 30px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('⚠ ЗЕМЛЕТРЯСЕНИЕ!', VIEW_W / 2, 66);
+        ctx.textAlign = 'left';
+      }
+    }
   }
 
   // ---------- цикл ----------
@@ -3869,6 +4085,9 @@ const Game = (() => {
       get hatShots() { return hatShots; },
       get boss() { return bossRef; },
       get level() { return level; },
+      get debris() { return debris; },
+      get quakeState() { return { phase: Quake.phase, t: +Quake.t.toFixed(2), power: +Quake.power.toFixed(2), nextAt: +Quake.nextAt.toFixed(1), auto: Quake.auto }; },
+      quake: (p, d) => Quake.trigger(p, d),
     };
     requestAnimationFrame((t) => { lastT = t; requestAnimationFrame(loop); });
   }

@@ -1,0 +1,875 @@
+     1→     1→// ============================================================
+     2→     2→// ЯДРО ИГРЫ
+     3→     3→// ============================================================
+     4→     4→const Game = (() => {
+     5→     5→  const canvas = document.getElementById('game');
+     6→     6→  const ctx = canvas.getContext('2d');
+     7→     7→  ctx.imageSmoothingEnabled = false;
+     8→     8→
+     9→     9→  let VIEW_W = 960;
+    10→    10→  const VIEW_H = 540;
+    11→    11→  let ZOOM = 1.4;               // приближение камеры к персонажу
+    12→    12→  let camY = 0;                 // вертикальная камера (мир 540 по высоте)
+    13→    13→
+    14→    14→  // ---------- автрастягивание под весь экран ----------
+    15→    15→  // Высота мира всегда 540 (вертикальный геймплей не меняется),
+    16→    16→  // ширина обзора подгоняется под пропорции окна — чёрных полос нет.
+    17→    17→  function resizeCanvas() {
+    18→    18→    const vw = Math.max(1, window.innerWidth), vh = Math.max(1, window.innerHeight);
+    19→    19→    const aspect = Math.max(0.5, Math.min(3.2, vw / vh));
+    20→    20→    VIEW_W = Math.max(480, Math.min(1920, Math.round(VIEW_H * aspect)));
+    21→    21→    canvas.width = VIEW_W;
+    22→    22→    canvas.height = VIEW_H;
+    23→    23→    ctx.imageSmoothingEnabled = false;
+    24→    24→    // в портрете зум поменьше — нужно видеть дальше вперёд
+    25→    25→    ZOOM = VIEW_W >= VIEW_H ? 1.4 : 1.2;
+    26→    26→  }
+    27→    27→
+    28→    28→  // ---------- полный экран (Fullscreen API) ----------
+    29→    29→  // Тап по экрану только ОТКРЫВАЕТ полный экран — и всё.
+    30→    30→  // Обратно не выключаем: выйти можно штатными средствами браузера (Esc).
+    31→    31→  function isFullscreen() { return !!document.fullscreenElement; }
+    32→    32→  function enterFullscreen() {
+    33→    33→    try {
+    34→    34→      if (isFullscreen()) return; // уже во весь экран — ничего не делаем
+    35→    35→      const el = document.documentElement;
+    36→    36→      const fn = el.requestFullscreen || el.webkitRequestFullscreen;
+    37→    37→      if (fn) { const p = fn.call(el); if (p && p.catch) p.catch(() => {}); }
+    38→    38→    } catch (e) { /* игнор — некоторые окружения запрещают фуллскрин */ }
+    39→    39→  }
+    40→    40→
+    41→    41→  let state = 'boot';           // boot | menu | playing | paused | gameover | transition | ending
+    42→    42→  let frozen = false;           // true во время диалогов
+    43→    43→  let level = null, levelIndex = 0;
+    44→    44→  let player = null;
+    45→    45→  let enemies = [], tomahawks = [], bottles = [], hearts = [], particles = [];
+    46→    46→  let plushes = [], hatShots = [];
+    47→    47→  let customEnts = [];          // кастомные объекты из админ-панели (скриптуемые)
+    48→    48→  let factory = null;
+    49→    49→  let cam = 0, shake = 0;
+    50→    50→  let bottlesGot = 0, kills = 0;
+    51→    51→  let tGlobal = 0, lastT = 0;
+    52→    52→  let bossRef = null;
+    53→    53→  let hudCache = { hp: -1, bottles: -1, hats: -1 };
+    54→    54→
+    55→    55→  const input = { left: false, right: false, down: false, jumpHeld: false, jumpPressed: false, shootPressed: false };
+    56→    56→
+    57→    57→  // API для сущностей (передаётся вместо this)
+    58→    58→  const api = {
+    59→    59→    spawnDust, spawnStars, onPlayerHurt, playerFell, onBossDead,
+    60→    60→    get player() { return player; },
+    61→    61→    get tomahawks() { return tomahawks; },
+    62→    62→    get shake() { return shake; },
+    63→    63→    set shake(v) { shake = v; },
+    64→    64→    get kills() { return kills; },
+    65→    65→    set kills(v) { kills = v; },
+    66→    66→  };
+    67→    67→
+    68→    68→  // API для скриптов кастомных объектов (админ-панель)
+    69→    69→  const scriptApi = Object.create(api);
+    70→    70→  Object.assign(scriptApi, {
+    71→    71→    // гравитация + коллизии с тайлами (вызывай каждый кадр для «физических» объектов)
+    72→    72→    gravity(o, d) { o.vy = Math.min((o.vy || 0) + CONFIG.GRAVITY * d, 1100); moveEntity(o, level, d, false); },
+    73→    73→    // упёрся ли в стену на прошлом кадре
+    74→    74→    solid(o) { return !!o.hitWall; },
+    75→    75→    // живые враги на карте: у обычных нет hp — убиваются e.stomp(api), у босса есть hp — бьётся e.hitByHat(api)
+    76→    76→    enemies() { return enemies.filter(e => !e.dead); },
+    77→    77→    // чекушки на карте: b.taken — подобрана, b.rect() — прямоугольник {x,y,w,h}
+    78→    78→    bottles() { return bottles; },
+    79→    79→    // твёрдый ли тайл в пиксельной точке
+    80→    80→    solidAt(px, py) { return isSolid(level, Math.floor(px / TILE), Math.floor(py / TILE)); },
+    81→    81→    playerNear(o, r = 60) { return player ? Math.abs(player.x - o.x) < r && Math.abs(player.y - o.y) < r : false; },
+    82→    82→    hurtPlayer(dir = 1) { if (player) player.hurt(dir, api); },
+    83→    83→    healPlayer(n = 1) { if (player && player.hp < CONFIG.PLAYER_HP) { player.hp += n; Audio8.sfx.heart(); } },
+    84→    84→    ammo(n = 1) { if (player) player.ammo = Math.min(9, player.ammo + n); },
+    85→    85→    score(n = 1) { bottlesGot += n; },
+    86→    86→    sfx(name = 'coin') { const f = Audio8.sfx[name]; if (f) f(); },
+    87→    87→    particles(x, y, kind = 'dust', n = 5) { for (let i = 0; i < n; i++) particles.push(mkParticle(x, y, kind)); },
+    88→    88→    shake(v = 0.2) { shake = Math.max(shake, v); },
+    89→    89→  });
+    90→    90→  // ВАЖНО: px/py/time — живые геттеры. Object.assign вызвал бы их ОДИН раз при
+    91→    91→  // загрузке (player ещё null → навсегда 0), поэтому только defineProperties.
+    92→    92→  Object.defineProperties(scriptApi, {
+    93→    93→    px: { get() { return player ? player.x : 0; } },
+    94→    94→    py: { get() { return player ? player.y : 0; } },
+    95→    95→    time: { get() { return tGlobal; } },
+    96→    96→  });
+    97→    97→
+    98→    98→  // ---------- прогресс ----------
+    99→    99→  const SAVE_KEY = 'melstroy_chekushka_v1';
+   100→   100→  let progress = { unlocked: 1, done: {}, sound: true, musicVol: 1, sfxVol: 1 };
+   101→   101→  try {
+   102→   102→    const raw = localStorage.getItem(SAVE_KEY);
+   103→   103→    if (raw) progress = Object.assign(progress, JSON.parse(raw));
+   104→   104→  } catch (e) { /* ignore */ }
+   105→   105→  function saveProgress() {
+   106→   106→    try { localStorage.setItem(SAVE_KEY, JSON.stringify(progress)); } catch (e) { /* ignore */ }
+   107→   107→  }
+   108→   108→
+   109→   109→  // ---------- загрузка уровня ----------
+   110→   110→  function startLevel(i) {
+   111→   111→    levelIndex = i;
+   112→   112→    const def = LEVELS[i];
+   113→   113→    if (!def) return;
+   114→   114→
+   115→   115→    // прогресс: запоминаем, на каком уровне игрок находится
+   116→   116→    progress.cur = i;
+   117→   117→    saveProgress();
+   118→   118→
+   119→   119→    if (def.type === 'indev') { Audio8.stopMusic(); UI.showScreen('indev'); return; }
+   120→   120→
+   121→   121→    if (def.type === 'cutscene') {
+   122→   122→      state = 'transition';
+   123→   123→      Audio8.stopMusic();
+   124→   124→      UI.showScreen(null);
+   125→   125→      UI.setHud({ levelName: def.name, hp: CONFIG.PLAYER_HP, bottles: 0 });
+   126→   126→      UI.cutscene(def.cutscene, CUTSCENE_BG_BY_INDEX).then(async () => {
+   127→   127→        await finishLevel(true);
+   128→   128→      });
+   129→   129→      return;
+   130→   130→    }
+   131→   131→
+   132→   132→    // карта
+   133→   133→    level = buildLevel(def);
+   134→   134→    enemies = []; tomahawks = []; bottles = []; hearts = []; particles = [];
+   135→   135→    plushes = []; hatShots = [];
+   136→   136→    customEnts = [];
+   137→   137→    bossRef = null;
+   138→   138→    level.spawns.enemies.forEach(({ type, c, r, hp }) => {
+   139→   139→      if (type === 'e') enemies.push(new Walker(c, r));
+   140→   140→      else if (type === 't') enemies.push(new Thrower(c, r));
+   141→   141→      else if (type === 'f') enemies.push(new Flyer(c, r === undefined ? 6 : r));
+   142→   142→      else if (type === 'j') enemies.push(new Jumper(c, r));
+   143→   143→      else if (type === 'a') enemies.push(new Armored(c, r));
+   144→   144→      else if (type === 'boss') { const b = new Boss(c, { hp, big: hp >= 10 }); enemies.push(b); bossRef = b; }
+   145→   145→    });
+   146→   146→    level.spawns.bottles.forEach(({ c, r }) => bottles.push(new Bottle(c, r)));
+   147→   147→    level.spawns.hearts.forEach(({ c, r }) => hearts.push(new HeartPickup(c, r)));
+   148→   148→    (level.spawns.plushes || []).forEach(({ c, r }) => plushes.push(new PlushPickup(c, r)));
+   149→   149→    (level.spawns.custom || []).forEach(({ type, c, r }) => { if (CustomObjects.def(type)) customEnts.push(new CustomEnt(type, c, r)); });
+   150→   150→    factory = new FactoryExit(level.factoryC, !!def.factoryLocked);
+   151→   151→    player = new Player(level.spawnC);
+   152→   152→    player.hp = CONFIG.PLAYER_HP;
+   153→   153→    player.ammo = 0; player.shootCd = 0;   // боезапас плюшек
+   154→   154→    bottlesGot = 0;
+   155→   155→    kills = 0;
+   156→   156→    cam = 0; shake = 0;
+   157→   157→    camY = VIEW_H - VIEW_H / ZOOM; // сразу «прижата к полу»
+   158→   158→    hudCache = { hp: -1, bottles: -1, hats: -1 };
+   159→   159→    // сброс ввода — чтобы залипшая клавиша/кнопка не тянула Андрея после рестарта
+   160→   160→    input.left = false; input.right = false; input.down = false;
+   161→   161→    input.jumpHeld = false; input.jumpPressed = false; input.shootPressed = false;
+   162→   162→
+   163→   163→    state = 'playing';
+   164→   164→    frozen = true; // пока идёт вступительный диалог
+   165→   165→    UI.showScreen(null);
+   166→   166→    UI.setHud({ levelName: def.name, hp: player.hp, bottles: 0, hats: 0 });
+   167→   167→    Audio8.startMusic();
+   168→   168→
+   169→   169→    UI.dialogue(def.dialogue?.intro).then(() => { frozen = false; });
+   170→   170→  }
+   171→   171→
+   172→   172→  // ---------- завершение уровня ----------
+   173→   173→  async function finishLevel(isIntro = false) {
+   174→   174→    const def = LEVELS[levelIndex];
+   175→   175→    Audio8.stopMusic();
+   176→   176→    Audio8.sfx.win();
+   177→   177→    frozen = true;
+   178→   178→
+   179→   179→    if (!isIntro && def.dialogue?.outro) await UI.dialogue(def.dialogue.outro);
+   180→   180→
+   181→   181→    progress.done[levelIndex] = true;
+   182→   182→    progress.unlocked = Math.max(progress.unlocked, Math.min(levelIndex + 2, LEVELS.length - 1));
+   183→   183→    saveProgress();
+   184→   184→
+   185→   185→    // финальный экран — после последнего играбельного уровня (дальше только «В разработке» или конец)
+   186→   186→    const nextDef = LEVELS[levelIndex + 1];
+   187→   187→    if (!nextDef || nextDef.type === 'indev') {
+   188→   188→      state = 'ending';
+   189→   189→      UI.showScreen('ending');
+   190→   190→    } else if (levelIndex === 0) {
+   191→   191→      UI.showComplete('Вступление пройдено!<br>Дальше — первая карта Буримовки.', true);
+   192→   192→    } else {
+   193→   193→      const total = bottles.length;
+   194→   194→      UI.showComplete(`Чекушки собрано: <b style="color:#ffd23f">${bottlesGot}</b> / ${total}`, true);
+   195→   195→    }
+   196→   196→    state = 'transition';
+   197→   197→  }
+   198→   198→
+   199→   199→  // ---------- события ----------
+   200→   200→  function onPlayerHurt() {
+   201→   201→    if (player.hp <= 0) gameOver();
+   202→   202→  }
+   203→   203→  function playerFell() {
+   204→   204→    player.hp--;
+   205→   205→    shake = 0.35;
+   206→   206→    if (player.hp <= 0) { Audio8.sfx.hurt(); gameOver(); }
+   207→   207→    else { Audio8.sfx.hurt(); player.respawn(); }
+   208→   208→  }
+   209→   209→  function gameOver() {
+   210→   210→    state = 'gameover';
+   211→   211→    Audio8.stopMusic();
+   212→   212→    Audio8.sfx.lose();
+   213→   213→    UI.showScreen('gameover');
+   214→   214→  }
+   215→   215→  function onBossDead() {
+   216→   216→    // взрыв звёзд
+   217→   217→    for (let i = 0; i < 26; i++) particles.push(mkParticle(bossRef.x + bossRef.w / 2, bossRef.y + bossRef.h / 2, 'star'));
+   218→   218→    if (factory) factory.unlock();
+   219→   219→    frozen = true;
+   220→   220→    const outro = (LEVELS[levelIndex] && LEVELS[levelIndex].bossOutro) || DIALOGUES.outroAfterBoss;
+   221→   221→    UI.dialogue(outro).then(() => {
+   222→   222→      frozen = false;
+   223→   223→    });
+   224→   224→  }
+   225→   225→
+   226→   226→  // ---------- частицы ----------
+   227→   227→  function mkParticle(x, y, kind) {
+   228→   228→    const colors = { dust: '#c9c2b8', star: Math.random() < 0.5 ? '#ffd23f' : '#ff4757', sparkle: '#9fd8b4' };
+   229→   229→    return {
+   230→   230→      x, y,
+   231→   231→      vx: (Math.random() - 0.5) * 260,
+   232→   232→      vy: kind === 'dust' ? -Math.random() * 120 : (Math.random() - 0.7) * 300,
+   233→   233→      g: kind === 'dust' ? 120 : 300,
+   234→   234→      life: 0.5 + Math.random() * 0.4, maxLife: 0.9,
+   235→   235→      size: kind === 'star' ? 6 : 4,
+   236→   236→      color: colors[kind] || '#fff',
+   237→   237→    };
+   238→   238→  }
+   239→   239→  function spawnDust(x, y, n) { for (let i = 0; i < n; i++) particles.push(mkParticle(x, y, 'dust')); }
+   240→   240→  function spawnStars(x, y) { for (let i = 0; i < 10; i++) particles.push(mkParticle(x, y, 'star')); }
+   241→   241→
+   242→   242→  // ---------- обновление ----------
+   243→   243→  function update(dt) {
+   244→   244→    tGlobal += dt;
+   245→   245→    if (shake > 0) shake -= dt;
+   246→   246→
+   247→   247→    if (state !== 'playing' || frozen) { input.jumpPressed = false; return; }
+   248→   248→
+   249→   249→    player.update(dt, input, level, api);
+   250→   250→
+   251→   251→    // ---------- сыпучие платформы: триггер под ногами + обрушение ----------
+   252→   252→    if (player.onGround) {
+   253→   253→      const fr = Math.floor((player.y + player.h + 2) / TILE);
+   254→   254→      const c0 = Math.floor(player.x / TILE), c1 = Math.floor((player.x + player.w - 1) / TILE);
+   255→   255→      for (let c = c0; c <= c1; c++) {
+   256→   256→        if (tileAt(level, c, fr) === 'C' && !level.crumble.has(c + ',' + fr)) {
+   257→   257→          level.crumble.set(c + ',' + fr, { t: 0, broken: false });
+   258→   258→          Audio8.sfx.crumble();
+   259→   259→        }
+   260→   260→      }
+   261→   261→    }
+   262→   262→    level.crumble.forEach((st, k) => {
+   263→   263→      st.t += dt;
+   264→   264→      if (!st.broken && st.t > 0.45) {
+   265→   265→        st.broken = true; st.t = 0;
+   266→   266→        Audio8.sfx.crumble();
+   267→   267→        const [cc, rr] = k.split(',').map(Number);
+   268→   268→        spawnDust(cc * TILE + 20, rr * TILE + 20, 6);
+   269→   269→      } else if (st.broken && st.t > 2.6) {
+   270→   270→        level.crumble.delete(k);
+   271→   271→      }
+   272→   272→    });
+   273→   273→
+   274→   274→    // ---------- плюшки: бросок ----------
+   275→   275→    if (player.shootCd > 0) player.shootCd -= dt;
+   276→   276→    if (input.shootPressed) {
+   277→   277→      input.shootPressed = false;
+   278→   278→      if (player.ammo > 0 && player.shootCd <= 0) {
+   279→   279→        player.ammo--;
+   280→   280→        player.shootCd = 0.45;
+   281→   281→        const dir = player.dir || 1;
+   282→   282→        const hx = dir > 0 ? player.x + player.w - 4 : player.x - 26;
+   283→   283→        hatShots.push(new HatShot(hx, player.y + 2, dir));
+   284→   284→        Audio8.sfx.throw();
+   285→   285→      } else if (player.ammo <= 0) {
+   286→   286→        Audio8.sfx.locked(); // пусто — щёлкаем
+   287→   287→      }
+   288→   288→    }
+   289→   289→
+   290→   290→    enemies.forEach((e) => e.update(dt, level, api));
+   291→   291→    tomahawks.forEach((t) => t.update(dt, level, api));
+   292→   292→    tomahawks = tomahawks.filter((t) => !t.dead);
+   293→   293→
+   294→   294→    // столкновения игрок-враги
+   295→   295→    enemies.forEach((e) => {
+   296→   296→      if (e.dead) return;
+   297→   297→      if (!overlaps(player, e)) return;
+   298→   298→      const stomping = player.vy > 90 && (player.y + player.h) - e.y < 20;
+   299→   299→      if (stomping) {
+   300→   300→        if (e instanceof Boss) {
+   301→   301→          if (e.invuln > 0) { player.vy = -480; }
+   302→   302→          else { e.stomp(api); player.vy = -540; }
+   303→   303→        } else {
+   304→   304→          e.stomp(api);
+   305→   305→          player.vy = -490;
+   306→   306→        }
+   307→   307→      } else {
+   308→   308→        player.hurt(Math.sign(player.x - e.x) || 1, api);
+   309→   309→      }
+   310→   310→    });
+   311→   311→    enemies = enemies.filter((e) => !e.dead);
+   312→   312→
+   313→   313→    // предметы
+   314→   314→    bottles.forEach((b) => {
+   315→   315→      b.update(dt);
+   316→   316→      if (!b.taken && overlaps(player, b.rect())) {
+   317→   317→        b.taken = true;
+   318→   318→        bottlesGot++;
+   319→   319→        Audio8.sfx.coin();
+   320→   320→        for (let i = 0; i < 4; i++) particles.push(mkParticle(b.c * TILE + 20, b.r * TILE + 20, 'sparkle'));
+   321→   321→      }
+   322→   322→    });
+   323→   323→    bottles = bottles.filter((b) => !b.taken);
+   324→   324→    hearts.forEach((h) => {
+   325→   325→      h.update(dt);
+   326→   326→      if (!h.taken && overlaps(player, h.rect())) {
+   327→   327→        h.taken = true;
+   328→   328→        if (player.hp < CONFIG.PLAYER_HP) { player.hp++; Audio8.sfx.heart(); }
+   329→   329→        else { bottlesGot++; Audio8.sfx.coin(); }
+   330→   330→      }
+   331→   331→    });
+   332→   332→    hearts = hearts.filter((h) => !h.taken);
+   333→   333→
+   334→   334→    // плюшки — подбор боеприпаса
+   335→   335→    plushes.forEach((p) => {
+   336→   336→      p.update(dt);
+   337→   337→      if (!p.taken && overlaps(player, p.rect())) {
+   338→   338→        p.taken = true;
+   339→   339→        player.ammo = Math.min(9, player.ammo + 3);
+   340→   340→        Audio8.sfx.heart();
+   341→   341→        for (let i = 0; i < 6; i++) particles.push(mkParticle(p.c * TILE + 20, p.r * TILE + 20, 'sparkle'));
+   342→   342→      }
+   343→   343→    });
+   344→   344→    plushes = plushes.filter((p) => !p.taken);
+   345→   345→
+   346→   346→    // кастомные объекты (админ-панель): скрипт + взаимодействия с игроком
+   347→   347→    customEnts.forEach((o) => o.update(dt, level, scriptApi));
+   348→   348→    customEnts.forEach((o) => {
+   349→   349→      if (o.dead || o.taken) return;
+   350→   350→      if (!overlaps(player, o)) return;
+   351→   351→      const stomping = player.vy > 90 && (player.y + player.h) - o.y < 24;
+   352→   352→      if (o.collect > 0) {
+   353→   353→        o.taken = true;
+   354→   354→        bottlesGot += o.collect;
+   355→   355→        Audio8.sfx.coin();
+   356→   356→        scriptApi.particles(o.x + o.w / 2, o.y + o.h / 2, 'sparkle', 5);
+   357→   357→      } else if (stomping && o.stompable) {
+   358→   358→        o.hurt(api);
+   359→   359→        player.vy = -490;
+   360→   360→      } else if (o.dangerous) {
+   361→   361→        player.hurt(Math.sign(player.x - o.x) || 1, api);
+   362→   362→      }
+   363→   363→    });
+   364→   364→    customEnts = customEnts.filter((o) => !o.dead && !o.taken);
+   365→   365→
+   366→   366→    // летящие плюшки — столкновения
+   367→   367→    hatShots.forEach((s) => s.update(dt, level, api));
+   368→   368→    hatShots.forEach((s) => {
+   369→   369→      if (s.dead) return;
+   370→   370→      for (const e of enemies) {
+   371→   371→        if (e.dead) continue;
+   372→   372→        if (overlaps(s, e)) {
+   373→   373→          s.dead = true;
+   374→   374→          if (e instanceof Boss) e.hitByHat(api);
+   375→   375→          else if (e.armor) e.die(api);
+   376→   376→          else e.stomp(api);
+   377→   377→          break;
+   378→   378→        }
+   379→   379→      }
+   380→   380→      // плюшки бьют и скриптуемых объектов (вожди-кастомы и прочие stompable)
+   381→   381→      if (!s.dead) {
+   382→   382→        for (const o of customEnts) {
+   383→   383→          if (o.dead || o.taken || !o.stompable) continue;
+   384→   384→          if (overlaps(s, o)) { s.dead = true; o.hurt(api); break; }
+   385→   385→        }
+   386→   386→      }
+   387→   387→    });
+   388→   388→    hatShots = hatShots.filter((s) => !s.dead);
+   389→   389→
+   390→   390→    // завод — выход (триггер = всё здание)
+   391→   391→    factory.update(dt, player);
+   392→   392→    if (!factory.locked && overlaps(player, factory.doorRect())) { finishLevel(); return; }
+   393→   393→
+   394→   394→    // частицы
+   395→   395→    particles.forEach((p) => { p.vy += p.g * dt; p.x += p.vx * dt; p.y += p.vy * dt; p.life -= dt; });
+   396→   396→    particles = particles.filter((p) => p.life > 0);
+   397→   397→
+   398→   398→    // камера: горизонт + мягкое вертикальное слежение, всё в «приближенных» координатах
+   399→   399→    const viewW = VIEW_W / ZOOM, viewH = VIEW_H / ZOOM;
+   400→   400→    const target = Math.max(0, Math.min(player.x + player.w / 2 - viewW * 0.44, level.w * TILE - viewW));
+   401→   401→    cam += (target - cam) * Math.min(1, dt * 9);
+   402→   402→    const ty = Math.max(0, Math.min(player.y + player.h / 2 - viewH * 0.55, VIEW_H - viewH));
+   403→   403→    camY += (ty - camY) * Math.min(1, dt * 7);
+   404→   404→
+   405→   405→    // HUD
+   406→   406→    if (hudCache.hp !== player.hp || hudCache.bottles !== bottlesGot || hudCache.hats !== player.ammo) {
+   407→   407→      hudCache = { hp: player.hp, bottles: bottlesGot, hats: player.ammo };
+   408→   408→      UI.setHud({ hp: player.hp, bottles: bottlesGot, hats: player.ammo });
+   409→   409→    }
+   410→   410→
+   411→   411→    input.jumpPressed = false;
+   412→   412→  }
+   413→   413→
+   414→   414→  // ---------- рендер ----------
+   415→   415→  const BG_COLORS = {
+   416→   416→    bg_fields: ['#87ceeb', '#5aa84f'],
+   417→   417→    bg_city: ['#9fb4c7', '#6b7a8c'],
+   418→   418→    bg_district: ['#e8875a', '#4a3a52'],
+   419→   419→    bg_plant: ['#1c2a4a', '#0d1424'],
+   420→   420→    bg_snow: ['#a8d4f0', '#e8f2fa'],
+   421→   421→    bg_desert: ['#ffd9a0', '#e8a75a'],
+   422→   422→    bg_sky: ['#8ec9f0', '#cfe8ff'],
+   423→   423→    bg_volcano: ['#e8703a', '#3a1f2b'],
+   424→   424→    bg_final: ['#2a1f3a', '#0d1424'],
+   425→   425→  };
+   426→   426→
+   427→   427→  // Темы тайлов: цвета земли/платформ/шипов/жидкости по фону уровня
+   428→   428→  const THEMES = {
+   429→   429→    bg_fields:   { ground: '#7a4a2b', dark: '#63391f', top: '#3fa34d', top2: '#54c15f', brick: '#9e5a3c', brickD: '#7a4029', plat: '#8b5a2b', platT: '#a9714b', platD: '#5d3a1a', spike: '#8d99ae', crumb: '#b8a888', haz: '#3e7cb8', haz2: '#6db3e8' },
+   430→   430→    bg_city:     { ground: '#6e6a63', dark: '#585450', top: '#7da35a', top2: '#93bd6d', brick: '#8a8378', brickD: '#6b655c', plat: '#7a746b', platT: '#948d82', platD: '#575248', spike: '#8d99ae', crumb: '#b8a888', haz: '#3e7cb8', haz2: '#6db3e8' },
+   431→   431→    bg_district: { ground: '#7a4a2b', dark: '#63391f', top: '#8f9a4a', top2: '#adb566', brick: '#9e5a3c', brickD: '#7a4029', plat: '#8b5a2b', platT: '#a9714b', platD: '#5d3a1a', spike: '#8d99ae', crumb: '#b8a888', haz: '#3e7cb8', haz2: '#6db3e8' },
+   432→   432→    bg_plant:    { ground: '#4a3f45', dark: '#3a3136', top: '#5a6e50', top2: '#6e8560', brick: '#5f4a52', brickD: '#47363d', plat: '#544750', platT: '#6d5e68', platD: '#38303b', spike: '#8d99ae', crumb: '#8a7f92', haz: '#63d471', haz2: '#a8f0a8' },
+   433→   433→    bg_snow:     { ground: '#7186a8', dark: '#5a6d8c', top: '#f0f6fb', top2: '#ffffff', brick: '#93a8c9', brickD: '#7488a8', plat: '#8296b5', platT: '#a5b8d4', platD: '#5f7290', spike: '#bfe3ff', crumb: '#d5e5f5', haz: '#2f6fb0', haz2: '#6db3e8' },
+   434→   434→    bg_desert:   { ground: '#c98f4e', dark: '#a8733c', top: '#e8b86a', top2: '#f5d089', brick: '#b57f45', brickD: '#946330', plat: '#b0813f', platT: '#d0a05c', platD: '#8a5f2c', spike: '#6f8a4f', crumb: '#e0c088', haz: '#e8622a', haz2: '#ffa25c' },
+   435→   435→    bg_sky:      { ground: '#9aa7c7', dark: '#7e8aad', top: '#ffffff', top2: '#f0f6ff', brick: '#b0bcdc', brickD: '#8e9abc', plat: '#a2b0d2', platT: '#c4d0ec', platD: '#7e8aad', spike: '#8d99ae', crumb: '#e8eefc', haz: '#63d471', haz2: '#a8f0a8' },
+   436→   436→    bg_volcano:  { ground: '#5a3a3a', dark: '#462c2c', top: '#8a4a3a', top2: '#a85c48', brick: '#6a4440', brickD: '#523432', plat: '#634041', platT: '#7e5454', platD: '#4a2f30', spike: '#9aa4b2', crumb: '#a08484', haz: '#ff7a2a', haz2: '#ffc25c' },
+   437→   437→    bg_final:    { ground: '#41415f', dark: '#333349', top: '#5c5c85', top2: '#7070a0', brick: '#4f4f74', brickD: '#3c3c58', plat: '#4a4a6e', platT: '#60608e', platD: '#35354e', spike: '#8d99ae', crumb: '#8c8cb0', haz: '#63d471', haz2: '#a8f0a8' },
+   438→   438→  };
+   439→   439→  function theme(bgKey) { return THEMES[bgKey] || THEMES.bg_fields; }
+   440→   440→
+   441→   441→  function drawBackground(bgKey) {
+   442→   442→    const spr = Sprites.get(bgKey);
+   443→   443→    if (spr && spr.img) {
+   444→   444→      const img = spr.img;
+   445→   445→      const scale = VIEW_H / img.height;
+   446→   446→      const w = img.width * scale;
+   447→   447→      let off = -((cam * 0.28) % w);
+   448→   448→      for (let x = off; x < VIEW_W; x += w) ctx.drawImage(img, x, 0, w, VIEW_H);
+   449→   449→    } else {
+   450→   450→      const [top, bottom] = BG_COLORS[bgKey] || BG_COLORS.bg_fields;
+   451→   451→      const grad = ctx.createLinearGradient(0, 0, 0, VIEW_H);
+   452→   452→      grad.addColorStop(0, top); grad.addColorStop(1, bottom);
+   453→   453→      ctx.fillStyle = grad;
+   454→   454→      ctx.fillRect(0, 0, VIEW_W, VIEW_H);
+   455→   455→    }
+   456→   456→  }
+   457→   457→
+   458→   458→  function drawTiles() {
+   459→   459→    const viewW = VIEW_W / ZOOM;
+   460→   460→    const c0 = Math.max(0, Math.floor(cam / TILE) - 1);
+   461→   461→    const c1 = Math.min(level.w - 1, Math.ceil((cam + viewW) / TILE) + 1);
+   462→   462→    const T = theme(LEVELS[levelIndex].bg);
+   463→   463→    for (let r = 0; r < ROWS; r++) {
+   464→   464→      for (let c = c0; c <= c1; c++) {
+   465→   465→        const t = level.grid[r][c];
+   466→   466→        if (t === '.') continue;
+   467→   467→        let x = c * TILE - cam, y = r * TILE;
+   468→   468→        if (t === '#') {
+   469→   469→          const grass = !TILE_SOLID.has(tileAt(level, c, r - 1));
+   470→   470→          ctx.fillStyle = T.ground;
+   471→   471→          ctx.fillRect(x, y, TILE, TILE);
+   472→   472→          ctx.fillStyle = T.dark;
+   473→   473→          ctx.fillRect(x + 4, y + 14, 8, 6);
+   474→   474→          ctx.fillRect(x + 24, y + 26, 10, 6);
+   475→   475→          if (grass) {
+   476→   476→            ctx.fillStyle = T.top;
+   477→   477→            ctx.fillRect(x, y, TILE, 12);
+   478→   478→            ctx.fillStyle = T.top2;
+   479→   479→            ctx.fillRect(x, y, TILE, 5);
+   480→   480→          }
+   481→   481→        } else if (t === 'B') {
+   482→   482→          ctx.fillStyle = T.brick;
+   483→   483→          ctx.fillRect(x, y, TILE, TILE);
+   484→   484→          ctx.fillStyle = T.brickD;
+   485→   485→          ctx.fillRect(x, y + 19, TILE, 2);
+   486→   486→          ctx.fillRect(x, y, 2, TILE);
+   487→   487→          ctx.fillRect(x + 19, y + 19, 2, 21);
+   488→   488→          ctx.fillRect(x + 39, y, 1, TILE);
+   489→   489→        } else if (t === '=') {
+   490→   490→          ctx.fillStyle = T.plat;
+   491→   491→          ctx.fillRect(x, y, TILE, 16);
+   492→   492→          ctx.fillStyle = T.platT;
+   493→   493→          ctx.fillRect(x, y, TILE, 6);
+   494→   494→          ctx.fillStyle = T.platD;
+   495→   495→          ctx.fillRect(x, y + 14, TILE, 2);
+   496→   496→        } else if (t === 'C') {
+   497→   497→          // сыпучая платформа: трясётся после триггера, исчезает после обрушения
+   498→   498→          const st = level.crumble && level.crumble.get(c + ',' + r);
+   499→   499→          if (st && st.broken) continue;
+   500→   500→          if (st) x += Math.sin(tGlobal * 42) * 2.2;
+   501→   501→          ctx.fillStyle = T.crumb;
+   502→   502→          ctx.fillRect(x, y, TILE, 16);
+   503→   503→          ctx.fillStyle = '#00000022';
+   504→   504→          ctx.fillRect(x + 8, y + 3, 2, 10);
+   505→   505→          ctx.fillRect(x + 22, y + 5, 2, 9);
+   506→   506→          ctx.fillRect(x + 33, y + 2, 2, 11);
+   507→   507→          ctx.fillStyle = '#00000045';
+   508→   508→          ctx.fillRect(x, y + 14, TILE, 2);
+   509→   509→        } else if (t === '^') {
+   510→   510→          ctx.fillStyle = T.spike;
+   511→   511→          for (let i = 0; i < 2; i++) {
+   512→   512→            ctx.beginPath();
+   513→   513→            ctx.moveTo(x + i * 20, y + 40);
+   514→   514→            ctx.lineTo(x + i * 20 + 10, y + 8);
+   515→   515→            ctx.lineTo(x + i * 20 + 20, y + 40);
+   516→   516→            ctx.closePath();
+   517→   517→            ctx.fill();
+   518→   518→          }
+   519→   519→        } else if (t === 'L') {
+   520→   520→          // жидкость: полынья / лава / кислота — волнует поверхность и пузырится
+   521→   521→          const wave = Math.sin(tGlobal * 3 + c * 1.7) * 3;
+   522→   522→          ctx.fillStyle = T.haz;
+   523→   523→          ctx.fillRect(x, y + 10 + wave, TILE, TILE - 10 - wave + 4);
+   524→   524→          ctx.fillStyle = T.haz2;
+   525→   525→          ctx.fillRect(x, y + 10 + wave, TILE, 4);
+   526→   526→          const bb = (tGlobal * 1.3 + c * 0.7) % 1;
+   527→   527→          ctx.fillStyle = T.haz2;
+   528→   528→          ctx.globalAlpha = 0.7 * (1 - bb);
+   529→   529→          ctx.fillRect(x + 8 + (c % 3) * 8, y + 34 - bb * 18, 4, 4);
+   530→   530→          ctx.globalAlpha = 1;
+   531→   531→        } else if (t === 'v') {
+   532→   532→          // батут: стойка + пружина + площадка
+   533→   533→          ctx.fillStyle = '#3a3a46';
+   534→   534→          ctx.fillRect(x + 8, y + 28, 4, 12);
+   535→   535→          ctx.fillRect(x + 28, y + 28, 4, 12);
+   536→   536→          ctx.fillStyle = '#9e9e9e';
+   537→   537→          for (let i = 0; i < 3; i++) ctx.fillRect(x + 12, y + 22 + i * 3, 16, 2);
+   538→   538→          const pulse = 0.5 + Math.sin(tGlobal * 5 + c) * 0.5;
+   539→   539→          ctx.fillStyle = `rgb(${200 + pulse * 40}, ${60 + pulse * 30}, 60)`;
+   540→   540→          ctx.fillRect(x + 6, y + 14, 28, 7);
+   541→   541→          ctx.fillStyle = '#ffd23f';
+   542→   542→          ctx.fillRect(x + 6, y + 14, 28, 2);
+   543→   543→        } else if (t === 'S') {
+   544→   544→          // пила: крутится, полутело над землёй
+   545→   545→          const cx = x + 20, cy = y + 26, R = 24;
+   546→   546→          ctx.save();
+   547→   547→          ctx.translate(cx, cy);
+   548→   548→          ctx.rotate(tGlobal * 9);
+   549→   549→          ctx.fillStyle = '#b8c2cc';
+   550→   550→          for (let i = 0; i < 8; i++) {
+   551→   551→            ctx.rotate(Math.PI / 4);
+   552→   552→            ctx.beginPath();
+   553→   553→            ctx.moveTo(R - 6, -5); ctx.lineTo(R + 5, 0); ctx.lineTo(R - 6, 5);
+   554→   554→            ctx.closePath(); ctx.fill();
+   555→   555→          }
+   556→   556→          ctx.fillStyle = '#8d99ae';
+   557→   557→          ctx.beginPath(); ctx.arc(0, 0, R - 6, 0, 7); ctx.fill();
+   558→   558→          ctx.fillStyle = '#5a6472';
+   559→   559→          ctx.beginPath(); ctx.arc(0, 0, 7, 0, 7); ctx.fill();
+   560→   560→          ctx.restore();
+   561→   561→        }
+   562→   562→      }
+   563→   563→    }
+   564→   564→  }
+   565→   565→
+   566→   566→  function drawHints() {
+   567→   567→    ctx.font = 'bold 15px Arial';
+   568→   568→    ctx.textAlign = 'center';
+   569→   569→    level.hints.forEach((h) => {
+   570→   570→      const x = h.c * TILE - cam + 60, y = 9.2 * TILE;
+   571→   571→      ctx.fillStyle = 'rgba(0,0,0,.55)';
+   572→   572→      const wTxt = ctx.measureText(h.text).width;
+   573→   573→      ctx.fillRect(x - wTxt / 2 - 8, y - 16, wTxt + 16, 24);
+   574→   574→      ctx.fillStyle = '#ffe9a8';
+   575→   575→      ctx.fillText(h.text, x, y);
+   576→   576→    });
+   577→   577→    ctx.textAlign = 'left';
+   578→   578→  }
+   579→   579→
+   580→   580→  function render() {
+   581→   581→    ctx.clearRect(0, 0, VIEW_W, VIEW_H);
+   582→   582→    if (!level) return;
+   583→   583→
+   584→   584→    const def = LEVELS[levelIndex];
+   585→   585→    drawBackground(def.bg || 'bg_fields');
+   586→   586→
+   587→   587→    ctx.save();
+   588→   588→    let sx = 0, sy = 0;
+   589→   589→    if (shake > 0) { sx = (Math.random() - 0.5) * 12 * shake; sy = (Math.random() - 0.5) * 12 * shake; }
+   590→   590→    ctx.translate(sx, sy);
+   591→   591→    // приближение: мир рисуется крупнее, камера следит за Андреем
+   592→   592→    ctx.scale(ZOOM, ZOOM);
+   593→   593→    ctx.translate(0, -camY);
+   594→   594→
+   595→   595→    drawTiles();
+   596→   596→    if (def.type === 'map') drawHints();
+   597→   597→
+   598→   598→    bottles.forEach((b) => b.draw(ctx, cam));
+   599→   599→    hearts.forEach((h) => h.draw(ctx, cam));
+   600→   600→    plushes.forEach((p) => p.draw(ctx, cam));
+   601→   601→    factory.draw(ctx, cam);
+   602→   602→    enemies.forEach((e) => e.draw(ctx, cam, tGlobal));
+   603→   603→    tomahawks.forEach((t) => t.draw(ctx, cam));
+   604→   604→    hatShots.forEach((s) => s.draw(ctx, cam));
+   605→   605→    customEnts.forEach((o) => o.draw(ctx, cam));
+   606→   606→    if (player) player.draw(ctx, cam);
+   607→   607→
+   608→   608→    // частицы
+   609→   609→    particles.forEach((p) => {
+   610→   610→      ctx.globalAlpha = Math.max(0, p.life / p.maxLife);
+   611→   611→      ctx.fillStyle = p.color;
+   612→   612→      ctx.fillRect(p.x - cam - p.size / 2, p.y - p.size / 2, p.size, p.size);
+   613→   613→      ctx.globalAlpha = 1;
+   614→   614→    });
+   615→   615→
+   616→   616→    ctx.restore();
+   617→   617→  }
+   618→   618→
+   619→   619→  // ---------- цикл ----------
+   620→   620→  function loop(t) {
+   621→   621→    const dt = Math.min(0.033, (t - lastT) / 1000 || 0.016);
+   622→   622→    lastT = t;
+   623→   623→    update(dt);
+   624→   624→    render();
+   625→   625→    requestAnimationFrame(loop);
+   626→   626→  }
+   627→   627→
+   628→   628→  // ---------- пауза ----------
+   629→   629→  function togglePause() {
+   630→   630→    if (state === 'playing') {
+   631→   631→      state = 'paused';
+   632→   632→      Audio8.stopMusic();
+   633→   633→      UI.showScreen('pause');
+   634→   634→    } else if (state === 'paused') {
+   635→   635→      state = 'playing';
+   636→   636→      UI.showScreen(null);
+   637→   637→      Audio8.startMusic();
+   638→   638→    }
+   639→   639→  }
+   640→   640→
+   641→   641→  function toMenu() {
+   642→   642→    state = 'menu';
+   643→   643→    Audio8.stopMusic();
+   644→   644→    level = null;
+   645→   645→    UI.updatePlayButton(); // надпись «ПРОДОЛЖИТЬ: …» по свежему прогрессу
+   646→   646→    UI.showScreen('menu');
+   647→   647→  }
+   648→   648→
+   649→   649→  // ---------- колбэки для UI ----------
+   650→   650→  const callbacks = {
+   651→   651→    onPlay() {
+   652→   652→      // автофуллскрин по жесту пользователя (если окружение разрешает)
+   653→   653→      enterFullscreen();
+   654→   654→      // продолжаем с уровня, на котором остановились (иначе — первый непройденный)
+   655→   655→      const total = LEVELS.length - 1;
+   656→   656→      let start = 0;
+   657→   657→      if (progress.cur !== undefined && !progress.done[progress.cur] && progress.cur < total) {
+   658→   658→        start = progress.cur;
+   659→   659→      } else {
+   660→   660→        const firstUndone = LEVELS.findIndex((_, i) => i < total && !progress.done[i]);
+   661→   661→        start = firstUndone === -1 ? 0 : firstUndone;
+   662→   662→      }
+   663→   663→      startLevel(start);
+   664→   664→    },
+   665→   665→    onLevelPick(i) { startLevel(i); },
+   666→   666→    getProgress() { return progress; },
+   667→   667→    getSoundPrefs() { return { musicVol: progress.musicVol, sfxVol: progress.sfxVol }; },
+   668→   668→    setSoundPrefs(v) { progress.musicVol = v.musicVol; progress.sfxVol = v.sfxVol; saveProgress(); },
+   669→   669→    onPause() { togglePause(); },
+   670→   670→    onResume() { togglePause(); },
+   671→   671→    onRestart() { startLevel(levelIndex); },
+   672→   672→    onRetry() { startLevel(levelIndex); },
+   673→   673→    onMenu() { toMenu(); },
+   674→   674→    onNext() { startLevel(levelIndex + 1); },
+   675→   675→  };
+   676→   676→
+   677→   677→  // ---------- ввод ----------
+   678→   678→  function bindInput() {
+   679→   679→    document.addEventListener('keydown', (e) => {
+   680→   680→      const codes = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Space', 'KeyA', 'KeyD', 'KeyW', 'KeyS', 'KeyP', 'Escape'];
+   681→   681→      if (codes.includes(e.code)) e.preventDefault();
+   682→   682→      if (state === 'playing' && !frozen) {
+   683→   683→        if (e.code === 'ArrowLeft' || e.code === 'KeyA') input.left = true;
+   684→   684→        if (e.code === 'ArrowRight' || e.code === 'KeyD') input.right = true;
+   685→   685→        if (e.code === 'ArrowDown' || e.code === 'KeyS') input.down = true;
+   686→   686→        if ((e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW') && !e.repeat) {
+   687→   687→          input.jumpHeld = true; input.jumpPressed = true;
+   688→   688→        }
+   689→   689→        if (e.code === 'KeyX' && !e.repeat) input.shootPressed = true; // бросить плюшку
+   690→   690→      }
+   691→   691→      if (e.code === 'KeyP' || e.code === 'Escape') togglePause();
+   692→   692→      if (e.code === 'KeyF' && !e.repeat) enterFullscreen();
+   693→   693→    });
+   694→   694→
+   695→   695→    // тап/клик по экрану игры — ТОЛЬКО открыть полный экран (без выключения)
+   696→   696→    canvas.addEventListener('pointerup', (e) => {
+   697→   697→      if (e.pointerType === 'mouse' && e.button !== 0) return;
+   698→   698→      enterFullscreen();
+   699→   699→    });
+   700→   700→    document.addEventListener('keyup', (e) => {
+   701→   701→      if (e.code === 'ArrowLeft' || e.code === 'KeyA') input.left = false;
+   702→   702→      if (e.code === 'ArrowRight' || e.code === 'KeyD') input.right = false;
+   703→   703→      if (e.code === 'ArrowDown' || e.code === 'KeyS') input.down = false;
+   704→   704→      if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW') input.jumpHeld = false;
+   705→   705→    });
+   706→   706→
+   707→   707→    // тач-кнопки
+   708→   708→    const isTouch = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
+   709→   709→    if (isTouch) document.getElementById('touch').classList.remove('hidden');
+   710→   710→    const bindHold = (id, on, off) => {
+   711→   711→      const el = document.getElementById(id);
+   712→   712→      const start = (e) => { e.preventDefault(); Audio8.resume(); on(); };
+   713→   713→      const end = (e) => { e.preventDefault(); off(); };
+   714→   714→      el.addEventListener('pointerdown', start);
+   715→   715→      el.addEventListener('pointerup', end);
+   716→   716→      el.addEventListener('pointercancel', end);
+   717→   717→      el.addEventListener('pointerleave', end);
+   718→   718→    };
+   719→   719→    bindHold('touch-left', () => input.left = true, () => input.left = false);
+   720→   720→    bindHold('touch-right', () => input.right = true, () => input.right = false);
+   721→   721→    bindHold('touch-jump', () => { input.jumpHeld = true; input.jumpPressed = true; }, () => input.jumpHeld = false);
+   722→   722→    bindHold('touch-shoot', () => { input.shootPressed = true; }, () => {});
+   723→   723→
+   724→   724→    // пауза при уходе со вкладки
+   725→   725→    document.addEventListener('visibilitychange', () => {
+   726→   726→      if (document.hidden && state === 'playing') togglePause();
+   727→   727→    });
+   728→   728→
+   729→   729→    // подсказка поворота
+   730→   730→    const checkOrient = () => {
+   731→   731→      const portrait = window.innerHeight > window.innerWidth;
+   732→   732→      document.getElementById('rotate-hint').classList.toggle('hidden', !(isTouch && portrait));
+   733→   733→    };
+   734→   734→    window.addEventListener('resize', checkOrient);
+   735→   735→    checkOrient();
+   736→   736→  }
+   737→   737→
+   738→   738→  // ---------- service worker ----------
+   739→   739→  function registerSW() {
+   740→   740→    if ('serviceWorker' in navigator) {
+   741→   741→      navigator.serviceWorker.register('sw.js').catch(() => {});
+   742→   742→    }
+   743→   743→  }
+   744→   744→
+   745→   745→  // ---------- запуск ----------
+   746→   746→  async function boot() {
+   747→   747→    Audio8.setVolumes(typeof progress.musicVol === 'number' ? progress.musicVol : 1, typeof progress.sfxVol === 'number' ? progress.sfxVol : 1);
+   748→   748→    Audio8.setEnabled(progress.sound !== false);
+   749→   749→    resizeCanvas();
+   750→   750→    window.addEventListener('resize', resizeCanvas);
+   751→   751→    window.addEventListener('orientationchange', () => setTimeout(resizeCanvas, 120));
+   752→   752→    await Sprites.load();
+   753→   753→    // иконка чекушки в HUD (скроем, если файла нет)
+   754→   754→    const bi = document.getElementById('hud-bottle-icon');
+   755→   755→    bi.src = 'image/checkushka.png';
+   756→   756→    bi.onerror = () => { bi.style.visibility = 'hidden'; };
+   757→   757→    bi.onload = () => { bi.style.visibility = ''; };
+   758→   758→    // иконка плюшки в HUD
+   759→   759→    const pi = document.getElementById('hud-plush-icon');
+   760→   760→    if (pi) {
+   761→   761→      pi.src = 'image/plush.png';
+   762→   762→      pi.onerror = () => { pi.style.visibility = 'hidden'; };
+   763→   763→      pi.onload = () => { pi.style.visibility = ''; };
+   764→   764→    }
+   765→   765→  // === ADMIN CMS OVERRIDE — НАЧАЛО (временная админ-панель; удалить этот блок + admin.html + api/game-cms при снятии) ===
+   766→   766→  function applyLegacyLevels(levels) {
+   767→   767→    Object.entries(levels).forEach(([i, def]) => {
+   768→   768→      const k = Number(i);
+   769→   769→      if (LEVELS[k] && LEVELS[k].type === 'map' && def && def.type === 'map') {
+   770→   770→        LEVELS[k] = Object.assign({}, LEVELS[k], def); // диалоги/фон берутся из def или оригинала
+   771→   771→      }
+   772→   772→    });
+   773→   773→  }
+   774→   774→  // Применяет пакет из админ-панели: карты (сколько угодно, в любом порядке), разговоры, текстуры, музыку, каналы
+   775→   775→  function applyCms(j) {
+   776→   776→    // кастомные объекты: текстуры + JS-скрипты (загружаем первыми — нужны картам)
+   777→   777→    if (Array.isArray(j.objects) && j.objects.length) {
+   778→   778→      CustomObjects.set(j.objects);
+   779→   779→      j.objects.forEach((o) => {
+   780→   780→        if (!o || !o.id) return;
+   781→   781→        if (o.character) {
+   782→   782→          CONFIG.NAMES['@' + o.id] = o.name || o.id;
+   783→   783→          UI.addSpeaker('@' + o.id, 'obj-' + o.id);
+   784→   784→        }
+   785→   785→      });
+   786→   786→    }
+   787→   787→    if (Array.isArray(j.maps) && j.maps.length) {
+   788→   788→      const intro = LEVELS[0];
+   789→   789→      const defs = j.maps.map((m) => m && m.def).filter((d) => d && (d.type === 'map' || d.type === 'indev'));
+   790→   790→      if (defs.length) {
+   791→   791→        // старые публикации (без маркера v) всегда заканчивались экраном «В разработке» — сохраняем поведение
+   792→   792→        if (!(j.v >= 3) && !defs.some((d) => d.type === 'indev')) {
+   793→   793→          const iv = LEVELS.find((x) => x.type === 'indev');
+   794→   794→          if (iv) defs.push(JSON.parse(JSON.stringify(iv)));
+   795→   795→        }
+   796→   796→        LEVELS.splice(0, LEVELS.length, intro, ...defs);
+   797→   797→      }
+   798→   798→    } else if (j.levels) {
+   799→   799→      applyLegacyLevels(j.levels);
+   800→   800→    }
+   801→   801→    if (j.intro && typeof j.intro === 'object') {
+   802→   802→      if (Array.isArray(j.intro.cutscene) && j.intro.cutscene.length && LEVELS[0]) LEVELS[0].cutscene = j.intro.cutscene;
+   803→   803→      if (Array.isArray(j.intro.outroAfterBoss) && j.intro.outroAfterBoss.length) DIALOGUES.outroAfterBoss = j.intro.outroAfterBoss;
+   804→   804→    }
+   805→   805→    if (j.textures && typeof j.textures === 'object') {
+   806→   806→      const map = {};
+   807→   807→      Object.entries(j.textures).forEach(([k, v]) => { if (v && v.url) map[k] = v.url; });
+   808→   808→      Sprites.setCustom(map);
+   809→   809→      const bi = document.getElementById('hud-bottle-icon');
+   810→   810→      if (bi && map.checkushka) { bi.style.visibility = ''; bi.src = map.checkushka; }
+   811→   811→      const pi = document.getElementById('hud-plush-icon');
+   812→   812→      if (pi && map.plush) { pi.style.visibility = ''; pi.src = map.plush; }
+   813→   813→    }
+   814→   814→    if (j.music && Array.isArray(j.music.tracks) && j.music.active) {
+   815→   815→      const tr = j.music.tracks.find((t) => t.id === j.music.active);
+   816→   816→      if (tr && tr.url) Audio8.setCustomMusic(tr.url);
+   817→   817→    }
+   818→   818→    if (Array.isArray(j.socials) && j.socials.length) {
+   819→   819→      CONFIG.SOCIALS = j.socials.map((s) => ({ name: s.name, class: s.class || 'tg', url: s.url || '#' }));
+   820→   820→    }
+   821→   821→  }
+   822→   822→  async function loadAdminCms() {
+   823→   823→    try {
+   824→   824→      let cms = null;
+   825→   825→      try {
+   826→   826→        const r0 = await fetch('/api/game-cms', { cache: 'no-store', signal: AbortSignal.timeout(2500) });
+   827→   827→        if (r0.ok) { const j = await r0.json(); if (j && j.ok) cms = j; }
+   828→   828→      } catch (e) { /* нет API — норма */ }
+   829→   829→      if (!cms) {
+   830→   830→        // статичный хостинг: рядом с index.html лежит game-cms.json (экспорт панели)
+   831→   831→        try {
+   832→   832→          const r1 = await fetch('game-cms.json', { cache: 'no-store', signal: AbortSignal.timeout(2500) });
+   833→   833→          if (r1.ok) cms = await r1.json();
+   834→   834→        } catch (e) { /* нет файла */ }
+   835→   835→      }
+   836→   836→      if (cms && (cms.maps || cms.levels || cms.textures || cms.music || cms.socials || cms.intro || cms.objects)) {
+   837→   837→        applyCms(cms);
+   838→   838→        return;
+   839→   839→      }
+   840→   840→      try {
+   841→   841→        const r2 = await fetch('maps-override.json', { cache: 'no-store', signal: AbortSignal.timeout(2500) });
+   842→   842→        if (r2.ok) { const j = await r2.json(); if (j && j.levels) applyLegacyLevels(j.levels); }
+   843→   843→      } catch (e) { /* нет файла — норма */ }
+   844→   844→    } catch (e) { /* подмена необязательна */ }
+   845→   845→  }
+   846→   846→  // === ADMIN CMS OVERRIDE — КОНЕЦ ===
+   847→   847→
+   848→   848→  // ---------- запуск ----------
+   849→   849→    await loadAdminCms();
+   850→   850→    UI.init(callbacks);
+   851→   851→    bindInput();
+   852→   852→    registerSW();
+   853→   853→    UI.showScreen('gate'); // сначала 18+
+   854→   854→    state = 'menu';
+   855→   855→    // отладочный хук (можно дёргать из консоли)
+   856→   856→    window.GameDebug = {
+   857→   857→      startLevel, finishLevel,
+   858→   858→      get player() { return player; },
+   859→   859→      get enemies() { return enemies; },
+   860→   860→      get customEnts() { return customEnts; },
+   861→   861→      get factory() { return factory; },
+   862→   862→      get plushes() { return plushes; },
+   863→   863→      get hatShots() { return hatShots; },
+   864→   864→      get boss() { return bossRef; },
+   865→   865→      get level() { return level; },
+   866→   866→    };
+   867→   867→    requestAnimationFrame((t) => { lastT = t; requestAnimationFrame(loop); });
+   868→   868→  }
+   869→   869→
+   870→   870→  window.addEventListener('load', boot);
+   871→   871→
+   872→   872→  // наружу (для отладки)
+   873→   873→  return { get state() { return state; } };
+   874→   874→})();
+   875→   875→

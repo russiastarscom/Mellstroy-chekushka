@@ -56,7 +56,7 @@ const OBJ_TEMPLATES = {
   danger: { label: '⚠ Ловушка (урон при касании)', code: '// Ловушка: касается игрок — получает урон\nobj.dangerous = true;' },
   enemy: { label: '👊 Враг (ходит, убивается прыжком)', code: '// Враг: ходит, опасен, убивается прыжком сверху (и плюшкой)\n// ВАЖНО: настройки задаются ОДИН РАЗ (иначе урон будет сбрасываться!)\nif (!obj.data.init) {\n  obj.data.init = true;\n  obj.hp = 2; obj.maxHp = 2;\n  obj.stompable = true; obj.dangerous = true;\n  obj.data.speed = 60;\n}\nobj.vx = obj.data.speed * obj.dir;\napi.gravity(obj, dt);\nif (api.solid(obj)) obj.dir = -obj.dir;' },
   boss: { label: '👑 Вождь (босс 6 HP, прыгает)', code: '// Вождь: 6 HP, опасен, убивается прыжком и плюшками\n// Настройки — ОДИН РАЗ, физика — каждый кадр\nif (!obj.data.init) {\n  obj.data.init = true;\n  obj.hp = 6; obj.maxHp = 6;\n  obj.stompable = true; obj.dangerous = true;\n  obj.data.speed = 70;\n}\nobj.vx = obj.data.speed * obj.dir;\napi.gravity(obj, dt);\nif (api.solid(obj)) obj.dir = -obj.dir;\n// каждые 4 секунды прыжок в сторону игрока\nif (Math.floor(obj.t / 4) !== obj.data.jmp) {\n  obj.data.jmp = Math.floor(obj.t / 4);\n  obj.vy = -520;\n  obj.dir = (api.px > obj.x) ? 1 : -1;\n}' },
-  empty: { label: '📝 Пустой (напишу сам)', code: '// Свой код. Доступно каждый кадр:\n// obj — объект: x, y, w, h, vx, vy, hp, t (сек), dir, data (свои переменные)\n// api.gravity(obj, dt) — физика+коллизии;  api.solid(obj) — упёрся в стену\n// api.hurtPlayer(1); api.healPlayer(1); api.ammo(3); api.score(5);\n// api.sfx(\'coin\'); api.particles(x, y, \'star\', 10); api.shake(0.3);\n// api.px, api.py — координаты игрока; api.solidAt(px, py) — твёрдый ли тайл\n// СОВЕТ: одноразовые настройки делай через if (!obj.data.init) { ... }' },
+  empty: { label: '📝 Пустой (напишу сам)', code: '// Свой код. Доступно каждый кадр:\n// obj — объект: x, y, w, h, vx, vy, hp, t (сек), dir, data (свои переменные)\n// api.gravity(obj, dt) — физика+коллизии;  api.solid(obj) — упёрся в стену\n// api.hurtPlayer(1); api.healPlayer(1); api.ammo(3); api.score(5);\n// api.sfx(\'coin\'); api.particles(x, y, \'star\', 10); api.shake(0.3);\n// api.quake(1, 4) — ЗЕМЛЕТРЯСЕНИЕ (сила 0.3-1.6, секунды): тряска + камни с неба\n// api.px, api.py — координаты игрока; api.solidAt(px, py) — твёрдый ли тайл\n// СОВЕТ: одноразовые настройки делай через if (!obj.data.init) { ... }' },
 };
 
 const toastEl = $('toast');
@@ -932,7 +932,7 @@ function renderObjects() {
     // подсказка по API
     const note = document.createElement('div');
     note.className = 'apinote';
-    note.innerHTML = 'Код выполняется каждый кадр: <b>obj</b> — объект (x, y, hp, t — время, data — свои переменные), <b>api</b> — игра, <b>dt</b> — секунды. Флаги: <b>obj.collect=1</b> подбор, <b>obj.dangerous=true</b> урон, <b>obj.stompable=true</b> убивается прыжком/плюшкой (плюс HP). <b>api.gravity(obj, dt)</b> — физика, <b>api.solid(obj)</b> — стена, <b>api.hurtPlayer/healPlayer/ammo/score/sfx/particles/shake</b>, <b>api.px/api.py</b> — игрок.';
+    note.innerHTML = 'Код выполняется каждый кадр: <b>obj</b> — объект (x, y, hp, t — время, data — свои переменные), <b>api</b> — игра, <b>dt</b> — секунды. Флаги: <b>obj.collect=1</b> подбор, <b>obj.dangerous=true</b> урон, <b>obj.stompable=true</b> убивается прыжком/плюшкой (плюс HP). <b>api.gravity(obj, dt)</b> — физика, <b>api.solid(obj)</b> — стена, <b>api.hurtPlayer/healPlayer/ammo/score/sfx/particles/shake</b>, <b>api.quake(сила, сек)</b> — землетрясение, <b>api.px/api.py</b> — игрок.';
     card.appendChild(note);
 
     box.appendChild(card);

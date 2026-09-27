@@ -666,6 +666,66 @@ class HatShot {
   }
 }
 
+// ============================================================
+// ОБЛОМКИ ЗЕМЛЕТРЯСЕНИЯ — камни с неба (спавнит Quake в main.js)
+// Падают, бьют игрока (с инвулном), прибивают мелких врагов,
+// разбиваются о землю/стены с пылью и звуком крошения.
+// ============================================================
+class QuakeDebris {
+  constructor(x, y, big = false) {
+    this.s = big ? 20 : 13;             // размер камня
+    this.w = this.s; this.h = this.s;
+    this.x = x; this.y = y;
+    this.vx = (Math.random() - 0.5) * 70;
+    this.vy = 40 + Math.random() * 90;
+    this.rot = Math.random() * 6.28;
+    this.rotSpd = (Math.random() < 0.5 ? -1 : 1) * (3 + Math.random() * 4);
+    this.big = big;
+    // рваный контур генерится ОДИН раз — камень не «мигает» гранями
+    this.pts = [];
+    const n = 7;
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2;
+      const rr = this.s * (0.38 + Math.random() * 0.16);
+      this.pts.push([Math.cos(a) * rr, Math.sin(a) * rr]);
+    }
+    this.dead = false;
+  }
+  update(dt, level, game) {
+    this.vy = Math.min(this.vy + CONFIG.GRAVITY * 0.6 * dt, 720);
+    moveEntity(this, level, dt);
+    this.rot += this.rotSpd * dt;
+    // удар о землю/стену/платформу — разбился
+    if (this.onGround || this.hitWall) {
+      this.dead = true;
+      game.spawnDust(this.x + this.s / 2, this.y + this.s, this.big ? 6 : 3);
+      Audio8.sfx.crumble();
+      return;
+    }
+    if (this.y > ROWS * TILE + 60) { this.dead = true; return; }
+    // задел игрока (инвулн после урона спасает, как у шипов)
+    const p = game.player;
+    if (p && p.invuln <= 0 && overlaps(this, p)) {
+      this.dead = true;
+      p.hurt(Math.sign(p.x - this.x) || 1, game);
+      return;
+    }
+  }
+  draw(ctx, camX) {
+    ctx.save();
+    ctx.translate(this.x + this.s / 2 - camX, this.y + this.s / 2);
+    ctx.rotate(this.rot);
+    ctx.fillStyle = this.big ? '#6b5847' : '#7d6a56';
+    ctx.beginPath();
+    this.pts.forEach(([px, py], i) => (i ? ctx.lineTo(px, py) : ctx.moveTo(px, py)));
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = 'rgba(0,0,0,.25)';
+    ctx.fillRect(-this.s * 0.22, -this.s * 0.05, this.s * 0.3, this.s * 0.26);
+    ctx.restore();
+  }
+}
+
 // Завод — выход с уровня. Стоит НА земле (не зарывается в тайлы!),
 // триггером завершения уровня служит всё здание с запасом по краям.
 const GROUND_TOP = (ROWS - 2) * TILE; // верх земли — ряд 11 → y = 440
