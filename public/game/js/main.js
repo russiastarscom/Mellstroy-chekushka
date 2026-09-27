@@ -257,12 +257,28 @@ const Game = (() => {
     nextAt: 12,           // сек игры до следующего автотолчка
     auto: false,          // включены ли автотолчки на этом уровне
     spawnT: 0, rumbleT: 0, crumbT: 0,
+    // настройки из админ-панели (вкладка «🌍 ЗЕМЛЕТРЯСЕНИЯ», публикуются для всех)
+    cfg: { enabled: true, prologue: false, rocks: true, power: 1, interval: 20, dur: 5 },
+
+    setConfig(c) {
+      if (!c || typeof c !== 'object') return;
+      const n = this.cfg;
+      if (typeof c.enabled === 'boolean') n.enabled = c.enabled;
+      if (typeof c.prologue === 'boolean') n.prologue = c.prologue;
+      if (typeof c.rocks === 'boolean') n.rocks = c.rocks;
+      if (typeof c.power === 'number' && isFinite(c.power)) n.power = Math.max(0.4, Math.min(2.5, c.power));
+      if (typeof c.interval === 'number' && isFinite(c.interval)) n.interval = Math.max(6, Math.min(60, c.interval));
+      if (typeof c.dur === 'number' && isFinite(c.dur)) n.dur = Math.max(2, Math.min(12, c.dur));
+    },
 
     reset(def) {
       this.phase = 'idle'; this.t = 0; this.spawnT = 0; this.rumbleT = 0; this.crumbT = 0;
-      // автоземлетрясения: главы 1-3, обычные карты (не арены боссов)
-      this.auto = !!(def && def.type === 'map' && !def.boss && (def.chapter || 0) >= 1);
-      this.nextAt = 9 + Math.random() * 7;
+      // автоземлетрясения: обычные карты (не арены боссов) — главы 1-3,
+      // пролог — только если в панели включено «И на прологе»
+      const onMap = !!(def && def.type === 'map' && !def.boss);
+      const ch = (def && def.chapter) || 0;
+      this.auto = onMap && this.cfg.enabled && (this.cfg.prologue || ch >= 1);
+      this.nextAt = this.cfg.interval * (0.45 + Math.random() * 0.35); // первый толчок — раньше
     },
 
     trigger(power = 1, dur = 5) {
@@ -297,10 +313,13 @@ const Game = (() => {
         if (!this.auto) return;
         this.nextAt -= dt;
         if (this.nextAt <= 0) {
-          // сила и длина растут с номером главы
+          // сила и длина растут с номером главы, множится на настройку панели
           const ch = (LEVELS[levelIndex] && LEVELS[levelIndex].chapter) || 1;
-          this.trigger(0.55 + ch * 0.12 + Math.random() * 0.2, 4 + Math.random() * 3);
-          this.nextAt = 15 + Math.random() * 12;
+          this.trigger(
+            (0.55 + ch * 0.12 + Math.random() * 0.2) * this.cfg.power,
+            this.cfg.dur * (0.8 + Math.random() * 0.6)
+          );
+          this.nextAt = this.cfg.interval * (0.75 + Math.random() * 0.6);
         }
         return;
       }
@@ -327,7 +346,8 @@ const Game = (() => {
         shake = Math.max(shake, 0.16 * this.power); // базовая тряска поверх синусоиды
         this.rumbleT -= dt;
         if (this.rumbleT <= 0) { this.rumbleT = 1.3; Audio8.sfx.rumble(); }
-        // камни с неба
+        // камни с неба (в панели можно отключить — пусть трясёт без урона)
+        if (this.cfg.rocks) {
         this.spawnT -= dt;
         if (this.spawnT <= 0) {
           this.spawnT = Math.max(0.14, 0.55 / this.power) * (0.6 + Math.random() * 0.8);
@@ -336,6 +356,7 @@ const Game = (() => {
           for (let i = 0; i < n; i++) {
             debris.push(new QuakeDebris(cam + 30 + Math.random() * (vx - 60), camY - 30 - Math.random() * 60, Math.random() < 0.3 * this.power));
           }
+        }
         }
         // пыль лезет из-под земли
         if (Math.random() < dt * 9 * this.power) {
@@ -348,7 +369,7 @@ const Game = (() => {
       // after: афтершоки затухают (см. offset())
       if (this.t >= 2) {
         this.phase = 'idle'; this.t = 0;
-        if (this.auto) this.nextAt = 15 + Math.random() * 12;
+        if (this.auto) this.nextAt = this.cfg.interval * (0.75 + Math.random() * 0.6);
       }
     },
   };
@@ -971,6 +992,7 @@ const Game = (() => {
     if (Array.isArray(j.socials) && j.socials.length) {
       CONFIG.SOCIALS = j.socials.map((s) => ({ name: s.name, class: s.class || 'tg', url: s.url || '#' }));
     }
+    if (j.quake && typeof j.quake === 'object') Quake.setConfig(j.quake);
   }
   async function loadAdminCms() {
     try {
@@ -986,7 +1008,7 @@ const Game = (() => {
           if (r1.ok) cms = await r1.json();
         } catch (e) { /* нет файла */ }
       }
-      if (cms && (cms.maps || cms.levels || cms.textures || cms.music || cms.socials || cms.intro || cms.objects)) {
+      if (cms && (cms.maps || cms.levels || cms.textures || cms.music || cms.socials || cms.intro || cms.objects || cms.quake)) {
         applyCms(cms);
         return;
       }
@@ -1017,7 +1039,7 @@ const Game = (() => {
       get boss() { return bossRef; },
       get level() { return level; },
       get debris() { return debris; },
-      get quakeState() { return { phase: Quake.phase, t: +Quake.t.toFixed(2), power: +Quake.power.toFixed(2), nextAt: +Quake.nextAt.toFixed(1), auto: Quake.auto }; },
+      get quakeState() { return { phase: Quake.phase, t: +Quake.t.toFixed(2), power: +Quake.power.toFixed(2), nextAt: +Quake.nextAt.toFixed(1), auto: Quake.auto, cfg: Quake.cfg }; },
       quake: (p, d) => Quake.trigger(p, d),
     };
     requestAnimationFrame((t) => { lastT = t; requestAnimationFrame(loop); });

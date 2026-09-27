@@ -49,11 +49,12 @@ type Cms = {
   music: { active: string | null; tracks: Track[] } | null;
   socials: Social[] | null;
   objects: CustomObject[] | null;
+  quake: Record<string, unknown> | null;
   updatedAt: string;
 };
 
 function emptyCms(): Omit<Cms, 'updatedAt'> {
-  return { levels: null, v: null, maps: null, intro: null, textures: null, music: null, socials: null, objects: null };
+  return { levels: null, v: null, maps: null, intro: null, textures: null, music: null, socials: null, objects: null, quake: null };
 }
 
 function readCms(): Omit<Cms, 'updatedAt'> & { updatedAt: string | null } {
@@ -72,7 +73,7 @@ function readCms(): Omit<Cms, 'updatedAt'> & { updatedAt: string | null } {
 
 function validateMaps(maps: unknown): string | null {
   if (!Array.isArray(maps)) return 'maps must be an array';
-  if (maps.length > 40) return 'too many maps (max 40)';
+  if (maps.length > 80) return 'too many maps (max 80)';
   for (const m of maps) {
     if (!m || typeof m !== 'object') return 'map: not an object';
     const { key, def } = m as { key: unknown; def: unknown };
@@ -157,6 +158,16 @@ function validateCms(body: Record<string, unknown>): string | null {
       if (typeof o.character !== 'boolean') return `object ${o.id}: bad character flag`;
     }
   }
+  if (body.quake !== undefined && body.quake !== null) {
+    const q = body.quake as Record<string, unknown>;
+    if (typeof q !== 'object' || Array.isArray(q)) return 'quake must be an object';
+    for (const k of ['enabled', 'prologue', 'rocks']) {
+      if (q[k] !== undefined && typeof q[k] !== 'boolean') return `quake.${k} must be boolean`;
+    }
+    for (const k of ['power', 'interval', 'dur']) {
+      if (q[k] !== undefined && (typeof q[k] !== 'number' || !isFinite(q[k] as number))) return `quake.${k} must be a number`;
+    }
+  }
   return null;
 }
 
@@ -185,6 +196,7 @@ export async function POST(req: Request) {
     if (body.music !== undefined) next.music = (body.music as Cms['music']) || null;
     if (body.socials !== undefined) next.socials = (body.socials as Cms['socials']) || null;
     if (body.objects !== undefined) next.objects = (body.objects as Cms['objects']) || null;
+    if (body.quake !== undefined) next.quake = (body.quake as Cms['quake']) || null;
     const payload = { ...next, updatedAt: new Date().toISOString() };
     fs.mkdirSync(path.dirname(FILE), { recursive: true });
     fs.writeFileSync(FILE, JSON.stringify(payload));

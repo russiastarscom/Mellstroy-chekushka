@@ -112,6 +112,16 @@
   .tagok { background: #2a8a4a; color: #fff; font-size: 10px; padding: 3px 8px; border-radius: 8px; }
   .note { color: #8a8aa0; font-size: 12px; padding: 0 14px 10px; }
 
+  /* ---------- ЗЕМЛЕТРЯСЕНИЯ ---------- */
+  .qk-wrap { padding: 12px 14px; }
+  .qchk { display: flex; gap: 8px; align-items: center; background: #1a1a2b; border: 1px solid #2c2c46; border-radius: 10px; padding: 10px 12px; margin-bottom: 8px; cursor: pointer; font-weight: bold; }
+  .qchk input { width: 18px; height: 18px; accent-color: #e63946; }
+  .qchk small { color: #8a8aa0; font-weight: normal; }
+  .qrow { background: #1a1a2b; border: 1px solid #2c2c46; border-radius: 10px; padding: 10px 12px; margin-bottom: 8px; }
+  .qrow .qtop { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px; color: #cfcfe6; }
+  .qrow .qtop b { color: #ffd23f; font-size: 15px; }
+  .qrow input[type=range] { width: 100%; accent-color: #e63946; }
+
   /* ---------- КАНАЛЫ ---------- */
   .soc-wrap { padding: 12px 14px; }
   .soc { display: flex; gap: 6px; align-items: center; background: #1a1a2b; border: 1px solid #2c2c46; border-radius: 10px; padding: 8px; margin-bottom: 8px; flex-wrap: wrap; }
@@ -165,6 +175,7 @@
   <button data-mode="objects">🧩 ОБЪЕКТЫ</button>
   <button data-mode="music">🎵 МУЗЫКА</button>
   <button data-mode="socials">📢 КАНАЛЫ</button>
+  <button data-mode="quake">🌍 ЗЕМЛЕТРЯСЕНИЯ</button>
 </div>
 
 <!-- ================= КАРТЫ ================= -->
@@ -175,10 +186,17 @@
     <button class="tool" data-tool="B" title="Кирпич — твёрдый, любой ряд"><b>🧱</b>кирпич</button>
     <button class="tool" data-tool="=" title="Платформа — можно спрыгнуть вниз"><b>▬</b>платформа</button>
     <button class="tool" data-tool="^" title="Шипы — урон"><b>▲</b>шипы</button>
+    <button class="tool" data-tool="L" title="Жидкость (полынья/лава/кислота) — урон, на дне ям"><b>🌊</b>жижа</button>
+    <button class="tool" data-tool="v" title="Батут — подброс (на бегу — двойное сальто)"><b>🤸</b>батут</button>
+    <button class="tool" data-tool="C" title="Сыпучая платформа — обрушается, если постоять"><b>🪨</b>сыпучая</button>
+    <button class="tool" data-tool="S" title="Пила — крутится, урон при касании"><b>🪚</b>пила</button>
     <button class="tool" data-tool="erase" title="Ластик — стереть тайл/сущность"><b>⌫</b>ластик</button>
     <div class="sep"></div>
     <button class="tool" data-tool="e" title="Рядовой бурмалдинец"><b>👊</b>враг</button>
     <button class="tool" data-tool="t" title="Метатель томагавков"><b>🪓</b>метатель</button>
+    <button class="tool" data-tool="f" title="Летун — летает синусоидой"><b>🕊</b>летун</button>
+    <button class="tool" data-tool="j" title="Прыгун — скачет по таймеру"><b>🦘</b>прыгун</button>
+    <button class="tool" data-tool="a" title="Щитоносец — стомп не берёт, только плюшка"><b>🛡</b>щит.</button>
     <button class="tool" data-tool="G" title="Вождь (босс)"><b>👑</b>вождь</button>
     <button class="tool" data-tool="bottle" title="Чекушка (+1)"><b>🍾</b>чекушка</button>
     <button class="tool" data-tool="heart" title="Сердечко (+1 HP)"><b>❤</b>сердце</button>
@@ -198,6 +216,7 @@
       <option value="bg_district">Район</option>
       <option value="bg_plant">Завод (ночь)</option>
     </select></label>
+    <label style="color:#8a8aa0" title="Здоровье вождя, если он стоит на карте">HP вождя: <input id="bosshp" type="number" min="1" max="30" value="6" style="background:#23233a;border:1px solid #3a3a5a;color:#fff;border-radius:8px;padding:8px;width:64px;font-size:13px"></label>
     <button class="act gray" id="btn-move-up" title="Передвинуть уровень выше по порядку">↑ Выше</button>
     <button class="act gray" id="btn-move-down" title="Передвинуть уровень ниже по порядку">↓ Ниже</button>
     <button class="act warn" id="btn-reset-level">Сброс этой карты</button>
@@ -216,7 +235,7 @@
   </div>
   <div id="canvaswrap"><canvas id="cv"></canvas></div>
   <div id="cellinfo"></div>
-  <div id="hint">Земля — два нижних ряда (11–12), ластик пробивает ямы насквозь. «↑ Выше / ↓ Ниже» — порядок уровней, новая карта вставляется после выбранной. «🚧 В разработке» — экран в конце игры: его можно настроить или удалить. Всё публикуется одной кнопкой внизу.</div>
+  <div id="hint">Земля — два нижних ряда (11–12), ластик пробивает ямы насквозь. Новое: жижа на дне ям, батуты, сыпучие мосты, пилы, летуны/прыгуны/щитоносцы (стомп не берёт — бей плюшкой). HP вождя — поле рядом с фоном. «↑/↓» — порядок уровней. Всё публикуется одной кнопкой внизу.</div>
 </div>
 
 <!-- ================= РАЗГОВОРЫ ================= -->
@@ -285,6 +304,31 @@
   </div>
 </div>
 
+<!-- ================= ЗЕМЛЕТРЯСЕНИЯ ================= -->
+<div class="pane" id="pane-quake">
+  <div class="qk-wrap">
+    <div class="dlg-block">
+      <h3>🌍 ЗЕМЛЕТРЯСЕНИЯ (для всех игроков)</h3>
+      <div class="sub">Автотолчки на картах: баннер «⚠ ЗЕМЛЕТРЯСЕНИЕ!» → тряска экрана и камни с неба → афтершоки. Камни бьют игрока и прибивают мелких врагов. Ручной толчок — в скрипте объекта: <b style="color:#9fd8b4">api.quake(сила, сек)</b>.</div>
+      <label class="qchk"><input type="checkbox" id="qk-enabled"> <span>Авто-землетрясения ВКЛ <small>— на обычных картах глав</small></span></label>
+      <label class="qchk"><input type="checkbox" id="qk-prologue"> <span>И на прологе <small>— первые карты без глав</small></span></label>
+      <label class="qchk"><input type="checkbox" id="qk-rocks"> <span>Камни с неба <small>— выключи, если пусть трясёт без урона</small></span></label>
+      <div class="qrow">
+        <div class="qtop"><span>Сила толчка</span><b id="qk-power-val"></b></div>
+        <input type="range" id="qk-power" min="0.5" max="2" step="0.1">
+      </div>
+      <div class="qrow">
+        <div class="qtop"><span>Интервал между толчками</span><b id="qk-interval-val"></b></div>
+        <input type="range" id="qk-interval" min="8" max="40" step="1">
+      </div>
+      <div class="qrow">
+        <div class="qtop"><span>Длительность толчка</span><b id="qk-dur-val"></b></div>
+        <input type="range" id="qk-dur" min="2" max="10" step="1">
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- ================= КАНАЛЫ ================= -->
 <div class="pane" id="pane-socials">
   <div class="soc-wrap">
@@ -307,6 +351,6 @@
 <div id="toast"></div>
 <script src="js/config.js"></script>
 <script src="js/levels.js"></script>
-<script src="admin.js"></script>
+<script src="admin.js?v=3"></script>
 </body>
 </html>

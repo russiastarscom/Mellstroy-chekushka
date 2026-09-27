@@ -16,8 +16,18 @@ const CMS = {
   music: { active: null, tracks: [] },
   socials: [],
   objects: [],         // кастомные объекты: {id,name,emoji,w,h,tex,texId,script,character}
+  quake: null,         // настройки землетрясений (DEFAULT_QUAKE), заполнится ниже
 };
-let introDirty = false, socialsDirty = false, texturesDirty = false, musicDirty = false, objectsDirty = false;
+const DEFAULT_QUAKE = {
+  enabled: true,   // авто-землетрясения на обычных картах глав
+  prologue: false, // и на прологе (первые карты без главы)
+  rocks: true,     // камни с неба (урон)
+  power: 1,        // множитель силы 0.5..2
+  interval: 20,    // средний интервал между толчками, сек (8..40)
+  dur: 5,          // средняя длительность толчка, сек (2..10)
+};
+CMS.quake = Object.assign({}, DEFAULT_QUAKE);
+let introDirty = false, socialsDirty = false, texturesDirty = false, musicDirty = false, objectsDirty = false, quakeDirty = false;
 let mapsListDirty = false; // состав списка карт менялся (добавление/удаление) — нужна перепубликация
 let pubAt = null;
 let mode = 'maps';
@@ -85,9 +95,24 @@ function defToState(def) {
   (def.plats || []).forEach(([c, r, len]) => {
     for (let i = 0; i < len; i++) { const cc = c + i; if (r >= 0 && r < ROWS && cc >= 0 && cc < w) cells[r][cc] = '='; }
   });
+  (def.crumble || []).forEach(([c, r, len]) => {
+    for (let i = 0; i < len; i++) { const cc = c + i; if (r >= 0 && r < ROWS && cc >= 0 && cc < w) cells[r][cc] = 'C'; }
+  });
   (def.spikes || []).forEach(([c0, c1, r]) => {
     const row = (r === undefined || r === null) ? 10 : r;
     for (let c = c0; c <= c1; c++) if (row >= 0 && row < ROWS && c >= 0 && c < w) cells[row][c] = '^';
+  });
+  (def.liquids || []).forEach(([c0, c1, r]) => {
+    const row = (r === undefined || r === null) ? 12 : r;
+    for (let c = c0; c <= c1; c++) if (row >= 0 && row < ROWS && c >= 0 && c < w) cells[row][c] = 'L';
+  });
+  (def.springs || []).forEach(([c, r]) => {
+    const row = (r === undefined || r === null) ? 10 : r;
+    if (row >= 0 && row < ROWS && c >= 0 && c < w) cells[row][c] = 'v';
+  });
+  (def.saws || []).forEach(([c, r]) => {
+    const row = (r === undefined || r === null) ? 10 : r;
+    if (row >= 0 && row < ROWS && c >= 0 && c < w) cells[row][c] = 'S';
   });
   const ents = [];
   const add = (t, c, r) => { if (c >= 0 && c < w && r >= 0 && r < ROWS) ents.push({ t, c, r }); };
@@ -105,6 +130,7 @@ function defToState(def) {
     cells, ents, undo: [], dirty: false,
     spawn: def.spawn?.c ?? 2, factory: def.factory?.c ?? (w - 6),
     name: def.name || 'Карта', bg: def.bg || 'bg_fields',
+    bossHp: (def.boss && typeof def.boss.hp === 'number') ? def.boss.hp : 6,
     dialogs: {
       intro: (def.dialogue?.intro || []).map((l) => ({ who: l.who, text: l.text })),
       outro: (def.dialogue?.outro || []).map((l) => ({ who: l.who, text: l.text })),
@@ -130,7 +156,11 @@ function stateToDef(m) {
   }
   const { cells, ents } = st;
   const w = st.cells[0].length;
+  // база — оригинальный def: поля, которых редактор не редактирует (chapter,
+  // chapterTitle, bossOutro и любые будущие), НЕ теряются при публикации
+  const base = (m.def && m.def.type === 'map') ? JSON.parse(JSON.stringify(m.def)) : {};
   const ground = [], bricks = [], plats = [], spikes = [];
+  const crumble = [], liquids = [], springs = [], saws = [];
   const singles = [], hearts = [], plushes = [], enemies = [];
   const custom = {};
   let bossCol = null;
@@ -147,10 +177,14 @@ function stateToDef(m) {
     let c = 0;
     while (c < w) {
       const ch = cells[r][c];
-      if (ch === 'B' || ch === '=' || ch === '^') {
+      if (ch === 'B' || ch === '=' || ch === '^' || ch === 'C' || ch === 'L' || ch === 'v' || ch === 'S') {
         const c0 = c; while (c < w && cells[r][c] === ch) c++;
         if (ch === 'B') bricks.push([c0, r, c - 1, r]);
         else if (ch === '=') plats.push([c0, r, c - c0]);
+        else if (ch === 'C') crumble.push([c0, r, c - c0]);
+        else if (ch === 'L') liquids.push([c0, c - 1, r]);
+        else if (ch === 'v') for (let k = c0; k < c; k++) springs.push([k, r]); // каждый батут — отдельный (соседние не склеивать)
+        else if (ch === 'S') for (let k = c0; k < c; k++) saws.push([k, r]);
         else spikes.push([c0, c - 1, r]);
       } else c++;
     }
@@ -159,7 +193,7 @@ function stateToDef(m) {
     if (e.t === 'bottle') singles.push([e.c, e.r]);
     else if (e.t === 'heart') hearts.push([e.c, e.r]);
     else if (e.t === 'plush') plushes.push([e.c, e.r]);
-    else if (e.t === 'e' || e.t === 't') enemies.push([e.t, e.c, e.r]);
+    else if (e.t === 'e' || e.t === 't' || e.t === 'f' || e.t === 'j' || e.t === 'a') enemies.push([e.t, e.c, e.r]);
     else if (e.t === 'G') bossCol = e.c;
     else if (e.t[0] === '@') {
       const id = e.t.slice(1);
@@ -167,22 +201,21 @@ function stateToDef(m) {
     }
   });
   const dlg = st.dialogs || { intro: [], outro: [], hints: [] };
-  const def = {
+  const def = Object.assign(base, {
     id: m.id, type: 'map', bg: st.bg || 'bg_fields', width: w,
     name: (st.name || 'Карта').slice(0, 40),
-    ground, bricks, plats, spikes,
+    ground, bricks, plats, spikes, crumble, liquids, springs, saws,
     bottles: { runs: [], singles },
-    hearts, enemies,
+    hearts, plushes, enemies,
     spawn: { c: st.spawn }, factory: { c: st.factory },
-  };
-  if (plushes.length) def.plushes = plushes;
-  if (Object.keys(custom).length) def.custom = custom;
-  if (bossCol !== null) def.boss = { col: bossCol };
-  if (m.def && m.def.factoryLocked) def.factoryLocked = true;
-  if (dlg.intro.length || dlg.outro.length) {
-    def.dialogue = { intro: dlg.intro, outro: dlg.outro };
-  }
-  if (dlg.hints.length) def.hints = dlg.hints.map((h) => ({ c: h.c, text: h.text }));
+  });
+  if (bossCol !== null) {
+    def.boss = Object.assign({}, (base.boss && typeof base.boss === 'object') ? base.boss : {}, { col: bossCol });
+    if (typeof st.bossHp === 'number' && st.bossHp >= 1) def.boss.hp = st.bossHp;
+  } else delete def.boss;
+  if (Object.keys(custom).length) def.custom = custom; else delete def.custom;
+  if (dlg.intro.length || dlg.outro.length) def.dialogue = { intro: dlg.intro, outro: dlg.outro }; else delete def.dialogue;
+  if (dlg.hints.length) def.hints = dlg.hints.map((h) => ({ c: h.c, text: h.text })); else delete def.hints;
   return def;
 }
 
@@ -223,6 +256,7 @@ function saveDrafts() {
         textures: CMS.textures, texturesClean: !texturesDirty,
         musicActive: CMS.music.active, musicClean: !musicDirty,
         objects: CMS.objects, objectsClean: !objectsDirty,
+        quake: CMS.quake, quakeClean: !quakeDirty,
         listClean: !mapsListDirty,
       };
       localStorage.setItem(DRAFT_KEY, JSON.stringify(out));
@@ -284,6 +318,7 @@ function applyDrafts(d) {
   if (d.textures && typeof d.textures === 'object') { CMS.textures = d.textures; texturesDirty = !d.texturesClean; any = true; }
   if (d.musicActive !== undefined) { CMS.music.active = d.musicActive; musicDirty = !d.musicClean; }
   if (Array.isArray(d.objects)) { CMS.objects = d.objects; objectsDirty = !d.objectsClean; any = true; }
+  if (d.quake && typeof d.quake === 'object') { CMS.quake = Object.assign({}, DEFAULT_QUAKE, d.quake); quakeDirty = !d.quakeClean; any = true; }
   if (d.listClean !== undefined) mapsListDirty = !d.listClean;
   return any;
 }
@@ -389,7 +424,7 @@ function resetMap() {
     m.ed = defToState(m.def);
   } else {
     const w = m.ed.cells[0].length;
-    const ed = { cells: Array.from({ length: ROWS }, () => Array(w).fill('.')), ents: [], undo: [], dirty: true, spawn: 2, factory: w - 6, name: m.ed.name, bg: m.ed.bg, dialogs: { intro: [], outro: [], hints: [] } };
+    const ed = { cells: Array.from({ length: ROWS }, () => Array(w).fill('.')), ents: [], undo: [], dirty: true, spawn: 2, factory: w - 6, name: m.ed.name, bg: m.ed.bg, bossHp: 6, dialogs: { intro: [], outro: [], hints: [] } };
     for (let c = 0; c < w; c++) { ed.cells[11][c] = '#'; ed.cells[12][c] = '#'; }
     m.ed = ed;
   }
@@ -410,6 +445,7 @@ function syncMapOpts() {
   } else {
     $('lvlname').value = m.ed.name || '';
     $('lvbg').value = m.ed.bg || 'bg_fields';
+    $('bosshp').value = (typeof m.ed.bossHp === 'number') ? m.ed.bossHp : 6;
   }
 }
 
@@ -449,6 +485,10 @@ function draw() {
       else if (ch === 'B') { x.fillStyle = '#9c4a2d'; x.fillRect(px, py, cs, cs); x.strokeStyle = '#5d2c1a'; x.lineWidth = 1; x.strokeRect(px + .5, py + .5, cs - 1, cs - 1); x.beginPath(); x.moveTo(px, py + cs / 2); x.lineTo(px + cs, py + cs / 2); x.stroke(); }
       else if (ch === '=') { x.fillStyle = '#b98a4a'; x.fillRect(px, py + cs * .2, cs, cs * .45); x.fillStyle = '#8a6234'; x.fillRect(px, py + cs * .5, cs, cs * .15); }
       else if (ch === '^') { x.fillStyle = '#b9b9c9'; for (let k = 0; k < 2; k++) { x.beginPath(); x.moveTo(px + k * cs / 2, py + cs); x.lineTo(px + k * cs / 2 + cs / 4, py + cs * .25); x.lineTo(px + (k + 1) * cs / 2, py + cs); x.closePath(); x.fill(); } }
+      else if (ch === 'C') { x.fillStyle = '#c9a15a'; x.fillRect(px, py + cs * .25, cs, cs * .5); x.strokeStyle = '#8a6a34'; x.lineWidth = 1; x.beginPath(); x.moveTo(px + cs * .3, py + cs * .3); x.lineTo(px + cs * .6, py + cs * .7); x.moveTo(px + cs * .65, py + cs * .35); x.lineTo(px + cs * .45, py + cs * .6); x.stroke(); }
+      else if (ch === 'L') { x.fillStyle = '#2b7fd4'; x.fillRect(px, py + cs * .2, cs, cs * .8); x.fillStyle = '#5fb0f0'; x.fillRect(px, py + cs * .2, cs, cs * .16); }
+      else if (ch === 'v') { x.fillStyle = '#e63946'; x.fillRect(px + cs * .15, py + cs * .55, cs * .7, cs * .3); x.fillStyle = '#ffd23f'; x.fillRect(px + cs * .3, py + cs * .35, cs * .4, cs * .2); }
+      else if (ch === 'S') { x.fillStyle = '#9aa0b5'; x.beginPath(); x.arc(px + cs / 2, py + cs / 2, cs * .38, 0, 7); x.fill(); x.strokeStyle = '#5d6275'; x.lineWidth = 2; for (let k = 0; k < 4; k++) { const a = k * Math.PI / 2 + .6; x.beginPath(); x.moveTo(px + cs / 2 + Math.cos(a) * cs * .38, py + cs / 2 + Math.sin(a) * cs * .38); x.lineTo(px + cs / 2 + Math.cos(a) * cs * .5, py + cs / 2 + Math.sin(a) * cs * .5); x.stroke(); } }
       if (r === 11 && st.cells[r][c] === '.' && (st.cells[r - 1] && st.cells[r - 1][c]) !== '#') { x.fillStyle = '#22223a'; x.fillRect(px, py, cs, cs * 2 / 3); }
     }
   }
@@ -486,10 +526,12 @@ function drawEnt(x, e, cs, TOP) {
   const map = { e: 'burmaldenets', t: 'burmaldenets', G: 'boss', bottle: 'checkushka', heart: 'heart', plush: 'plush' };
   const spr = IMG[map[e.t]];   // неизвестный тип сущности не должен ломать весь редактор
   if (!spr || !imgFit(x, spr, cx, by, e.t === 'G' ? cs * 1.8 : cs * .95, e.t === 'G' ? cs * 1.9 : cs * .95)) {
-    x.fillStyle = e.t === 'G' ? '#ffd23f' : '#e63946';
+    const col = { f: '#7ad0ff', j: '#8ee08a', a: '#c0c6d4' }[e.t] || (e.t === 'G' ? '#ffd23f' : '#e63946');
+    x.fillStyle = col;
     x.beginPath(); x.arc(cx, by - cs / 2, cs * .3, 0, 7); x.fill();
   }
   if (e.t === 't') { x.fillStyle = '#fff'; x.font = 'bold 9px Arial'; x.textAlign = 'center'; x.fillText('T', cx, by - cs - 1); }
+  if (e.t === 'f' || e.t === 'j' || e.t === 'a') { x.fillStyle = '#1a1a2e'; x.font = 'bold 9px Arial'; x.textAlign = 'center'; x.fillText(e.t.toUpperCase(), cx, by - cs * .65); }
 }
 function drawSpawn(x, c, cs, TOP) {
   const cx = c * cs + cs / 2, by = TOP + 11 * cs;
@@ -530,9 +572,9 @@ function applyTool(c, r) {
   if (tool === 'ground') {
     if (r < 11) { toast('Земля — только нижние ряды 11–12. Выше ставь кирпич или платформу.'); return; }
     if (st.cells[r][c] !== '#') { st.cells[11][c] = '#'; st.cells[12][c] = '#'; st.dirty = true; }
-  } else if (tool === 'B' || tool === '=' || tool === '^') {
+  } else if (tool === 'B' || tool === '=' || tool === '^' || tool === 'C' || tool === 'L' || tool === 'v' || tool === 'S') {
     if (st.cells[r][c] !== tool) {
-      if (r >= 11 && tool !== 'B' && st.cells[r][c] === '#') { toast('Сначала сотри землю ластиком.'); return; }
+      if (r >= 11 && tool !== 'B' && tool !== 'L' && st.cells[r][c] === '#') { toast('Сначала сотри землю ластиком.'); return; }
       st.cells[r][c] = tool; st.dirty = true;
     }
   } else if (tool === 'erase') {
@@ -596,6 +638,11 @@ $('zoom-in').onclick = () => { zoom.cs = Math.min(40, zoom.cs + 4); $('zoom-val'
 $('zoom-out').onclick = () => { zoom.cs = Math.max(10, zoom.cs - 4); $('zoom-val').textContent = zoom.cs + 'px'; draw(); };
 $('lvlname').addEventListener('input', () => { curEd().name = $('lvlname').value; curEd().dirty = true; buildMapTabs(); saveDrafts(); setStatus(); });
 $('lvbg').addEventListener('change', () => { curEd().bg = $('lvbg').value; curEd().dirty = true; saveDrafts(); setStatus(); });
+$('bosshp').addEventListener('input', () => {
+  const ed = curEd(); if (!ed || ed.isIndev) return;
+  const v = Math.max(1, Math.min(30, Math.round(+$('bosshp').value || 6)));
+  if (ed.bossHp !== v) { ed.bossHp = v; ed.dirty = true; saveDrafts(); setStatus(); }
+});
 $('btn-reset-level').onclick = resetMap;
 $('btn-del-map').onclick = delMap;
 $('btn-move-up').onclick = () => moveMap(-1);
@@ -1113,6 +1160,7 @@ document.querySelectorAll('#modes button').forEach((b) => {
     if (mode === 'objects') renderObjects();
     if (mode === 'music') renderMusic();
     if (mode === 'socials') renderSocials();
+    if (mode === 'quake') renderQuake();
   };
 });
 
@@ -1128,6 +1176,7 @@ function buildPayload() {
     music: { active: CMS.music.active, tracks: CMS.music.tracks },
     socials: CMS.socials,
     objects: CMS.objects,
+    quake: CMS.quake,
   };
 }
 async function publish() {
@@ -1140,7 +1189,7 @@ async function publish() {
     const j = await r.json();
     if (!j.ok) { toast('Ошибка публикации: ' + (j.error || r.status)); return null; }
     CMS.maps.forEach((m) => { m.ed.dirty = false; });
-    introDirty = socialsDirty = texturesDirty = musicDirty = mapsListDirty = objectsDirty = false;
+    introDirty = socialsDirty = texturesDirty = musicDirty = mapsListDirty = objectsDirty = quakeDirty = false;
     pubAt = j.updatedAt || Date.now();
     saveDrafts();
     setStatus();
@@ -1165,7 +1214,7 @@ $('btn-reset-all').onclick = async () => {
 };
 
 function anyDirty() {
-  return introDirty || socialsDirty || texturesDirty || musicDirty || mapsListDirty || objectsDirty || CMS.maps.some((m) => m.ed.dirty);
+  return introDirty || socialsDirty || texturesDirty || musicDirty || mapsListDirty || objectsDirty || quakeDirty || CMS.maps.some((m) => m.ed.dirty);
 }
 function setStatus() {
   const el = $('status');
@@ -1183,6 +1232,35 @@ function setStatus() {
 function switchMode(m) {
   const b = document.querySelector(`#modes button[data-mode="${m}"]`);
   if (b) b.click();
+}
+
+// ============================================================
+// ЗЕМЛЕТРЯСЕНИЯ (настройки автотолчков)
+// ============================================================
+function renderQuake() {
+  const q = CMS.quake || (CMS.quake = Object.assign({}, DEFAULT_QUAKE));
+  const en = $('qk-enabled'), pr = $('qk-prologue'), rk = $('qk-rocks');
+  const pw = $('qk-power'), iv = $('qk-interval'), du = $('qk-dur');
+  en.checked = q.enabled !== false;
+  pr.checked = !!q.prologue;
+  rk.checked = q.rocks !== false;
+  pw.value = q.power; iv.value = q.interval; du.value = q.dur;
+  const vals = () => {
+    $('qk-power-val').textContent = Number(pw.value).toFixed(1) + '×';
+    $('qk-interval-val').textContent = iv.value + ' сек';
+    $('qk-dur-val').textContent = du.value + ' сек';
+  };
+  vals();
+  if (!en.dataset.bound) {
+    en.dataset.bound = '1'; pr.dataset.bound = '1'; rk.dataset.bound = '1';
+    pw.dataset.bound = '1'; iv.dataset.bound = '1'; du.dataset.bound = '1';
+    en.onchange = () => { q.enabled = en.checked; quakeDirty = true; saveDrafts(); setStatus(); };
+    pr.onchange = () => { q.prologue = pr.checked; quakeDirty = true; saveDrafts(); setStatus(); };
+    rk.onchange = () => { q.rocks = rk.checked; quakeDirty = true; saveDrafts(); setStatus(); };
+    pw.oninput = () => { q.power = +pw.value; vals(); quakeDirty = true; saveDrafts(); setStatus(); };
+    iv.oninput = () => { q.interval = +iv.value; vals(); quakeDirty = true; saveDrafts(); setStatus(); };
+    du.oninput = () => { q.dur = +du.value; vals(); quakeDirty = true; saveDrafts(); setStatus(); };
+  }
 }
 
 // ============================================================
@@ -1233,6 +1311,7 @@ function serverMapsToCms(j) {
   if (j.music && typeof j.music === 'object') CMS.music = { active: j.music.active || null, tracks: j.music.tracks || [] };
   if (Array.isArray(j.socials)) CMS.socials = j.socials;
   if (Array.isArray(j.objects)) CMS.objects = j.objects;
+  if (j.quake && typeof j.quake === 'object') CMS.quake = Object.assign({}, DEFAULT_QUAKE, j.quake);
 }
 async function boot() {
   let j = null;
@@ -1255,7 +1334,7 @@ async function boot() {
   pubAt = (j && j.updatedAt) || null;
   setStatus();
   fitZoom(); buildMapTabs(); buildCustomTools(); syncMapOpts(); draw();
-  buildDlgMapSelect(); renderAllDialogs(); renderTextures(); renderObjects(); renderMusic(); renderSocials();
+  buildDlgMapSelect(); renderAllDialogs(); renderTextures(); renderObjects(); renderMusic(); renderSocials(); renderQuake();
   if (hadDirty) toast('Черновик восстановлен — есть НЕОПУБЛИКОВАННЫЕ правки', true);
   else if (applied) toast('Черновик восстановлен из браузера', true);
   if (j && j.updatedAt) toast('Загружено ОПУБЛИКОВАННОЕ (редактируешь его)', true);
@@ -1266,7 +1345,7 @@ async function boot() {
     get curMap() { return curMap; },
     paint: (c, r, t) => { tool = t; applyTool(c, r); },
     addMap, stateToDef, publish, buildPayload, switchMode, moveMap, indevToMap,
-    renderAll: { textures: renderTextures, music: renderMusic, socials: renderSocials, dialogs: renderAllDialogs, objects: renderObjects },
+    renderAll: { textures: renderTextures, music: renderMusic, socials: renderSocials, dialogs: renderAllDialogs, objects: renderObjects, quake: renderQuake },
     buildCustomTools,
     get dirty() { return anyDirty(); },
   };
