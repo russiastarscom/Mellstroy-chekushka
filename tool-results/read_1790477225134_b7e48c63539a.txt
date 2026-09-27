@@ -1,0 +1,766 @@
+     1→     1→// ============================================================
+     2→     2→// Физика + сущности
+     3→     3→// ============================================================
+     4→     4→const TILE_SOLID = new Set(['#', 'B']);
+     5→     5→
+     6→     6→function isSolid(level, c, r) {
+     7→     7→  if (c < 0 || c >= level.w) return true;   // стены по краям уровня
+     8→     8→  if (r < 0 || r >= ROWS) return false;     // сверху/внизу — открыто
+     9→     9→  return TILE_SOLID.has(level.grid[r][c]);
+    10→    10→}
+    11→    11→function isPlat(level, c, r) {
+    12→    12→  if (c < 0 || c >= level.w || r < 0 || r >= ROWS) return false;
+    13→    13→  const t = level.grid[r][c];
+    14→    14→  if (t === '=') return true;
+    15→    15→  // сыпучая платформа: твёрдая, пока не обрушилась
+    16→    16→  if (t === 'C') {
+    17→    17→    const st = level.crumble && level.crumble.get(c + ',' + r);
+    18→    18→    return !(st && st.broken);
+    19→    19→  }
+    20→    20→  return false;
+    21→    21→}
+    22→    22→function isSpike(level, c, r) {
+    23→    23→  if (c < 0 || c >= level.w || r < 0 || r >= ROWS) return false;
+    24→    24→  return level.grid[r][c] === '^';
+    25→    25→}
+    26→    26→function tileAt(level, c, r) {
+    27→    27→  if (c < 0 || c >= level.w || r < 0 || r >= ROWS) return '.';
+    28→    28→  return level.grid[r][c];
+    29→    29→}
+    30→    30→function isLiquid(level, c, r) { return tileAt(level, c, r) === 'L'; }
+    31→    31→
+    32→    32→// Движение с разрешением коллизий по тайлам
+    33→    33→function moveEntity(ent, level, dt, ignorePlats = false) {
+    34→    34→  // --- X ---
+    35→    35→  ent.x += ent.vx * dt;
+    36→    36→  ent.hitWall = false;
+    37→    37→  {
+    38→    38→    const r0 = Math.floor(ent.y / TILE), r1 = Math.floor((ent.y + ent.h - 1) / TILE);
+    39→    39→    const c1 = Math.floor((ent.x + ent.w - 1) / TILE), c0 = Math.floor(ent.x / TILE);
+    40→    40→    if (ent.vx > 0) {
+    41→    41→      for (let r = r0; r <= r1; r++) if (isSolid(level, c1, r)) { ent.x = c1 * TILE - ent.w; ent.vx = 0; ent.hitWall = true; break; }
+    42→    42→    } else if (ent.vx < 0) {
+    43→    43→      for (let r = r0; r <= r1; r++) if (isSolid(level, c0, r)) { ent.x = (c0 + 1) * TILE; ent.vx = 0; ent.hitWall = true; break; }
+    44→    44→    }
+    45→    45→  }
+    46→    46→  // --- Y ---
+    47→    47→  const prevBottom = ent.y + ent.h;
+    48→    48→  ent.y += ent.vy * dt;
+    49→    49→  ent.onGround = false;
+    50→    50→  {
+    51→    51→    const c0 = Math.floor(ent.x / TILE), c1 = Math.floor((ent.x + ent.w - 1) / TILE);
+    52→    52→    const r0 = Math.floor(ent.y / TILE), r1 = Math.floor((ent.y + ent.h - 1) / TILE);
+    53→    53→    if (ent.vy > 0) {
+    54→    54→      for (let c = c0; c <= c1; c++) {
+    55→    55→        if (isSolid(level, c, r1)) { ent.y = r1 * TILE - ent.h; ent.vy = 0; ent.onGround = true; break; }
+    56→    56→        if (!ignorePlats && isPlat(level, c, r1) && prevBottom <= r1 * TILE + 8) {
+    57→    57→          ent.y = r1 * TILE - ent.h; ent.vy = 0; ent.onGround = true; break;
+    58→    58→        }
+    59→    59→      }
+    60→    60→    } else if (ent.vy < 0) {
+    61→    61→      for (let c = c0; c <= c1; c++) {
+    62→    62→        if (isSolid(level, c, r0)) { ent.y = (r0 + 1) * TILE; ent.vy = 0; break; }
+    63→    63→      }
+    64→    64→    }
+    65→    65→  }
+    66→    66→}
+    67→    67→
+    68→    68→function overlaps(a, b) {
+    69→    69→  return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+    70→    70→}
+    71→    71→
+    72→    72→// ============================================================
+    73→    73→// ИГРОК — Андрей
+    74→    74→// ============================================================
+    75→    75→class Player {
+    76→    76→  constructor(colC) {
+    77→    77→    this.w = 30; this.h = 50;
+    78→    78→    this.x = colC * TILE + 5;
+    79→    79→    this.y = 9 * TILE;
+    80→    80→    this.vx = 0; this.vy = 0;
+    81→    81→    this.dir = 1;
+    82→    82→    this.onGround = false;
+    83→    83→    this.hp = CONFIG.PLAYER_HP;
+    84→    84→    this.invuln = 0;
+    85→    85→    this.jumpBuffer = 0;
+    86→    86→    this.coyote = 0;
+    87→    87→    this.dropTimer = 0;
+    88→    88→    this.lastSafe = { x: this.x, y: this.y };
+    89→    89→    this.safeTimer = 0;
+    90→    90→    this.walkT = 0;
+    91→    91→    this.squash = 0;
+    92→    92→  }
+    93→    93→
+    94→    94→  update(dt, input, level, game) {
+    95→    95→    const SPEED = CONFIG.MOVE_SPEED, ACC = 2200, FRICTION = 2600;
+    96→    96→
+    97→    97→    // горизонталь
+    98→    98→    if (input.left) { this.vx -= ACC * dt; this.dir = -1; }
+    99→    99→    if (input.right) { this.vx += ACC * dt; this.dir = 1; }
+   100→   100→    if (!input.left && !input.right) {
+   101→   101→      const s = Math.sign(this.vx);
+   102→   102→      this.vx -= s * FRICTION * dt;
+   103→   103→      if (Math.sign(this.vx) !== s) this.vx = 0;
+   104→   104→    }
+   105→   105→    this.vx = Math.max(-SPEED, Math.min(SPEED, this.vx));
+   106→   106→
+   107→   107→    // прыжок: буфер + койот
+   108→   108→    this.jumpBuffer = input.jumpPressed ? 0.12 : Math.max(0, this.jumpBuffer - dt);
+   109→   109→    this.coyote = this.onGround ? 0.1 : Math.max(0, this.coyote - dt);
+   110→   110→    this.dropTimer = Math.max(0, this.dropTimer - dt);
+   111→   111→
+   112→   112→    if (this.jumpBuffer > 0 && input.down && this.onGround) {
+   113→   113→      // спрыгнуть с платформы
+   114→   114→      this.dropTimer = 0.22;
+   115→   115→      this.jumpBuffer = 0;
+   116→   116→      this.vy = 60;
+   117→   117→    } else if (this.jumpBuffer > 0 && (this.coyote > 0)) {
+   118→   118→      this.vy = CONFIG.JUMP_VEL;
+   119→   119→      this.jumpBuffer = 0;
+   120→   120→      this.coyote = 0;
+   121→   121→      this.squash = -0.25;
+   122→   122→      Audio8.sfx.jump();
+   123→   123→      game.spawnDust(this.x + this.w / 2, this.y + this.h, 4);
+   124→   124→    }
+   125→   125→    // короткий прыжок при отпускании (батут не режем — у него свой импульс-таймер)
+   126→   126→    this.springT = Math.max(0, (this.springT || 0) - dt);
+   127→   127→    if (!input.jumpHeld && this.springT <= 0 && this.vy < -260) this.vy = -260;
+   128→   128→
+   129→   129→    this.vy = Math.min(this.vy + CONFIG.GRAVITY * dt, 1100);
+   130→   130→    moveEntity(this, level, dt, this.dropTimer > 0);
+   131→   131→
+   132→   132→    // приземление — пыль + сквош
+   133→   133→    if (this.onGround && this.prevVy > 380) {
+   134→   134→      this.squash = 0.3;
+   135→   135→      game.spawnDust(this.x + this.w / 2, this.y + this.h, 3);
+   136→   136→    }
+   137→   137→    this.prevVy = this.vy;
+   138→   138→    this.squash *= Math.pow(0.001, dt);
+   139→   139→
+   140→   140→    // безопасная точка (для респауна после ямы)
+   141→   141→    this.safeTimer -= dt;
+   142→   142→    if (this.onGround && this.safeTimer <= 0 && this.vy === 0) {
+   143→   143→      const fc = Math.floor((this.x + this.w / 2) / TILE);
+   144→   144→      const fr = Math.floor((this.y + this.h + 6) / TILE);
+   145→   145→      if (isSolid(level, fc, fr)) { this.lastSafe = { x: this.x, y: this.y }; this.safeTimer = 0.4; }
+   146→   146→    }
+   147→   147→
+   148→   148→    // шипы
+   149→   149→    if (this.invuln <= 0) {
+   150→   150→      const c0 = Math.floor((this.x + 6) / TILE), c1 = Math.floor((this.x + this.w - 6) / TILE);
+   151→   151→      const r = Math.floor((this.y + this.h - 4) / TILE);
+   152→   152→      for (let c = c0; c <= c1; c++) {
+   153→   153→        if (isSpike(level, c, r)) { this.hurt(c * TILE + 20 < this.x + this.w / 2 ? 1 : -1, game, true); break; }
+   154→   154→      }
+   155→   155→    }
+   156→   156→
+   157→   157→    // жидкость (полынья/лава/кислота): касание = урон + респавн, как падение в яму
+   158→   158→    if (this.invuln <= 0) {
+   159→   159→      const c0 = Math.floor((this.x + 4) / TILE), c1 = Math.floor((this.x + this.w - 4) / TILE);
+   160→   160→      const r0 = Math.floor((this.y + 8) / TILE), r1 = Math.floor((this.y + this.h - 1) / TILE);
+   161→   161→      outer: for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) {
+   162→   162→        if (isLiquid(level, c, r)) { game.playerFell(); return; }
+   163→   163→      }
+   164→   164→    }
+   165→   165→
+   166→   166→    // пилы: круглая пила в тайле — задевание с любой стороны
+   167→   167→    if (this.invuln <= 0) {
+   168→   168→      const c0 = Math.floor((this.x - 10) / TILE), c1 = Math.floor((this.x + this.w + 10) / TILE);
+   169→   169→      const r0 = Math.floor((this.y - 10) / TILE), r1 = Math.floor((this.y + this.h + 10) / TILE);
+   170→   170→      for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) {
+   171→   171→        if (tileAt(level, c, r) !== 'S') continue;
+   172→   172→        const sx = c * TILE + 20, sy = r * TILE + 26, R = 24;
+   173→   173→        const nx = Math.max(this.x, Math.min(sx, this.x + this.w));
+   174→   174→        const ny = Math.max(this.y, Math.min(sy, this.y + this.h));
+   175→   175→        if ((nx - sx) * (nx - sx) + (ny - sy) * (ny - sy) < R * R) {
+   176→   176→          this.hurt(sx < this.x + this.w / 2 ? 1 : -1, game, true); break;
+   177→   177→        }
+   178→   178→      }
+   179→   179→    }
+   180→   180→
+   181→   181→    // батут: приземлился/наступил — подброс (тайл батута в клетке ног или под ногами)
+   182→   182→    if (this.onGround && this.vy === 0) {
+   183→   183→      const sc0 = Math.floor((this.x + 4) / TILE), sc1 = Math.floor((this.x + this.w - 4) / TILE);
+   184→   184→      const srA = Math.floor((this.y + this.h - 2) / TILE), srB = Math.floor((this.y + this.h + 2) / TILE);
+   185→   185→      for (let c = sc0; c <= sc1; c++) {
+   186→   186→        if (tileAt(level, c, srA) === 'v' || tileAt(level, c, srB) === 'v') {
+   187→   187→          this.vy = -1180; this.onGround = false; this.squash = -0.4; this.springT = 0.6;
+   188→   188→          Audio8.sfx.spring();
+   189→   189→          game.spawnDust(this.x + this.w / 2, this.y + this.h, 6);
+   190→   190→          break;
+   191→   191→        }
+   192→   192→      }
+   193→   193→    }
+   194→   194→
+   195→   195→    // падение в яму
+   196→   196→    if (this.y > ROWS * TILE + 60) game.playerFell();
+   197→   197→
+   198→   198→    if (this.invuln > 0) this.invuln -= dt;
+   199→   199→    if (Math.abs(this.vx) > 20 && this.onGround) this.walkT += dt * Math.abs(this.vx) / 26;
+   200→   200→  }
+   201→   201→
+   202→   202→  hurt(dir, game, fromSpike = false) {
+   203→   203→    if (this.invuln > 0) return;
+   204→   204→    this.hp--;
+   205→   205→    this.invuln = 1.3;
+   206→   206→    this.vy = fromSpike ? -430 : -330;
+   207→   207→    this.vx = dir * 260;
+   208→   208→    Audio8.sfx.hurt();
+   209→   209→    game.onPlayerHurt();
+   210→   210→  }
+   211→   211→
+   212→   212→  respawn() {
+   213→   213→    this.x = this.lastSafe.x; this.y = this.lastSafe.y;
+   214→   214→    this.vx = 0; this.vy = 0;
+   215→   215→    this.invuln = 1.3;
+   216→   216→  }
+   217→   217→
+   218→   218→  draw(ctx, camX) {
+   219→   219→    if (this.invuln > 0 && Math.floor(this.invuln * 12) % 2 === 0) return; // мигание
+   220→   220→    const bob = (Math.abs(this.vx) > 20 && this.onGround) ? Math.abs(Math.sin(this.walkT * 6)) * 3 : 0;
+   221→   221→    const sq = this.squash;
+   222→   222→    const w = this.w + 10 - Math.abs(sq) * 12;
+   223→   223→    const h = this.h - sq * 10;
+   224→   224→    const x = this.x - (w - this.w) / 2 - camX;
+   225→   225→    const y = this.y + (this.h - h) - bob;
+   226→   226→    // тень
+   227→   227→    ctx.fillStyle = 'rgba(0,0,0,.25)';
+   228→   228→    ctx.beginPath();
+   229→   229→    ctx.ellipse(this.x + this.w / 2 - camX, this.y + this.h + 3, 16, 4, 0, 0, 7);
+   230→   230→    ctx.fill();
+   231→   231→    Sprites.draw(ctx, 'andrey', x, y, w, h, this.dir < 0);
+   232→   232→  }
+   233→   233→}
+   234→   234→
+   235→   235→// ============================================================
+   236→   236→// БУРМАЛДЕНЕЦ (пехота)
+   237→   237→// ============================================================
+   238→   238→class Walker {
+   239→   239→  constructor(colC, r = 10) {
+   240→   240→    this.w = 34; this.h = 46;
+   241→   241→    this.x = colC * TILE + 3;
+   242→   242→    this.y = r * TILE - this.h + TILE;
+   243→   243→    this.vx = -60; this.vy = 0;
+   244→   244→    this.dir = -1;
+   245→   245→    this.dead = false;
+   246→   246→    this.walkT = Math.random() * 3;
+   247→   247→  }
+   248→   248→  update(dt, level, game) {
+   249→   249→    this.vy = Math.min(this.vy + CONFIG.GRAVITY * dt, 900);
+   250→   250→    moveEntity(this, level, dt);
+   251→   251→    if (this.hitWall) this.flip();
+   252→   252→    // не падать с края и не ходить в шипы
+   253→   253→    if (this.onGround) {
+   254→   254→      const frontX = this.vx > 0 ? this.x + this.w + 3 : this.x - 3;
+   255→   255→      const fc = Math.floor(frontX / TILE);
+   256→   256→      const fr = Math.floor((this.y + this.h + 8) / TILE);
+   257→   257→      if (!isSolid(level, fc, fr) && !isPlat(level, fc, fr)) this.flip();
+   258→   258→      const br = Math.floor((this.y + this.h - 6) / TILE);
+   259→   259→      if (isSpike(level, fc, br)) this.flip();
+   260→   260→    }
+   261→   261→    this.walkT += dt * 5;
+   262→   262→  }
+   263→   263→  flip() { this.vx = -Math.sign(this.vx || this.dir) * 60; this.dir = Math.sign(this.vx); }
+   264→   264→  stomp(game) {
+   265→   265→    this.dead = true;
+   266→   266→    Audio8.sfx.stomp();
+   267→   267→    game.spawnStars(this.x + this.w / 2, this.y + 8);
+   268→   268→    game.kills++;
+   269→   269→  }
+   270→   270→  draw(ctx, camX) {
+   271→   271→    ctx.fillStyle = 'rgba(0,0,0,.25)';
+   272→   272→    ctx.beginPath();
+   273→   273→    ctx.ellipse(this.x + this.w / 2 - camX, this.y + this.h + 3, 14, 4, 0, 0, 7);
+   274→   274→    ctx.fill();
+   275→   275→    const bob = Math.abs(Math.sin(this.walkT)) * 2.5;
+   276→   276→    Sprites.draw(ctx, 'burmaldenets', this.x - camX, this.y - bob, this.w + 10, this.h + 12 - 0, this.vx > 0);
+   277→   277→  }
+   278→   278→}
+   279→   279→
+   280→   280→// ============================================================
+   281→   281→// МЕТАТЕЛЬ ТОМАГАВКОВ
+   282→   282→// ============================================================
+   283→   283→class Thrower extends Walker {
+   284→   284→  constructor(colC, r = 10) {
+   285→   285→    super(colC, r);
+   286→   286→    this.w = 34; this.h = 46;
+   287→   287→    this.vx = -36;
+   288→   288→    this.throwT = 1.2 + Math.random();
+   289→   289→  }
+   290→   290→  flip() { this.vx = -Math.sign(this.vx || this.dir) * 36; this.dir = Math.sign(this.vx); }
+   291→   291→  update(dt, level, game) {
+   292→   292→    super.update(dt, level, game);
+   293→   293→    this.throwT -= dt;
+   294→   294→    const p = game.player;
+   295→   295→    if (this.throwT <= 0 && Math.abs(p.x - this.x) < 360 && Math.abs(p.y - this.y) < 200) {
+   296→   296→      this.throwT = 2.4;
+   297→   297→      const dir = p.x > this.x ? 1 : -1;
+   298→   298→      game.tomahawks.push(new Tomahawk(this.x + this.w / 2, this.y + 8, dir));
+   299→   299→      Audio8.sfx.throw();
+   300→   300→    }
+   301→   301→  }
+   302→   302→}
+   303→   303→
+   304→   304→class Tomahawk {
+   305→   305→  constructor(x, y, dir) {
+   306→   306→    this.w = 18; this.h = 18;
+   307→   307→    this.x = x - 9; this.y = y;
+   308→   308→    this.vx = dir * 250; this.vy = -300;
+   309→   309→    this.rot = 0; this.dead = false;
+   310→   310→    this.harmless = 0.12; // чтобы не бить прямо из руки в упор
+   311→   311→  }
+   312→   312→  update(dt, level, game) {
+   313→   313→    this.vy += 1000 * dt;
+   314→   314→    this.x += this.vx * dt;
+   315→   315→    this.y += this.vy * dt;
+   316→   316→    this.rot += dt * 14;
+   317→   317→    this.harmless -= dt;
+   318→   318→    const c = Math.floor((this.x + 9) / TILE), r = Math.floor((this.y + 9) / TILE);
+   319→   319→    if (isSolid(level, c, r)) { this.dead = true; game.spawnDust(this.x + 9, this.y + 9, 4); }
+   320→   320→    if (this.y > ROWS * TILE + 40) this.dead = true;
+   321→   321→    if (this.harmless <= 0 && this.overlapPlayer(game.player)) {
+   322→   322→      this.dead = true;
+   323→   323→      game.player.hurt(Math.sign(game.player.x - this.x) || 1, game);
+   324→   324→    }
+   325→   325→  }
+   326→   326→  overlapPlayer(p) {
+   327→   327→    return overlaps(this, p);
+   328→   328→  }
+   329→   329→  draw(ctx, camX) {
+   330→   330→    ctx.save();
+   331→   331→    ctx.translate(this.x + 9 - camX, this.y + 9);
+   332→   332→    ctx.rotate(this.rot);
+   333→   333→    const spr = Sprites.get('tomahawk');
+   334→   334→    const src = spr.img || spr.fallback;
+   335→   335→    ctx.imageSmoothingEnabled = false;
+   336→   336→    ctx.drawImage(src, -10, -10, 20, 20);
+   337→   337→    ctx.restore();
+   338→   338→  }
+   339→   339→}
+   340→   340→
+   341→   341→// ============================================================
+   342→   342→// ЛЕТУН — крылатый бурмалденец (патрулирует по воздуху, синус)
+   343→   343→// ============================================================
+   344→   344→class Flyer {
+   345→   345→  constructor(colC, r = 6) {
+   346→   346→    this.w = 44; this.h = 38;
+   347→   347→    this.x = colC * TILE + (TILE - this.w) / 2;
+   348→   348→    this.y = r * TILE;
+   349→   349→    this.baseY = r * TILE;
+   350→   350→    this.vx = -95; this.vy = 0;
+   351→   351→    this.t = Math.random() * 6;
+   352→   352→    this.dead = false;
+   353→   353→  }
+   354→   354→  update(dt, level, game) {
+   355→   355→    this.t += dt;
+   356→   356→    this.x += this.vx * dt;
+   357→   357→    this.y = this.baseY + Math.sin(this.t * 3.2) * 24;
+   358→   358→    // разворот у стен и краёв карты
+   359→   359→    const fc = Math.floor((this.vx > 0 ? this.x + this.w + 4 : this.x - 4) / TILE);
+   360→   360→    const fr = Math.floor((this.y + this.h / 2) / TILE);
+   361→   361→    if (fc <= 0 || fc >= level.w - 1 || isSolid(level, fc, fr) || isLiquid(level, fc, fr)) this.vx = -this.vx;
+   362→   362→  }
+   363→   363→  stomp(game) {
+   364→   364→    this.dead = true;
+   365→   365→    Audio8.sfx.stomp();
+   366→   366→    game.spawnStars(this.x + this.w / 2, this.y + 8);
+   367→   367→    game.kills++;
+   368→   368→  }
+   369→   369→  draw(ctx, camX) {
+   370→   370→    const flap = Math.sin(this.t * 14) * 3;
+   371→   371→    Sprites.draw(ctx, 'flyer', this.x - camX, this.y - flap, this.w + 14, this.h + 12, this.vx > 0);
+   372→   372→  }
+   373→   373→}
+   374→   374→
+   375→   375→// ============================================================
+   376→   376→// ПРЫГУН — бурмалденец на пружинах (периодически скачет)
+   377→   377→// ============================================================
+   378→   378→class Jumper extends Walker {
+   379→   379→  constructor(colC, r = 10) {
+   380→   380→    super(colC, r);
+   381→   381→    this.w = 36; this.h = 52;
+   382→   382→    this.vx = -52;
+   383→   383→    this.jumpT = 0.9 + Math.random() * 1.2;
+   384→   384→  }
+   385→   385→  flip() { this.vx = -Math.sign(this.vx || this.dir) * 52; this.dir = Math.sign(this.vx); }
+   386→   386→  update(dt, level, game) {
+   387→   387→    super.update(dt, level, game);
+   388→   388→    if (this.onGround) {
+   389→   389→      this.jumpT -= dt;
+   390→   390→      if (this.jumpT <= 0) {
+   391→   391→        this.jumpT = 1.2 + Math.random() * 1.2;
+   392→   392→        this.vy = -640;
+   393→   393→        game.spawnDust(this.x + this.w / 2, this.y + this.h, 3);
+   394→   394→      }
+   395→   395→    }
+   396→   396→  }
+   397→   397→  draw(ctx, camX) {
+   398→   398→    ctx.fillStyle = 'rgba(0,0,0,.25)';
+   399→   399→    ctx.beginPath();
+   400→   400→    ctx.ellipse(this.x + this.w / 2 - camX, this.y + this.h + 3, 14, 4, 0, 0, 7);
+   401→   401→    ctx.fill();
+   402→   402→    const sq = this.onGround ? 0 : (this.vy < 0 ? -4 : 3);
+   403→   403→    Sprites.draw(ctx, 'jumper', this.x - camX - 3, this.y - sq, this.w + 12, this.h + 14, this.vx > 0);
+   404→   404→  }
+   405→   405→}
+   406→   406→
+   407→   407→// ============================================================
+   408→   408→// ЩИТОНОСЕЦ — бронированный: сверху не убить, только плюшкой
+   409→   409→// ============================================================
+   410→   410→class Armored extends Walker {
+   411→   411→  constructor(colC, r = 10) {
+   412→   412→    super(colC, r);
+   413→   413→    this.w = 38; this.h = 50;
+   414→   414→    this.vx = -26;
+   415→   415→    this.armor = true;      // плюшка убивает (die), прыжок сверху — нет
+   416→   416→    this.flash = 0;
+   417→   417→  }
+   418→   418→  flip() { this.vx = -Math.sign(this.vx || this.dir) * 26; this.dir = Math.sign(this.vx); }
+   419→   419→  stomp(game) {
+   420→   420→    // броня: прыжок сверху ничего не даёт (игрок просто отскакивает)
+   421→   421→    if (this.flash <= 0) { this.flash = 0.35; Audio8.sfx.locked(); game.spawnDust(this.x + this.w / 2, this.y, 3); }
+   422→   422→  }
+   423→   423→  die(game) {
+   424→   424→    this.dead = true;
+   425→   425→    Audio8.sfx.stomp();
+   426→   426→    game.spawnStars(this.x + this.w / 2, this.y + 8);
+   427→   427→    game.kills++;
+   428→   428→  }
+   429→   429→  update(dt, level, game) {
+   430→   430→    super.update(dt, level, game);
+   431→   431→    if (this.flash > 0) this.flash -= dt;
+   432→   432→  }
+   433→   433→  draw(ctx, camX) {
+   434→   434→    ctx.fillStyle = 'rgba(0,0,0,.25)';
+   435→   435→    ctx.beginPath();
+   436→   436→    ctx.ellipse(this.x + this.w / 2 - camX, this.y + this.h + 3, 15, 4, 0, 0, 7);
+   437→   437→    ctx.fill();
+   438→   438→    if (this.flash > 0) ctx.globalAlpha = 0.6;
+   439→   439→    const bob = Math.abs(Math.sin(this.walkT)) * 2;
+   440→   440→    Sprites.draw(ctx, 'armored', this.x - camX - 5, this.y - bob, this.w + 14, this.h + 14, this.vx > 0);
+   441→   441→    ctx.globalAlpha = 1;
+   442→   442→  }
+   443→   443→}
+   444→   444→
+   445→   445→// ============================================================
+   446→   446→// ВОЖДЬ БУРМАЛДЕНОВ (босс) — параметры настраиваются уровнем
+   447→   447→// ============================================================
+   448→   448→class Boss {
+   449→   449→  constructor(colC, opts = {}) {
+   450→   450→    this.w = opts.big ? 84 : 66;
+   451→   451→    this.h = opts.big ? 104 : 84;
+   452→   452→    this.x = colC * TILE + (TILE - this.w) / 2;
+   453→   453→    this.y = 8 * TILE + (opts.big ? -14 : 0);
+   454→   454→    this.vx = -70; this.vy = 0;
+   455→   455→    this.dir = -1;
+   456→   456→    this.hp = opts.hp || 6; this.maxHp = this.hp;
+   457→   457→    this.big = !!opts.big;
+   458→   458→    this.dead = false;
+   459→   459→    this.invuln = 0;
+   460→   460→    this.chargeT = 5;
+   461→   461→    this.state = 'walk';      // walk | telegraph | charge
+   462→   462→    this.telegraphT = 0;
+   463→   463→    this.walkT = 0;
+   464→   464→    this.hurtFlash = 0;
+   465→   465→  }
+   466→   466→  get speed() { return 70 + (this.maxHp - this.hp) * (this.big ? 11 : 22); }
+   467→   467→
+   468→   468→  update(dt, level, game) {
+   469→   469→    if (this.invuln > 0) this.invuln -= dt;
+   470→   470→    if (this.hurtFlash > 0) this.hurtFlash -= dt;
+   471→   471→
+   472→   472→    if (this.state === 'telegraph') {
+   473→   473→      this.telegraphT -= dt;
+   474→   474→      this.vx = 0;
+   475→   475→      if (this.telegraphT <= 0) { this.state = 'charge'; this.chargeDir = Math.sign(game.player.x - this.x) || 1; this.vx = this.chargeDir * this.speed * 2.4; }
+   476→   476→    } else if (this.state === 'charge') {
+   477→   477→      this.vx = this.chargeDir * this.speed * 2.4;
+   478→   478→      this.chargeT -= 0;
+   479→   479→      if (this.hitWall || (this.chargeDir > 0 && game.player.x < this.x && Math.random() < 0.01)) { this.state = 'walk'; this.chargeT = 4.5 + Math.random() * 2; }
+   480→   480→    } else {
+   481→   481→      this.chargeT -= dt;
+   482→   482→      if (this.chargeT <= 0) { this.state = 'telegraph'; this.telegraphT = 0.7; Audio8.sfx.throw(); }
+   483→   483→    }
+   484→   484→
+   485→   485→    this.vy = Math.min(this.vy + CONFIG.GRAVITY * dt, 900);
+   486→   486→    moveEntity(this, level, dt);
+   487→   487→    if (this.hitWall) {
+   488→   488→      if (this.state === 'charge') { this.state = 'walk'; this.chargeT = 4.5 + Math.random() * 2; game.shake = 0.25; }
+   489→   489→      this.vx = -Math.sign(this.vx || this.dir) * this.speed;
+   490→   490→    }
+   491→   491→    // не падать с края (в арене и так стены, но на всякий)
+   492→   492→    if (this.onGround && this.state === 'walk') {
+   493→   493→      const frontX = this.vx > 0 ? this.x + this.w + 3 : this.x - 3;
+   494→   494→      const fc = Math.floor(frontX / TILE), fr = Math.floor((this.y + this.h + 8) / TILE);
+   495→   495→      if (!isSolid(level, fc, fr) && !isPlat(level, fc, fr)) this.vx = -Math.sign(this.vx) * this.speed;
+   496→   496→    }
+   497→   497→    this.walkT += dt * 4;
+   498→   498→  }
+   499→   499→
+   500→   500→  stomp(game) {
+   501→   501→    if (this.invuln > 0) return;
+   502→   502→    this.hp--;
+   503→   503→    this.invuln = 1.1;
+   504→   504→    this.hurtFlash = 0.4;
+   505→   505→    game.shake = 0.3;
+   506→   506→    game.spawnStars(this.x + this.w / 2, this.y + 10);
+   507→   507→    Audio8.sfx.bossHit();
+   508→   508→    if (this.hp <= 0) {
+   509→   509→      this.dead = true;
+   510→   510→      Audio8.sfx.bossDie();
+   511→   511→      game.shake = 0.6;
+   512→   512→      game.onBossDead();
+   513→   513→    }
+   514→   514→  }
+   515→   515→
+   516→   516→  // Плюшкой киднули — урон без инвулна (каждая плюшка считается)
+   517→   517→  hitByHat(game) {
+   518→   518→    this.hp--;
+   519→   519→    this.hurtFlash = 0.4;
+   520→   520→    game.shake = 0.3;
+   521→   521→    game.spawnStars(this.x + this.w / 2, this.y + 10);
+   522→   522→    Audio8.sfx.bossHit();
+   523→   523→    if (this.hp <= 0) {
+   524→   524→      this.dead = true;
+   525→   525→      Audio8.sfx.bossDie();
+   526→   526→      game.shake = 0.6;
+   527→   527→      game.onBossDead();
+   528→   528→    }
+   529→   529→  }
+   530→   530→
+   531→   531→  draw(ctx, camX, t) {
+   532→   532→    // телеграф рывка — мигает
+   533→   533→    let flash = false;
+   534→   534→    if (this.state === 'telegraph') flash = Math.floor(t * 10) % 2 === 0;
+   535→   535→    if (this.hurtFlash > 0) flash = true;
+   536→   536→    ctx.fillStyle = 'rgba(0,0,0,.3)';
+   537→   537→    ctx.beginPath();
+   538→   538→    ctx.ellipse(this.x + this.w / 2 - camX, this.y + this.h + 4, 26, 6, 0, 0, 7);
+   539→   539→    ctx.fill();
+   540→   540→    if (flash) {
+   541→   541→      ctx.save();
+   542→   542→      ctx.globalAlpha = 0.45;
+   543→   543→      Sprites.draw(ctx, 'boss', this.x - camX - 4, this.y - 4, this.w + 14, this.h + 12, this.vx > 0);
+   544→   544→      ctx.restore();
+   545→   545→    }
+   546→   546→    const bob = Math.abs(Math.sin(this.walkT)) * 3;
+   547→   547→    Sprites.draw(ctx, 'boss', this.x - camX, this.y - bob, this.w + 10, this.h + 8, this.vx > 0);
+   548→   548→    // HP босса
+   549→   549→    if (!this.dead) {
+   550→   550→      const bw = 70, bx = this.x + this.w / 2 - bw / 2 - camX, by = this.y - 18;
+   551→   551→      ctx.fillStyle = '#00000090'; ctx.fillRect(bx - 1, by - 1, bw + 2, 8);
+   552→   552→      ctx.fillStyle = '#ff4757'; ctx.fillRect(bx, by, bw * (this.hp / this.maxHp), 6);
+   553→   553→    }
+   554→   554→  }
+   555→   555→}
+   556→   556→
+   557→   557→// ============================================================
+   558→   558→// ПРЕДМЕТЫ
+   559→   559→// ============================================================
+   560→   560→class Bottle {
+   561→   561→  constructor(c, r) { this.c = c; this.r = r; this.t = Math.random() * 6; this.taken = false; }
+   562→   562→  rect() { return { x: this.c * TILE + 8, y: this.r * TILE + 4, w: 24, h: 34 }; }
+   563→   563→  update(dt) { this.t += dt; }
+   564→   564→  draw(ctx, camX) {
+   565→   565→    const bob = Math.sin(this.t * 3.2) * 4;
+   566→   566→    Sprites.draw(ctx, 'checkushka', this.c * TILE + 8 - camX, this.r * TILE + 4 + bob, 24, 32);
+   567→   567→  }
+   568→   568→}
+   569→   569→
+   570→   570→class HeartPickup {
+   571→   571→  constructor(c, r) { this.c = c; this.r = r; this.t = Math.random() * 6; this.taken = false; }
+   572→   572→  rect() { return { x: this.c * TILE + 7, y: this.r * TILE + 8, w: 26, h: 24 }; }
+   573→   573→  update(dt) { this.t += dt; }
+   574→   574→  draw(ctx, camX) {
+   575→   575→    const bob = Math.sin(this.t * 2.6) * 4;
+   576→   576→    Sprites.draw(ctx, 'heart', this.c * TILE + 7 - camX, this.r * TILE + 8 + bob, 26, 24);
+   577→   577→  }
+   578→   578→}
+   579→   579→
+   580→   580→// Гора плюшек — подбор даёт боеприпас (3 плюшки)
+   581→   581→class PlushPickup {
+   582→   582→  constructor(c, r) { this.c = c; this.r = r; this.t = Math.random() * 6; this.taken = false; }
+   583→   583→  rect() { return { x: this.c * TILE + 2, y: this.r * TILE + 8, w: 36, h: 32 }; }
+   584→   584→  update(dt) { this.t += dt; }
+   585→   585→  draw(ctx, camX) {
+   586→   586→    const bob = Math.sin(this.t * 2.8) * 5;
+   587→   587→    const x = this.c * TILE + 2 - camX, y = this.r * TILE + 8 + bob;
+   588→   588→    // светящийся ореол, чтобы бросалась в глаза
+   589→   589→    const pulse = 0.3 + Math.sin(this.t * 4) * 0.15;
+   590→   590→    ctx.fillStyle = `rgba(255,170,200,${pulse})`;
+   591→   591→    ctx.beginPath(); ctx.ellipse(x + 18, y + 18, 24, 20, 0, 0, 7); ctx.fill();
+   592→   592→    Sprites.draw(ctx, 'plush', x, y, 36, 32);
+   593→   593→  }
+   594→   594→}
+   595→   595→
+   596→   596→// Летящая плюшка — снаряд игрока. Лёгкая дуга, крутится, бьёт врагов и босса.
+   597→   597→class HatShot {
+   598→   598→  constructor(x, y, dir) {
+   599→   599→    this.w = 30; this.h = 26;
+   600→   600→    this.x = x; this.y = y;
+   601→   601→    this.vx = dir * 470; this.vy = -140;
+   602→   602→    this.rot = 0; this.dead = false;
+   603→   603→    this.life = 2.0;
+   604→   604→  }
+   605→   605→  update(dt, level, game) {
+   606→   606→    this.vy += 280 * dt;              // мягкая дуга — дальний бросок
+   607→   607→    this.x += this.vx * dt;
+   608→   608→    this.y += this.vy * dt;
+   609→   609→    this.rot += dt * 16;
+   610→   610→    this.life -= dt;
+   611→   611→    const c = Math.floor((this.x + this.w / 2) / TILE), r = Math.floor((this.y + this.h / 2) / TILE);
+   612→   612→    if (isSolid(level, c, r)) { this.dead = true; game.spawnDust(this.x + this.w / 2, this.y + this.h / 2, 4); }
+   613→   613→    if (this.life <= 0 || this.y > ROWS * TILE + 40) this.dead = true;
+   614→   614→  }
+   615→   615→  draw(ctx, camX) {
+   616→   616→    ctx.save();
+   617→   617→    ctx.translate(this.x + this.w / 2 - camX, this.y + this.h / 2);
+   618→   618→    ctx.rotate(this.rot);
+   619→   619→    const spr = Sprites.get('plush');
+   620→   620→    const src = spr && (spr.img || spr.fallback);
+   621→   621→    if (src) { ctx.imageSmoothingEnabled = false; ctx.drawImage(src, -18, -16, 36, 32); }
+   622→   622→    ctx.restore();
+   623→   623→  }
+   624→   624→}
+   625→   625→
+   626→   626→// Завод — выход с уровня. Стоит НА земле (не зарывается в тайлы!),
+   627→   627→// триггером завершения уровня служит всё здание с запасом по краям.
+   628→   628→const GROUND_TOP = (ROWS - 2) * TILE; // верх земли — ряд 11 → y = 440
+   629→   629→
+   630→   630→// ============================================================
+   631→   631→// КАСТОМНЫЕ ОБЪЕКТЫ (админ-панель): своя текстура + JS-скрипт
+   632→   632→// ============================================================
+   633→   633→// Скрипт объекта — тело функции, исполняется КАЖДЫЙ КАДР:
+   634→   634→//   function(obj, api, dt) { ... }
+   635→   635→// obj — сам объект (x, y, w, h, vx, vy, hp, t, data…),
+   636→   636→// api — доступ к игре, dt — секунды с прошлого кадра.
+   637→   637→const CustomObjects = {
+   638→   638→  defs: new Map(),
+   639→   639→  runs: new Map(),
+   640→   640→  broken: new Set(),   // объекты с ошибкой в скрипте — чтобы не спамить консоль
+   641→   641→  set(list) {
+   642→   642→    this.defs.clear(); this.runs.clear(); this.broken.clear();
+   643→   643→    (list || []).forEach((o) => {
+   644→   644→      if (!o || !o.id) return;
+   645→   645→      this.defs.set(o.id, o);
+   646→   646→      try {
+   647→   647→        this.runs.set(o.id, new Function('obj', 'api', 'dt', '"use strict";\n' + String(o.script || '')));
+   648→   648→      } catch (e) {
+   649→   649→        this.broken.add(o.id);
+   650→   650→        console.warn('Объект «' + (o.name || o.id) + '»: ошибка в скрипте — ' + e.message);
+   651→   651→      }
+   652→   652→      if (o.tex) Sprites.addSlot('obj-' + o.id, { w: o.w, h: o.h, url: o.tex, color: '#9a4de6', portrait: o.character ? [0, 0.66] : null });
+   653→   653→    });
+   654→   654→  },
+   655→   655→  def(id) { return this.defs.get(id) || null; },
+   656→   656→  get list() { return Array.from(this.defs.values()); },
+   657→   657→};
+   658→   658→
+   659→   659→class CustomEnt {
+   660→   660→  constructor(type, c, r) {
+   661→   661→    const d = CustomObjects.def(type) || {};
+   662→   662→    this.type = type;
+   663→   663→    this.w = Math.max(8, Math.min(400, d.w || 32));
+   664→   664→    this.h = Math.max(8, Math.min(400, d.h || 32));
+   665→   665→    this.x = c * TILE + (TILE - this.w) / 2;
+   666→   666→    this.y = (r + 1) * TILE - this.h;      // стоит на дне клетки
+   667→   667→    this.vx = 0; this.vy = 0;
+   668→   668→    this.dir = -1;
+   669→   669→    this.t = 0;                             // время жизни (сек)
+   670→   670→    this.hp = 1; this.maxHp = 1;
+   671→   671→    this.dead = false; this.taken = false;
+   672→   672→    // флаги поведения — скрипт задаёт/меняет:
+   673→   673→    this.collect = 0;        // >0: касание игроком = подбор, +collect к чекушкам
+   674→   674→    this.dangerous = false;  // касание игроком = урон
+   675→   675→    this.stompable = false;  // убивается прыжком сверху и плюшкой
+   676→   676→    this.onGround = false; this.hitWall = false;
+   677→   677→    this.flash = 0;
+   678→   678→    this.data = {};          // переменные скрипта
+   679→   679→  }
+   680→   680→  hurt(game) {
+   681→   681→    this.hp--;
+   682→   682→    this.flash = 0.25;
+   683→   683→    if (this.hp <= 0) {
+   684→   684→      this.dead = true;
+   685→   685→      game.kills++;
+   686→   686→      game.spawnStars(this.x + this.w / 2, this.y + this.h / 2);
+   687→   687→    }
+   688→   688→  }
+   689→   689→  update(dt, level, game) {
+   690→   690→    this.t += dt;
+   691→   691→    if (this.flash > 0) this.flash -= dt;
+   692→   692→    // упал за пределы карты (например, в яму) — убираем
+   693→   693→    if (this.y > ROWS * TILE + 80) this.dead = true;
+   694→   694→    const run = CustomObjects.runs.get(this.type);
+   695→   695→    if (!run || CustomObjects.broken.has(this.type)) return;
+   696→   696→    try { run(this, game, dt); }
+   697→   697→    catch (e) {
+   698→   698→      CustomObjects.broken.add(this.type);
+   699→   699→      console.warn('Объект «' + this.type + '»: ошибка выполнения скрипта — ' + e.message);
+   700→   700→    }
+   701→   701→    if (this.hp > this.maxHp) this.maxHp = this.hp;
+   702→   702→  }
+   703→   703→  draw(ctx, camX) {
+   704→   704→    if (!Sprites.get('obj-' + this.type)) return;
+   705→   705→    ctx.fillStyle = 'rgba(0,0,0,.2)';
+   706→   706→    ctx.beginPath();
+   707→   707→    ctx.ellipse(this.x + this.w / 2 - camX, this.y + this.h + 2, Math.max(6, this.w * 0.4), 3, 0, 0, 7);
+   708→   708→    ctx.fill();
+   709→   709→    if (this.flash > 0) ctx.globalAlpha = 0.55;
+   710→   710→    Sprites.draw(ctx, 'obj-' + this.type, this.x - camX, this.y, this.w, this.h, this.dir > 0);
+   711→   711→    ctx.globalAlpha = 1;
+   712→   712→    if (this.maxHp > 1 && !this.dead) {
+   713→   713→      const bw = Math.max(30, this.w * 0.8);
+   714→   714→      const bx = this.x + this.w / 2 - bw / 2 - camX, by = this.y - 10;
+   715→   715→      ctx.fillStyle = '#00000090'; ctx.fillRect(bx - 1, by - 1, bw + 2, 6);
+   716→   716→      ctx.fillStyle = '#ff4757'; ctx.fillRect(bx, by, bw * Math.max(0, this.hp / this.maxHp), 4);
+   717→   717→    }
+   718→   718→  }
+   719→   719→}
+   720→   720→
+   721→   721→class FactoryExit {
+   722→   722→  constructor(c, locked) {
+   723→   723→    this.c = c;
+   724→   724→    this.x = c * TILE; this.y = GROUND_TOP - 140;
+   725→   725→    this.w = 160; this.h = 140;
+   726→   726→    this.locked = locked;
+   727→   727→    this.t = 0;
+   728→   728→    this.near = 0;   // игрок рядом (для подсказки)
+   729→   729→  }
+   730→   730→  unlock() { this.locked = false; }
+   731→   731→  // зона-триггер: всё здание + 14px по краям, от крыши до земли
+   732→   732→  doorRect() { return { x: this.x - 14, y: this.y + 4, w: this.w + 28, h: this.h - 4 }; }
+   733→   733→  update(dt, player) {
+   734→   734→    this.t += dt;
+   735→   735→    const px = player ? player.x + player.w / 2 : -9999;
+   736→   736→    this.near = Math.abs(px - (this.x + this.w / 2)) < 300;
+   737→   737→  }
+   738→   738→  draw(ctx, camX) {
+   739→   739→    if (this.locked) ctx.globalAlpha = 0.35;
+   740→   740→    Sprites.draw(ctx, 'factory', this.x - camX, this.y, this.w, this.h);
+   741→   741→    ctx.globalAlpha = 1;
+   742→   742→    const cx = this.x + this.w / 2 - camX;
+   743→   743→    if (this.locked) {
+   744→   744→      ctx.fillStyle = '#ffd23f';
+   745→   745→      ctx.font = 'bold 22px Arial';
+   746→   746→      ctx.textAlign = 'center';
+   747→   747→      ctx.fillText('🔒', cx, this.y + 34 + Math.sin(this.t * 3) * 3);
+   748→   748→      ctx.textAlign = 'left';
+   749→   749→    } else {
+   750→   750→      // мигающая стрелка над заводом
+   751→   751→      const bob = Math.sin(this.t * 4) * 5;
+   752→   752→      ctx.fillStyle = '#2ed573';
+   753→   753→      ctx.font = 'bold 30px Arial';
+   754→   754→      ctx.textAlign = 'center';
+   755→   755→      ctx.fillText('▼', cx, this.y - 16 + bob);
+   756→   756→      // подсветка зоны триггера, когда игрок близко
+   757→   757→      if (this.near) {
+   758→   758→        const pulse = 0.35 + Math.sin(this.t * 6) * 0.2;
+   759→   759→        ctx.fillStyle = `rgba(46,213,115,${pulse})`;
+   760→   760→        ctx.fillRect(this.x - 14 - camX, this.y + this.h - 8, this.w + 28, 8);
+   761→   761→      }
+   762→   762→      ctx.textAlign = 'left';
+   763→   763→    }
+   764→   764→  }
+   765→   765→}
+   766→   766→

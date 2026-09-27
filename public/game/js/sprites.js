@@ -317,17 +317,20 @@ const Sprites = (() => {
 
   function get(key) { return store[key]; }
 
-  // Нарисовать спрайт (img или фолбэк) с флипом
-  function draw(ctx, key, x, y, w, h, flip = false) {
+  // Нарисовать спрайт (img или фолбэк).
+  // flip — зеркально; rot — поворот в радианах ВОКРУГ ЦЕНТРА; alpha — прозрачность.
+  function draw(ctx, key, x, y, w, h, flip = false, rot = 0, alpha = 1) {
     const s = store[key];
     if (!s) return;
     const src = s.img || s.fallback;
     if (!src) return;
     ctx.save();
-    if (flip) { ctx.translate(x + w, y); ctx.scale(-1, 1); }
-    else ctx.translate(x, y);
+    if (alpha < 1) ctx.globalAlpha *= Math.max(0, Math.min(1, alpha));
+    ctx.translate(x + w / 2, y + h / 2);
+    if (rot) ctx.rotate(rot);
+    ctx.scale(flip ? -1 : 1, 1);
     ctx.imageSmoothingEnabled = false;
-    ctx.drawImage(src, 0, 0, w, h);
+    ctx.drawImage(src, -w / 2, -h / 2, w, h);
     ctx.restore();
   }
 
