@@ -105,6 +105,19 @@ function validateMaps(maps: unknown): string | null {
         if (q[k] !== undefined && (typeof q[k] !== 'number' || !isFinite(q[k] as number))) return `map ${key}: quake.${k} must be a number`;
       }
     }
+    // секретные комнаты под землёй (def.under): {c0,c1,well,decoys,heart,plush}
+    const un = d.under;
+    if (un !== undefined && un !== null) {
+      if (!Array.isArray(un)) return `map ${key}: under must be an array`;
+      if (un.length > 6) return `map ${key}: too many under rooms (max 6)`;
+      for (const u of un) {
+        if (!u || typeof u !== 'object') return `map ${key}: under room must be an object`;
+        for (const kk of ['c0', 'c1']) {
+          const n = (u as Record<string, unknown>)[kk];
+          if (typeof n !== 'number' || !isFinite(n as number)) return `map ${key}: under.${kk} must be a number`;
+        }
+      }
+    }
   }
   return null;
 }

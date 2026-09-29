@@ -1165,17 +1165,35 @@ const Sprites = (() => {
 // 'v' батут, 'S' пила, 'c' чекушка, 'H' сердечко, 'e' бурмалденец, 't' метатель,
 // 'f' летун, 'j' прыгун, 'a' щитоносец, 'G' вождь-босс, 'F' завод (выход), 'P' старт
 // ============================================================
-const ROWS = 13;          // высота карты в тайлах
+const ROWS = 18;          // высота карты: 0-12 поверхность, 13-17 подземелье (секретные комнаты)
 const TILE = 40;          // размер тайла
+const SURFACE_ROWS = 13;  // «старая» высота мира (поверхность) — низ земли, ниже только подземка
 
 function buildLevel(def) {
   const w = def.width;
   const grid = Array.from({ length: ROWS }, () => Array(w).fill('.'));
   const spawns = { enemies: [], bottles: [], hearts: [], tomahawks: [], plushes: [], custom: [] };
 
-  // земля (2 ряда внизу)
+  // земля: поверхность (2 ряда) + сплошное подземелье ниже — снизу никогда не видно фон
   (def.ground || []).forEach(([c0, c1]) => {
-    for (let r = 11; r < ROWS; r++) for (let c = c0; c <= c1; c++) grid[r][c] = '#';
+    for (let r = 11; r <= 12; r++) for (let c = c0; c <= c1; c++) grid[r][c] = '#';
+  });
+  for (let r = 13; r < ROWS; r++) grid[r].fill('#');
+
+  // секретные комнаты под землёй: def.under = [{ c0, c1, well, decoys, heart, plush }]
+  // комната — воздух ряды 13-16 (пол — ряд 17); колодец — 2 колонки без земли
+  // (ряды 11-12) с батутом на дне = выход наружу; обманки 'D' — выглядят как
+  // земля, но проваливаешься внутрь (враги их обходят — считают краем)
+  (def.under || []).forEach((u) => {
+    if (!u || typeof u !== 'object') return; // битая секретка из панели — пропустить, не падать
+    for (let r = 13; r <= 16; r++) for (let c = u.c0; c <= u.c1; c++) if (c >= 0 && c < w) grid[r][c] = '.';
+    (u.well || []).forEach((c) => { for (let r = 11; r <= 12; r++) if (c >= 0 && c < w) grid[r][c] = '.'; });
+    // батут в КАЖДОЙ колонке колодца: упал в колодец — сразу выбросило наружу
+    // (колодец = выход; вход в комнату — только через обманки)
+    (u.well || []).forEach((c) => { if (c >= 0 && c < w) grid[16][c] = 'v'; });
+    (u.decoys || []).forEach((c) => {
+      for (let r = 11; r <= 12; r++) if (c >= 0 && c < w && grid[r][c] === '#') grid[r][c] = 'D';
+    });
   });
   // кирпичи: прямоугольники [c0, r0, c1, r1]
   (def.bricks || []).forEach(([c0, r0, c1, r1]) => {
@@ -1218,6 +1236,16 @@ function buildLevel(def) {
   (def.hearts || []).forEach(([c, r]) => spawns.hearts.push({ c, r }));
   // плюшки (боеприпас для стрельбы по боссу и щитоносцам)
   (def.plushes || []).forEach(([c, r]) => spawns.plushes.push({ c, r }));
+  // лут внутри секретных комнат: чекушки по полу, сердечко в центре (берётся
+  // в прыжке), плюшка-патроны в главах 2-3
+  (def.under || []).forEach((u) => {
+    if (!u || typeof u !== 'object') return; // битая секретка из панели — пропустить, не падать
+    for (let c = u.c0 + 1; c <= u.c1; c++) {
+      if (c >= 0 && c < w && grid[16][c] !== 'v') spawns.bottles.push({ c, r: 16 });
+    }
+    if (u.heart) spawns.hearts.push({ c: Math.floor((u.c0 + u.c1) / 2), r: 14 });
+    if (u.plush) spawns.plushes.push({ c: u.c0 + 1, r: 15 });
+  });
   // враги: [тип, колонка] — спавн на землю (ряд 10), либо [тип, колонка, ряд] — на платформу
   (def.enemies || []).forEach(([type, c, r]) => spawns.enemies.push({ type, c, r: (r === undefined) ? 10 : r }));
   if (def.boss) spawns.enemies.push({ type: 'boss', c: def.boss.col, r: 9, hp: def.boss.hp });
@@ -1539,6 +1567,8 @@ function genLevelDef(ch, idx, id) {
       }
       def.plats.push([68, 6, 3]);
     }
+    // тайник под ареной: колодец-выход с батутом, вход через обманки-плиты
+    def.under = [{ c0: 32, c1: 39, well: [32, 33], decoys: [36, 37], heart: true, plush: true }];
     return def;
   }
 
@@ -1581,8 +1611,12 @@ function genLevelDef(ch, idx, id) {
 
   // сыпучие мосты через широкие ямы (со 2-й половины главы)
   pits.forEach(([p0, p1, pw]) => {
-    if (pw >= 4 && d >= 4 && rng() < 0.6) def.crumble.push([p0, 10, pw]);
+    if (pw >= 4 && d >= 4 && rng() < 0.6) { def.crumble.push([p0, 10, pw]); mark(p0, p1); }
   });
+
+  // секретка под землёй — ПЕРЕД препятствиями: комната первой занимает
+  // колонки (mark), шипы/пилы/батуты/враги поверх входа не встанут
+  planUnder(def, segs, busy, mark, R, ch, rng);
 
   // батуты: у широких ям + случайные
   const springCount = ch === 1 ? (idx >= 3 ? R(1, 2) : 0) : (ch === 2 ? (idx >= 2 ? R(1, 3) : 0) : R(2, 3));
@@ -1654,13 +1688,25 @@ function genLevelDef(ch, idx, id) {
       if (!busy.has(ec)) { def.enemies.push([type, ec]); mark(ec, ec); }
     }
   }
-  if (hasArmored) { def.plushes.push([R(12, Math.max(13, w - 20)), 10], [R(12, Math.max(13, w - 20)), 10]); }
+  // плюшки/сердечки «на земле» — только на свободной колонке (не в шипах/пилах)
+  const freeCol = (a, b) => {
+    for (let t = 0; t < 14; t++) { const c = R(a, b); if (!busy.has(c)) return c; }
+    return -1;
+  };
+  if (hasArmored) {
+    const q1 = freeCol(12, Math.max(13, w - 20));
+    if (q1 >= 0) def.plushes.push([q1, 10]);
+    const q2 = freeCol(12, Math.max(13, w - 20));
+    if (q2 >= 0 && q2 !== q1) def.plushes.push([q2, 10]);
+  }
 
-  // чекушки: ряды на земле, на платформах, дуги над ямами
+  // чекушки: ряды на земле, на платформах, дуги над ямами.
+  // Занятые колонки (шипы/пилы/батуты/обманки) пропускаем — чекушка
+  // никогда не лежит в опасности
   segs.forEach(([g0, g1], si) => {
     if (si === 0 || rng() < 0.85) {
-      const b0 = Math.min(g0 + 1, g1 - 2);
-      def.bottles.runs.push([b0, b0 + R(0, 2), 10]);
+      const b0 = Math.min(g0 + 1, g1 - 2), b1 = b0 + R(0, 2);
+      for (let c = b0; c <= b1; c++) if (!busy.has(c)) def.bottles.runs.push([c, c, 10]);
     }
   });
   def.plats.forEach(([pc, pr, len]) => {
@@ -1678,7 +1724,8 @@ function genLevelDef(ch, idx, id) {
       const [pc, pr, len] = def.plats[R(0, def.plats.length - 1)];
       def.hearts.push([pc + Math.floor(len / 2), pr - 1]);
     } else {
-      def.hearts.push([R(20, Math.max(21, w - 20)), 10]);
+      const hc = freeCol(20, Math.max(21, w - 20));
+      if (hc >= 0) def.hearts.push([hc, 10]);
     }
   }
 
@@ -1691,6 +1738,56 @@ function genLevelDef(ch, idx, id) {
     def.dialogue = { intro: pair, outro: null };
   }
   return def;
+}
+
+// ============================================================
+// СЕКРЕТНЫЕ КОМНАТЫ ПОД ЗЕМЛЁЙ (генератор)
+// Длинный сегмент земли → под ним комната с лутом: вход — 2 тайла-
+// обманки 'D' (выглядят как земля, проваливаешься), выход — колодец
+// из 2 колонок с батутом на дне (выбрасывает наружу). Поверхность
+// над входом/колодцем чистится (mark): шипы/пилы/враги туда не встанут.
+// ============================================================
+function planUnder(def, segs, busy, mark, R, ch, rng) {
+  def.under = def.under || [];
+  const w = def.width;
+  // прогоны сплошной земли (ряды 11-12): под ямами комнату не рыть —
+  // жижа ямы оказалась бы потолком комнаты
+  const solid = new Array(w).fill(false);
+  (def.ground || []).forEach(([a, b]) => { for (let c = a; c <= b; c++) if (c >= 0 && c < w) solid[c] = true; });
+  const runs = [];
+  let s = -1;
+  for (let c = 0; c <= w; c++) {
+    if (c < w && solid[c]) { if (s < 0) s = c; }
+    else if (s >= 0) { if (c - s >= 9 && s > 8 && c <= w - 8) runs.push([s, c - 1]); s = -1; }
+  }
+  if (!runs.length) return;
+  const build = (first) => {
+    const [a, b] = runs[R(0, runs.length - 1)];
+    const rw = R(6, Math.min(9, b - a - 3));  // ширина комнаты (6-9, влезает в прогон)
+    const c0 = R(a + 1, b - rw);
+    const c1 = c0 + rw - 1;
+    const well = [c0, c0 + 1];                // колодец-выход у левого края
+    const d0 = c0 + 3 + R(0, rw - 6);         // обманки-вход правее колодца
+    for (let c = well[0] - 1; c <= well[1] + 1; c++) if (busy.has(c)) return false;
+    for (let c = d0 - 1; c <= d0 + 2; c++) if (busy.has(c)) return false;
+    def.under.push({
+      c0, c1, well, decoys: [d0, d0 + 1],
+      heart: first ? true : rng() < 0.5,
+      plush: ch >= 2,
+    });
+    mark(well[0] - 1, well[1] + 2);
+    mark(d0 - 1, d0 + 2);
+    return true;
+  };
+  build(true);
+  // вторая комната на длинных картах — не внахлёст с первой
+  if (w >= 135 && rng() < 0.8 && def.under.length) {
+    const before = def.under.length;
+    if (build(false) && def.under.length > before) {
+      const u = def.under[def.under.length - 1], f = def.under[0];
+      if (f !== u && !(u.c1 < f.c0 - 4 || u.c0 > f.c1 + 4)) def.under.pop();
+    }
+  }
 }
 
 function genChapter(ch) {
@@ -1724,6 +1821,7 @@ const LEVELS = [
       singles: [],
     },
     hearts: [[92, 5]],
+    under: [{ c0: 100, c1: 107, well: [100, 101], decoys: [104, 105], heart: true }],
     enemies: [['e', 24], ['e', 46], ['e', 80], ['e', 96], ['e', 120]],
     spawn: { c: 2 }, factory: { c: 123 },
     hints: [
@@ -1759,7 +1857,8 @@ const LEVELS = [
              [118, 118, 7], [125, 127, 10], [129, 129, 7]],
       singles: [],
     },
-    hearts: [[71, 5], [96, 5]],
+    hearts: [[71, 5], [93, 5]],
+    under: [{ c0: 114, c1: 121, well: [114, 115], decoys: [118, 119], heart: true }],
     enemies: [['e', 9], ['e', 28, 7], ['e', 50], ['e', 55], ['t', 35], ['t', 67],
               ['e', 74], ['e', 90], ['t', 93, 7], ['e', 105], ['t', 107],
               ['e', 124], ['e', 132], ['t', 130], ['e', 136]],
@@ -1788,15 +1887,16 @@ const LEVELS = [
              [110, 111], [127, 128], [138, 139], [14, 15, 7], [104, 105, 7]],
     bottles: {
       runs: [[5, 7, 10], [20, 20, 10], [25, 25, 7], [36, 38, 10], [41, 41, 5],
-             [45, 45, 7], [59, 61, 10], [63, 63, 7], [67, 67, 5], [79, 81, 10],
+             [45, 45, 7], [59, 61, 10], [63, 63, 7], [67, 67, 5], [83, 85, 10],
              [85, 85, 7], [87, 87, 9], [101, 103, 10], [106, 106, 7], [109, 109, 5],
-             [122, 124, 10], [127, 127, 7], [131, 133, 10], [137, 137, 7], [140, 141, 10]],
+             [122, 124, 10], [127, 127, 7], [129, 130, 10], [137, 137, 7], [140, 141, 10]],
       singles: [],
     },
     hearts: [[67, 5], [86, 5], [109, 5]],
-    enemies: [['e', 12], ['e', 22], ['t', 28], ['e', 36], ['t', 44], ['e', 48], ['e', 40],
-              ['e', 62], ['t', 66], ['t', 17, 7], ['t', 52, 7], ['e', 77], ['e', 82],
-              ['t', 86], ['e', 90], ['t', 108], ['e', 114], ['e', 124], ['t', 128],
+    under: [{ c0: 101, c1: 108, well: [101, 102], decoys: [105, 106], heart: true }],
+    enemies: [['e', 12], ['e', 25], ['t', 28], ['e', 36], ['t', 44], ['e', 48], ['e', 40],
+              ['e', 62], ['t', 70], ['t', 17, 7], ['t', 52, 7], ['e', 77], ['e', 82],
+              ['t', 86], ['e', 90], ['t', 108], ['e', 114], ['e', 124], ['t', 126],
               ['e', 142]],
     spawn: { c: 2 }, factory: { c: 144 },
     dialogue: {
@@ -1821,7 +1921,8 @@ const LEVELS = [
              [61, 63, 7], [69, 71, 7], [95, 97, 10]],
       singles: [],
     },
-    hearts: [[21, 5], [47, 5]],
+    hearts: [[21, 5], [39, 5]],
+    under: [{ c0: 44, c1: 51, well: [44, 45], decoys: [49, 50], heart: true, plush: true }],
     plushes: [[32, 10], [57, 10], [72, 10]],   // горы плюшек — боеприпас против вождя
     enemies: [['e', 12], ['e', 25], ['e', 33], ['t', 48], ['t', 21, 7],
               ['e', 55], ['e', 68, 7], ['t', 91]],
@@ -2756,7 +2857,7 @@ class QuakeDebris {
 
 // Завод — выход с уровня. Стоит НА земле (не зарывается в тайлы!),
 // триггером завершения уровня служит всё здание с запасом по краям.
-const GROUND_TOP = (ROWS - 2) * TILE; // верх земли — ряд 11 → y = 440
+const GROUND_TOP = 11 * TILE; // верх земли — ряд 11 → y = 440 (ниже — подземелье с секретками)
 
 // ============================================================
 // КАСТОМНЫЕ ОБЪЕКТЫ (админ-панель): своя текстура + JS-скрипт
@@ -3402,7 +3503,7 @@ const Game = (() => {
     kills = 0;
     cam = 0; shake = 0;
     Quake.reset(def);                  // план автотолчков этого уровня
-    camY = VIEW_H - VIEW_H / ZOOM; // сразу «прижата к полу»
+    camY = Math.max(0, Math.min(player.y + player.h / 2 - (VIEW_H / ZOOM) * 0.55, ROWS * TILE - VIEW_H / ZOOM)); // сразу на Андрее
     hudCache = { hp: -1, bottles: -1, hats: -1 };
     // сброс ввода — чтобы залипшая клавиша/кнопка не тянула Андрея после рестарта
     input.left = false; input.right = false; input.down = false;
@@ -3850,7 +3951,7 @@ const Game = (() => {
     const viewW = VIEW_W / ZOOM, viewH = VIEW_H / ZOOM;
     const target = Math.max(0, Math.min(player.x + player.w / 2 - viewW * 0.44, level.w * TILE - viewW));
     cam += (target - cam) * Math.min(1, dt * 9);
-    const ty = Math.max(0, Math.min(player.y + player.h / 2 - viewH * 0.55, VIEW_H - viewH));
+    const ty = Math.max(0, Math.min(player.y + player.h / 2 - viewH * 0.55, ROWS * TILE - viewH));
     camY += (ty - camY) * Math.min(1, dt * 7);
 
     // HUD
@@ -3877,15 +3978,15 @@ const Game = (() => {
 
   // Темы тайлов: цвета земли/платформ/шипов/жидкости по фону уровня
   const THEMES = {
-    bg_fields:   { ground: '#7a4a2b', dark: '#63391f', top: '#3fa34d', top2: '#54c15f', brick: '#9e5a3c', brickD: '#7a4029', plat: '#8b5a2b', platT: '#a9714b', platD: '#5d3a1a', spike: '#8d99ae', crumb: '#b8a888', haz: '#3e7cb8', haz2: '#6db3e8' },
-    bg_city:     { ground: '#6e6a63', dark: '#585450', top: '#7da35a', top2: '#93bd6d', brick: '#8a8378', brickD: '#6b655c', plat: '#7a746b', platT: '#948d82', platD: '#575248', spike: '#8d99ae', crumb: '#b8a888', haz: '#3e7cb8', haz2: '#6db3e8' },
-    bg_district: { ground: '#7a4a2b', dark: '#63391f', top: '#8f9a4a', top2: '#adb566', brick: '#9e5a3c', brickD: '#7a4029', plat: '#8b5a2b', platT: '#a9714b', platD: '#5d3a1a', spike: '#8d99ae', crumb: '#b8a888', haz: '#3e7cb8', haz2: '#6db3e8' },
-    bg_plant:    { ground: '#4a3f45', dark: '#3a3136', top: '#5a6e50', top2: '#6e8560', brick: '#5f4a52', brickD: '#47363d', plat: '#544750', platT: '#6d5e68', platD: '#38303b', spike: '#8d99ae', crumb: '#8a7f92', haz: '#63d471', haz2: '#a8f0a8' },
-    bg_snow:     { ground: '#7186a8', dark: '#5a6d8c', top: '#f0f6fb', top2: '#ffffff', brick: '#93a8c9', brickD: '#7488a8', plat: '#8296b5', platT: '#a5b8d4', platD: '#5f7290', spike: '#bfe3ff', crumb: '#d5e5f5', haz: '#2f6fb0', haz2: '#6db3e8' },
-    bg_desert:   { ground: '#c98f4e', dark: '#a8733c', top: '#e8b86a', top2: '#f5d089', brick: '#b57f45', brickD: '#946330', plat: '#b0813f', platT: '#d0a05c', platD: '#8a5f2c', spike: '#6f8a4f', crumb: '#e0c088', haz: '#e8622a', haz2: '#ffa25c' },
-    bg_sky:      { ground: '#9aa7c7', dark: '#7e8aad', top: '#ffffff', top2: '#f0f6ff', brick: '#b0bcdc', brickD: '#8e9abc', plat: '#a2b0d2', platT: '#c4d0ec', platD: '#7e8aad', spike: '#8d99ae', crumb: '#e8eefc', haz: '#63d471', haz2: '#a8f0a8' },
-    bg_volcano:  { ground: '#5a3a3a', dark: '#462c2c', top: '#8a4a3a', top2: '#a85c48', brick: '#6a4440', brickD: '#523432', plat: '#634041', platT: '#7e5454', platD: '#4a2f30', spike: '#9aa4b2', crumb: '#a08484', haz: '#ff7a2a', haz2: '#ffc25c' },
-    bg_final:    { ground: '#41415f', dark: '#333349', top: '#5c5c85', top2: '#7070a0', brick: '#4f4f74', brickD: '#3c3c58', plat: '#4a4a6e', platT: '#60608e', platD: '#35354e', spike: '#8d99ae', crumb: '#8c8cb0', haz: '#63d471', haz2: '#a8f0a8' },
+    bg_fields:   { ground: '#7a4a2b', dark: '#63391f', top: '#3fa34d', top2: '#54c15f', brick: '#9e5a3c', brickD: '#7a4029', plat: '#8b5a2b', platT: '#a9714b', platD: '#5d3a1a', spike: '#8d99ae', crumb: '#b8a888', haz: '#3e7cb8', haz2: '#6db3e8', cave: '#2b1a0e' },
+    bg_city:     { ground: '#6e6a63', dark: '#585450', top: '#7da35a', top2: '#93bd6d', brick: '#8a8378', brickD: '#6b655c', plat: '#7a746b', platT: '#948d82', platD: '#575248', spike: '#8d99ae', crumb: '#b8a888', haz: '#3e7cb8', haz2: '#6db3e8', cave: '#26241f' },
+    bg_district: { ground: '#7a4a2b', dark: '#63391f', top: '#8f9a4a', top2: '#adb566', brick: '#9e5a3c', brickD: '#7a4029', plat: '#8b5a2b', platT: '#a9714b', platD: '#5d3a1a', spike: '#8d99ae', crumb: '#b8a888', haz: '#3e7cb8', haz2: '#6db3e8', cave: '#2b1a0e' },
+    bg_plant:    { ground: '#4a3f45', dark: '#3a3136', top: '#5a6e50', top2: '#6e8560', brick: '#5f4a52', brickD: '#47363d', plat: '#544750', platT: '#6d5e68', platD: '#38303b', spike: '#8d99ae', crumb: '#8a7f92', haz: '#63d471', haz2: '#a8f0a8', cave: '#1b1619' },
+    bg_snow:     { ground: '#7186a8', dark: '#5a6d8c', top: '#f0f6fb', top2: '#ffffff', brick: '#93a8c9', brickD: '#7488a8', plat: '#8296b5', platT: '#a5b8d4', platD: '#5f7290', spike: '#bfe3ff', crumb: '#d5e5f5', haz: '#2f6fb0', haz2: '#6db3e8', cave: '#232c3d' },
+    bg_desert:   { ground: '#c98f4e', dark: '#a8733c', top: '#e8b86a', top2: '#f5d089', brick: '#b57f45', brickD: '#946330', plat: '#b0813f', platT: '#d0a05c', platD: '#8a5f2c', spike: '#6f8a4f', crumb: '#e0c088', haz: '#e8622a', haz2: '#ffa25c', cave: '#3d2a12' },
+    bg_sky:      { ground: '#9aa7c7', dark: '#7e8aad', top: '#ffffff', top2: '#f0f6ff', brick: '#b0bcdc', brickD: '#8e9abc', plat: '#a2b0d2', platT: '#c4d0ec', platD: '#7e8aad', spike: '#8d99ae', crumb: '#e8eefc', haz: '#63d471', haz2: '#a8f0a8', cave: '#2c3145' },
+    bg_volcano:  { ground: '#5a3a3a', dark: '#462c2c', top: '#8a4a3a', top2: '#a85c48', brick: '#6a4440', brickD: '#523432', plat: '#634041', platT: '#7e5454', platD: '#4a2f30', spike: '#9aa4b2', crumb: '#a08484', haz: '#ff7a2a', haz2: '#ffc25c', cave: '#211414' },
+    bg_final:    { ground: '#41415f', dark: '#333349', top: '#5c5c85', top2: '#7070a0', brick: '#4f4f74', brickD: '#3c3c58', plat: '#4a4a6e', platT: '#60608e', platD: '#35354e', spike: '#8d99ae', crumb: '#8c8cb0', haz: '#63d471', haz2: '#a8f0a8', cave: '#17172a' },
   };
   function theme(bgKey) { return THEMES[bgKey] || THEMES.bg_fields; }
 
@@ -3914,10 +4015,20 @@ const Game = (() => {
     for (let r = 0; r < ROWS; r++) {
       for (let c = c0; c <= c1; c++) {
         const t = level.grid[r][c];
-        if (t === '.') continue;
+        if (t === '.') {
+          // под землёй пустота = вырытая пещера/секретная комната — тёмный фон вместо неба
+          if (r >= 13) {
+            const cx = c * TILE - cam, cy = r * TILE;
+            ctx.fillStyle = T.cave;
+            ctx.fillRect(cx, cy, TILE, TILE);
+          }
+          continue;
+        }
         let x = c * TILE - cam, y = r * TILE;
-        if (t === '#') {
-          const grass = !TILE_SOLID.has(tileAt(level, c, r - 1));
+        if (t === '#' || t === 'D') {
+          // 'D' — обманка-вход в секретку: выглядит как обычная земля
+          const above = tileAt(level, c, r - 1);
+          const grass = !TILE_SOLID.has(above) && above !== 'D' && above !== 'L';
           ctx.fillStyle = T.ground;
           ctx.fillRect(x, y, TILE, TILE);
           ctx.fillStyle = T.dark;
@@ -3928,6 +4039,12 @@ const Game = (() => {
             ctx.fillRect(x, y, TILE, 12);
             ctx.fillStyle = T.top2;
             ctx.fillRect(x, y, TILE, 5);
+          }
+          if (t === 'D') {
+            // единственный намёк на тайный вход — еле заметная трещинка
+            ctx.fillStyle = 'rgba(0,0,0,.16)';
+            ctx.fillRect(x + 15, y + 15, 10, 2);
+            ctx.fillRect(x + 19, y + 23, 2, 9);
           }
         } else if (t === 'B') {
           ctx.fillStyle = T.brick;

@@ -160,7 +160,7 @@ const Game = (() => {
     kills = 0;
     cam = 0; shake = 0;
     Quake.reset(def);                  // план автотолчков этого уровня
-    camY = VIEW_H - VIEW_H / ZOOM; // сразу «прижата к полу»
+    camY = Math.max(0, Math.min(player.y + player.h / 2 - (VIEW_H / ZOOM) * 0.55, ROWS * TILE - VIEW_H / ZOOM)); // сразу на Андрее
     hudCache = { hp: -1, bottles: -1, hats: -1 };
     // сброс ввода — чтобы залипшая клавиша/кнопка не тянула Андрея после рестарта
     input.left = false; input.right = false; input.down = false;
@@ -608,7 +608,7 @@ const Game = (() => {
     const viewW = VIEW_W / ZOOM, viewH = VIEW_H / ZOOM;
     const target = Math.max(0, Math.min(player.x + player.w / 2 - viewW * 0.44, level.w * TILE - viewW));
     cam += (target - cam) * Math.min(1, dt * 9);
-    const ty = Math.max(0, Math.min(player.y + player.h / 2 - viewH * 0.55, VIEW_H - viewH));
+    const ty = Math.max(0, Math.min(player.y + player.h / 2 - viewH * 0.55, ROWS * TILE - viewH));
     camY += (ty - camY) * Math.min(1, dt * 7);
 
     // HUD
@@ -635,15 +635,15 @@ const Game = (() => {
 
   // Темы тайлов: цвета земли/платформ/шипов/жидкости по фону уровня
   const THEMES = {
-    bg_fields:   { ground: '#7a4a2b', dark: '#63391f', top: '#3fa34d', top2: '#54c15f', brick: '#9e5a3c', brickD: '#7a4029', plat: '#8b5a2b', platT: '#a9714b', platD: '#5d3a1a', spike: '#8d99ae', crumb: '#b8a888', haz: '#3e7cb8', haz2: '#6db3e8' },
-    bg_city:     { ground: '#6e6a63', dark: '#585450', top: '#7da35a', top2: '#93bd6d', brick: '#8a8378', brickD: '#6b655c', plat: '#7a746b', platT: '#948d82', platD: '#575248', spike: '#8d99ae', crumb: '#b8a888', haz: '#3e7cb8', haz2: '#6db3e8' },
-    bg_district: { ground: '#7a4a2b', dark: '#63391f', top: '#8f9a4a', top2: '#adb566', brick: '#9e5a3c', brickD: '#7a4029', plat: '#8b5a2b', platT: '#a9714b', platD: '#5d3a1a', spike: '#8d99ae', crumb: '#b8a888', haz: '#3e7cb8', haz2: '#6db3e8' },
-    bg_plant:    { ground: '#4a3f45', dark: '#3a3136', top: '#5a6e50', top2: '#6e8560', brick: '#5f4a52', brickD: '#47363d', plat: '#544750', platT: '#6d5e68', platD: '#38303b', spike: '#8d99ae', crumb: '#8a7f92', haz: '#63d471', haz2: '#a8f0a8' },
-    bg_snow:     { ground: '#7186a8', dark: '#5a6d8c', top: '#f0f6fb', top2: '#ffffff', brick: '#93a8c9', brickD: '#7488a8', plat: '#8296b5', platT: '#a5b8d4', platD: '#5f7290', spike: '#bfe3ff', crumb: '#d5e5f5', haz: '#2f6fb0', haz2: '#6db3e8' },
-    bg_desert:   { ground: '#c98f4e', dark: '#a8733c', top: '#e8b86a', top2: '#f5d089', brick: '#b57f45', brickD: '#946330', plat: '#b0813f', platT: '#d0a05c', platD: '#8a5f2c', spike: '#6f8a4f', crumb: '#e0c088', haz: '#e8622a', haz2: '#ffa25c' },
-    bg_sky:      { ground: '#9aa7c7', dark: '#7e8aad', top: '#ffffff', top2: '#f0f6ff', brick: '#b0bcdc', brickD: '#8e9abc', plat: '#a2b0d2', platT: '#c4d0ec', platD: '#7e8aad', spike: '#8d99ae', crumb: '#e8eefc', haz: '#63d471', haz2: '#a8f0a8' },
-    bg_volcano:  { ground: '#5a3a3a', dark: '#462c2c', top: '#8a4a3a', top2: '#a85c48', brick: '#6a4440', brickD: '#523432', plat: '#634041', platT: '#7e5454', platD: '#4a2f30', spike: '#9aa4b2', crumb: '#a08484', haz: '#ff7a2a', haz2: '#ffc25c' },
-    bg_final:    { ground: '#41415f', dark: '#333349', top: '#5c5c85', top2: '#7070a0', brick: '#4f4f74', brickD: '#3c3c58', plat: '#4a4a6e', platT: '#60608e', platD: '#35354e', spike: '#8d99ae', crumb: '#8c8cb0', haz: '#63d471', haz2: '#a8f0a8' },
+    bg_fields:   { ground: '#7a4a2b', dark: '#63391f', top: '#3fa34d', top2: '#54c15f', brick: '#9e5a3c', brickD: '#7a4029', plat: '#8b5a2b', platT: '#a9714b', platD: '#5d3a1a', spike: '#8d99ae', crumb: '#b8a888', haz: '#3e7cb8', haz2: '#6db3e8', cave: '#2b1a0e' },
+    bg_city:     { ground: '#6e6a63', dark: '#585450', top: '#7da35a', top2: '#93bd6d', brick: '#8a8378', brickD: '#6b655c', plat: '#7a746b', platT: '#948d82', platD: '#575248', spike: '#8d99ae', crumb: '#b8a888', haz: '#3e7cb8', haz2: '#6db3e8', cave: '#26241f' },
+    bg_district: { ground: '#7a4a2b', dark: '#63391f', top: '#8f9a4a', top2: '#adb566', brick: '#9e5a3c', brickD: '#7a4029', plat: '#8b5a2b', platT: '#a9714b', platD: '#5d3a1a', spike: '#8d99ae', crumb: '#b8a888', haz: '#3e7cb8', haz2: '#6db3e8', cave: '#2b1a0e' },
+    bg_plant:    { ground: '#4a3f45', dark: '#3a3136', top: '#5a6e50', top2: '#6e8560', brick: '#5f4a52', brickD: '#47363d', plat: '#544750', platT: '#6d5e68', platD: '#38303b', spike: '#8d99ae', crumb: '#8a7f92', haz: '#63d471', haz2: '#a8f0a8', cave: '#1b1619' },
+    bg_snow:     { ground: '#7186a8', dark: '#5a6d8c', top: '#f0f6fb', top2: '#ffffff', brick: '#93a8c9', brickD: '#7488a8', plat: '#8296b5', platT: '#a5b8d4', platD: '#5f7290', spike: '#bfe3ff', crumb: '#d5e5f5', haz: '#2f6fb0', haz2: '#6db3e8', cave: '#232c3d' },
+    bg_desert:   { ground: '#c98f4e', dark: '#a8733c', top: '#e8b86a', top2: '#f5d089', brick: '#b57f45', brickD: '#946330', plat: '#b0813f', platT: '#d0a05c', platD: '#8a5f2c', spike: '#6f8a4f', crumb: '#e0c088', haz: '#e8622a', haz2: '#ffa25c', cave: '#3d2a12' },
+    bg_sky:      { ground: '#9aa7c7', dark: '#7e8aad', top: '#ffffff', top2: '#f0f6ff', brick: '#b0bcdc', brickD: '#8e9abc', plat: '#a2b0d2', platT: '#c4d0ec', platD: '#7e8aad', spike: '#8d99ae', crumb: '#e8eefc', haz: '#63d471', haz2: '#a8f0a8', cave: '#2c3145' },
+    bg_volcano:  { ground: '#5a3a3a', dark: '#462c2c', top: '#8a4a3a', top2: '#a85c48', brick: '#6a4440', brickD: '#523432', plat: '#634041', platT: '#7e5454', platD: '#4a2f30', spike: '#9aa4b2', crumb: '#a08484', haz: '#ff7a2a', haz2: '#ffc25c', cave: '#211414' },
+    bg_final:    { ground: '#41415f', dark: '#333349', top: '#5c5c85', top2: '#7070a0', brick: '#4f4f74', brickD: '#3c3c58', plat: '#4a4a6e', platT: '#60608e', platD: '#35354e', spike: '#8d99ae', crumb: '#8c8cb0', haz: '#63d471', haz2: '#a8f0a8', cave: '#17172a' },
   };
   function theme(bgKey) { return THEMES[bgKey] || THEMES.bg_fields; }
 
@@ -672,10 +672,20 @@ const Game = (() => {
     for (let r = 0; r < ROWS; r++) {
       for (let c = c0; c <= c1; c++) {
         const t = level.grid[r][c];
-        if (t === '.') continue;
+        if (t === '.') {
+          // под землёй пустота = вырытая пещера/секретная комната — тёмный фон вместо неба
+          if (r >= 13) {
+            const cx = c * TILE - cam, cy = r * TILE;
+            ctx.fillStyle = T.cave;
+            ctx.fillRect(cx, cy, TILE, TILE);
+          }
+          continue;
+        }
         let x = c * TILE - cam, y = r * TILE;
-        if (t === '#') {
-          const grass = !TILE_SOLID.has(tileAt(level, c, r - 1));
+        if (t === '#' || t === 'D') {
+          // 'D' — обманка-вход в секретку: выглядит как обычная земля
+          const above = tileAt(level, c, r - 1);
+          const grass = !TILE_SOLID.has(above) && above !== 'D' && above !== 'L';
           ctx.fillStyle = T.ground;
           ctx.fillRect(x, y, TILE, TILE);
           ctx.fillStyle = T.dark;
@@ -686,6 +696,12 @@ const Game = (() => {
             ctx.fillRect(x, y, TILE, 12);
             ctx.fillStyle = T.top2;
             ctx.fillRect(x, y, TILE, 5);
+          }
+          if (t === 'D') {
+            // единственный намёк на тайный вход — еле заметная трещинка
+            ctx.fillStyle = 'rgba(0,0,0,.16)';
+            ctx.fillRect(x + 15, y + 15, 10, 2);
+            ctx.fillRect(x + 19, y + 23, 2, 9);
           }
         } else if (t === 'B') {
           ctx.fillStyle = T.brick;
