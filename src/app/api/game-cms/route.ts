@@ -95,6 +95,16 @@ function validateMaps(maps: unknown): string | null {
     }
     const b = d.bottles as Record<string, unknown> | undefined;
     if (b !== undefined && (typeof b !== 'object' || b === null)) return `map ${key}: bottles must be an object`;
+    // пер-картное землетрясение (def.quake): on/rocks — булевы, power/interval/dur — числа
+    const q = d.quake as Record<string, unknown> | undefined;
+    if (q !== undefined && q !== null) {
+      if (typeof q !== 'object' || Array.isArray(q)) return `map ${key}: quake must be an object`;
+      if (q.on !== undefined && typeof q.on !== 'boolean') return `map ${key}: quake.on must be boolean`;
+      if (q.rocks !== undefined && typeof q.rocks !== 'boolean') return `map ${key}: quake.rocks must be boolean`;
+      for (const k of ['power', 'interval', 'dur']) {
+        if (q[k] !== undefined && (typeof q[k] !== 'number' || !isFinite(q[k] as number))) return `map ${key}: quake.${k} must be a number`;
+      }
+    }
   }
   return null;
 }

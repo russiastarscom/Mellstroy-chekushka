@@ -131,6 +131,13 @@ function defToState(def) {
     spawn: def.spawn?.c ?? 2, factory: def.factory?.c ?? (w - 6),
     name: def.name || 'Карта', bg: def.bg || 'bg_fields',
     bossHp: (def.boss && typeof def.boss.hp === 'number') ? def.boss.hp : 6,
+    quake: (def.quake && def.quake.on) ? {
+      on: true,
+      power: (typeof def.quake.power === 'number') ? def.quake.power : 1,
+      interval: (typeof def.quake.interval === 'number') ? def.quake.interval : 20,
+      dur: (typeof def.quake.dur === 'number') ? def.quake.dur : 5,
+      rocks: def.quake.rocks !== false,
+    } : null,
     dialogs: {
       intro: (def.dialogue?.intro || []).map((l) => ({ who: l.who, text: l.text })),
       outro: (def.dialogue?.outro || []).map((l) => ({ who: l.who, text: l.text })),
@@ -214,6 +221,16 @@ function stateToDef(m) {
     if (typeof st.bossHp === 'number' && st.bossHp >= 1) def.boss.hp = st.bossHp;
   } else delete def.boss;
   if (Object.keys(custom).length) def.custom = custom; else delete def.custom;
+  // пер-картное землетрясение: сохраняем в def только если включено
+  if (st.quake && st.quake.on) {
+    def.quake = {
+      on: true,
+      power: Math.max(0.3, Math.min(2.5, +st.quake.power || 1)),
+      interval: Math.max(5, Math.min(90, Math.round(+st.quake.interval || 20))),
+      dur: Math.max(1.5, Math.min(15, +st.quake.dur || 5)),
+      rocks: st.quake.rocks !== false,
+    };
+  } else delete def.quake;
   if (dlg.intro.length || dlg.outro.length) def.dialogue = { intro: dlg.intro, outro: dlg.outro }; else delete def.dialogue;
   if (dlg.hints.length) def.hints = dlg.hints.map((h) => ({ c: h.c, text: h.text })); else delete def.hints;
   return def;
@@ -254,7 +271,7 @@ function saveDrafts() {
         officialRev: OFFICIAL_REV, // маркер версии официальных уровней, против которых сделан черновик
         maps: CMS.maps.map((m) => ({
           key: m.key, id: m.id, def: m.def ? JSON.parse(JSON.stringify(m.def)) : null,
-          ed: { cells: m.ed.cells, ents: m.ed.ents, spawn: m.ed.spawn, factory: m.ed.factory, name: m.ed.name, bg: m.ed.bg, dialogs: m.ed.dialogs, isIndev: !!m.ed.isIndev, clean: !m.ed.dirty },
+          ed: { cells: m.ed.cells, ents: m.ed.ents, spawn: m.ed.spawn, factory: m.ed.factory, name: m.ed.name, bg: m.ed.bg, dialogs: m.ed.dialogs, isIndev: !!m.ed.isIndev, quake: m.ed.quake || null, clean: !m.ed.dirty },
         })),
         listV: 3, // маркер: список карт уже управляет экраном «В разработке»
         intro: CMS.intro, introClean: !introDirty,
@@ -304,6 +321,7 @@ function applyDrafts(d) {
         spawn: (typeof base.spawn === 'number') ? base.spawn : 2,
         factory: (typeof base.factory === 'number') ? base.factory : (w - 6),
         name: base.name || 'Карта', bg: base.bg || 'bg_fields',
+        quake: base.quake || null,
         dialogs: base.dialogs || { intro: [], outro: [], hints: [] },
         dirty: !ed.clean,
       },
@@ -430,7 +448,7 @@ function resetMap() {
     m.ed = defToState(m.def);
   } else {
     const w = m.ed.cells[0].length;
-    const ed = { cells: Array.from({ length: ROWS }, () => Array(w).fill('.')), ents: [], undo: [], dirty: true, spawn: 2, factory: w - 6, name: m.ed.name, bg: m.ed.bg, bossHp: 6, dialogs: { intro: [], outro: [], hints: [] } };
+    const ed = { cells: Array.from({ length: ROWS }, () => Array(w).fill('.')), ents: [], undo: [], dirty: true, spawn: 2, factory: w - 6, name: m.ed.name, bg: m.ed.bg, bossHp: 6, quake: null, dialogs: { intro: [], outro: [], hints: [] } };
     for (let c = 0; c < w; c++) { ed.cells[11][c] = '#'; ed.cells[12][c] = '#'; }
     m.ed = ed;
   }
@@ -452,6 +470,15 @@ function syncMapOpts() {
     $('lvlname').value = m.ed.name || '';
     $('lvbg').value = m.ed.bg || 'bg_fields';
     $('bosshp').value = (typeof m.ed.bossHp === 'number') ? m.ed.bossHp : 6;
+    const q = m.ed.quake || null;
+    $('lvquake').checked = !!q;
+    $('quakeopts').style.display = q ? 'inline-flex' : 'none';
+    if (q) {
+      $('qkpow').value = q.power; $('qkpowv').textContent = (+q.power).toFixed(1);
+      $('qkint').value = q.interval; $('qkintv').textContent = q.interval + 'с';
+      $('qkdur').value = q.dur; $('qkdurv').textContent = q.dur + 'с';
+      $('qkrocks').checked = q.rocks !== false;
+    }
   }
 }
 
@@ -649,6 +676,31 @@ $('bosshp').addEventListener('input', () => {
   const v = Math.max(1, Math.min(30, Math.round(+$('bosshp').value || 6)));
   if (ed.bossHp !== v) { ed.bossHp = v; ed.dirty = true; saveDrafts(); setStatus(); }
 });
+// —— пер-картное землетрясение ——
+function qkApply() {
+  const ed = curEd(); if (!ed || ed.isIndev) return;
+  const on = $('lvquake').checked;
+  ed.quake = on ? {
+    on: true,
+    power: +$('qkpow').value || 1,
+    interval: Math.round(+$('qkint').value || 20),
+    dur: +$('qkdur').value || 5,
+    rocks: $('qkrocks').checked,
+  } : null;
+  ed.dirty = true; syncMapOpts(); saveDrafts(); setStatus();
+}
+$('lvquake').addEventListener('change', qkApply);
+$('qkrocks').addEventListener('change', qkApply);
+['qkpow', 'qkint', 'qkdur'].forEach((id) => $(id).addEventListener('input', () => {
+  const ed = curEd(); if (!ed || ed.isIndev || !ed.quake) return;
+  ed.quake.power = +$('qkpow').value || 1;
+  ed.quake.interval = Math.round(+$('qkint').value || 20);
+  ed.quake.dur = +$('qkdur').value || 5;
+  $('qkpowv').textContent = ed.quake.power.toFixed(1);
+  $('qkintv').textContent = ed.quake.interval + 'с';
+  $('qkdurv').textContent = ed.quake.dur + 'с';
+  ed.dirty = true; saveDrafts();
+}));
 $('btn-reset-level').onclick = resetMap;
 $('btn-del-map').onclick = delMap;
 $('btn-move-up').onclick = () => moveMap(-1);

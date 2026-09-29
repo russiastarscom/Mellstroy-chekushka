@@ -217,6 +217,13 @@
       <option value="bg_plant">Завод (ночь)</option>
     </select></label>
     <label style="color:#8a8aa0" title="Здоровье вождя, если он стоит на карте">HP вождя: <input id="bosshp" type="number" min="1" max="30" value="6" style="background:#23233a;border:1px solid #3a3a5a;color:#fff;border-radius:8px;padding:8px;width:64px;font-size:13px"></label>
+    <label style="color:#8a8aa0" title="Землетрясение именно на ЭТОЙ карте — работает даже в прологе и на босс-аренах">🌍 Тряска: <input id="lvquake" type="checkbox" style="transform:scale(1.2);vertical-align:middle"></label>
+    <span id="quakeopts" style="display:none;gap:12px;align-items:center;flex-wrap:wrap;color:#8a8aa0">
+      <label title="Сила толчков">сила <input id="qkpow" type="range" min="0.3" max="2.5" step="0.1" value="1" style="width:64px;vertical-align:middle"><b id="qkpowv" style="color:#fff;min-width:26px;display:inline-block">1.0</b></label>
+      <label title="Секунд между толчками">каждые <input id="qkint" type="range" min="5" max="60" step="1" value="20" style="width:64px;vertical-align:middle"><b id="qkintv" style="color:#fff;min-width:30px;display:inline-block">20с</b></label>
+      <label title="Длительность одного толчка, сек">длит. <input id="qkdur" type="range" min="2" max="12" step="0.5" value="5" style="width:64px;vertical-align:middle"><b id="qkdurv" style="color:#fff;min-width:30px;display:inline-block">5с</b></label>
+      <label title="Камни сыплются с неба во время толчка"><input id="qkrocks" type="checkbox" checked> камни</label>
+    </span>
     <button class="act gray" id="btn-move-up" title="Передвинуть уровень выше по порядку">↑ Выше</button>
     <button class="act gray" id="btn-move-down" title="Передвинуть уровень ниже по порядку">↓ Ниже</button>
     <button class="act warn" id="btn-reset-level">Сброс этой карты</button>

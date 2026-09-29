@@ -1,0 +1,1044 @@
+     1→// ============================================================
+     2→// ВРЕМЕННАЯ АДМИН-ПАНЕЛЬ v2: карты (сколько угодно), разговоры,
+     3→// текстуры, музыка, каналы. Удаляется по команде владельца
+     4→// вместе с admin.html + api/game-cms + блоком ADMIN CMS OVERRIDE в main.js.
+     5→// ============================================================
+     6→const $ = (id) => document.getElementById(id);
+     7→const API = '/api/game-cms';
+     8→// ROWS берётся из js/levels.js (13) — не переобъявляем
+     9→
+    10→// ---------- данные ----------
+    11→const MAP_LEVELS = LEVELS.filter((d) => d.type === 'map');
+    12→const CMS = {
+    13→  maps: [],            // {key, id, def|null(ориг), ed:{cells,ents,spawn,factory,name,bg,dirty,undo,dialogs:{intro,outro,hints}}}
+    14→  intro: { cutscene: [], outroAfterBoss: [] },
+    15→  textures: {},        // key -> {id,url}
+    16→  music: { active: null, tracks: [] },
+    17→  socials: [],
+    18→};
+    19→let introDirty = false, socialsDirty = false, texturesDirty = false, musicDirty = false;
+    20→let mapsListDirty = false; // состав списка карт менялся (добавление/удаление) — нужна перепубликация
+    21→let pubAt = null;
+    22→let mode = 'maps';
+    23→let curMap = 0;        // индекс в CMS.maps
+    24→let tool = 'ground';
+    25→let zoom = { cs: 26 };
+    26→let hover = null;
+    27→
+    28→const WHO_LIST = [
+    29→  ['andrey', 'Андрей'], ['enemy', 'Бурмалденец'], ['boss', 'Вождь'],
+    30→  ['radio', 'Радио/Новости'], ['narrator', 'Рассказчик'],
+    31→];
+    32→const TEX_SLOTS = [
+    33→  ['andrey', 'Андрей (герой)', '48×56', 'PNG с прозрачным фоном'],
+    34→  ['burmaldenets', 'Враг', '44×52', 'PNG с прозрачным фоном'],
+    35→  ['boss', 'Вождь (босс)', '76×92', 'PNG с прозрачным фоном'],
+    36→  ['checkushka', 'Чекушка', '24×32', 'PNG с прозрачным фоном'],
+    37→  ['plush', 'Плюшка (снаряд)', '36×32', 'PNG с прозрачным фоном'],
+    38→  ['heart', 'Сердечко', '26×24', 'PNG с прозрачным фоном'],
+    39→  ['tomahawk', 'Томагавк', '20×20', 'PNG с прозрачным фоном'],
+    40→  ['factory', 'Завод', '176×140', 'PNG с прозрачным фоном'],
+    41→  ['bg_fields', 'Фон «Поля»', '960×540', 'JPG/PNG, без прозрачности'],
+    42→  ['bg_city', 'Фон «Город»', '960×540', 'JPG/PNG, без прозрачности'],
+    43→  ['bg_district', 'Фон «Район»', '960×540', 'JPG/PNG, без прозрачности'],
+    44→  ['bg_plant', 'Фон «Завод, ночь»', '960×540', 'JPG/PNG, без прозрачности'],
+    45→];
+    46→const SOC_PRESETS = [
+    47→  ['tg', 'Telegram'], ['yt', 'YouTube'], ['tt', 'TikTok'], ['vk', 'ВКонтакте'],
+    48→  ['tw', 'Twitch'], ['ds', 'Discord'], ['other', 'Другое'],
+    49→];
+    50→
+    51→const toastEl = $('toast');
+    52→let toastTimer = null;
+    53→function toast(msg, ok = false) {
+    54→  toastEl.textContent = msg;
+    55→  toastEl.classList.toggle('ok', ok);
+    56→  toastEl.classList.add('show');
+    57→  clearTimeout(toastTimer);
+    58→  toastTimer = setTimeout(() => toastEl.classList.remove('show'), 3200);
+    59→}
+    60→
+    61→// ============================================================
+    62→// def <-> состояние редактора
+    63→// ============================================================
+    64→function defToState(def) {
+    65→  const w = def.width;
+    66→  const cells = Array.from({ length: ROWS }, () => Array(w).fill('.'));
+    67→  (def.ground || []).forEach(([c0, c1]) => {
+    68→    for (let r = 11; r < ROWS; r++) for (let c = c0; c <= c1; c++) if (c >= 0 && c < w) cells[r][c] = '#';
+    69→  });
+    70→  (def.bricks || []).forEach(([c0, r0, c1, r1]) => {
+    71→    for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++)
+    72→      if (r >= 0 && r < ROWS && c >= 0 && c < w) cells[r][c] = 'B';
+    73→  });
+    74→  (def.plats || []).forEach(([c, r, len]) => {
+    75→    for (let i = 0; i < len; i++) { const cc = c + i; if (r >= 0 && r < ROWS && cc >= 0 && cc < w) cells[r][cc] = '='; }
+    76→  });
+    77→  (def.spikes || []).forEach(([c0, c1, r]) => {
+    78→    const row = (r === undefined || r === null) ? 10 : r;
+    79→    for (let c = c0; c <= c1; c++) if (row >= 0 && row < ROWS && c >= 0 && c < w) cells[row][c] = '^';
+    80→  });
+    81→  const ents = [];
+    82→  const add = (t, c, r) => { if (c >= 0 && c < w && r >= 0 && r < ROWS) ents.push({ t, c, r }); };
+    83→  (def.bottles?.runs || []).forEach(([c0, c1, r]) => { for (let c = c0; c <= c1; c++) add('bottle', c, r); });
+    84→  (def.bottles?.singles || []).forEach(([c, r]) => add('bottle', c, r));
+    85→  (def.hearts || []).forEach(([c, r]) => add('heart', c, r));
+    86→  (def.plushes || []).forEach(([c, r]) => add('plush', c, r));
+    87→  (def.enemies || []).forEach(([t, c, r]) => add(t, c, (r === undefined || r === null) ? 10 : r));
+    88→  if (def.boss) add('G', def.boss.col, 9);
+    89→  return {
+    90→    cells, ents, undo: [], dirty: false,
+    91→    spawn: def.spawn?.c ?? 2, factory: def.factory?.c ?? (w - 6),
+    92→    name: def.name || 'Карта', bg: def.bg || 'bg_fields',
+    93→    dialogs: {
+    94→      intro: (def.dialogue?.intro || []).map((l) => ({ who: l.who, text: l.text })),
+    95→      outro: (def.dialogue?.outro || []).map((l) => ({ who: l.who, text: l.text })),
+    96→      hints: (def.hints || []).map((h) => ({ c: h.c, text: h.text })),
+    97→    },
+    98→  };
+    99→}
+   100→
+   101→function indevState(name, dirty) {
+   102→  // экран «В разработке» — уровень без террейна
+   103→  return { isIndev: true, cells: null, ents: null, undo: [], dirty: !!dirty, spawn: 2, factory: 0, bg: 'bg_fields', name: name || 'В разработке', dialogs: { intro: [], outro: [], hints: [] } };
+   104→}
+   105→function officialIndev() {
+   106→  const d = LEVELS.find((x) => x.type === 'indev');
+   107→  if (!d) return null;
+   108→  return { key: 'indev', id: d.id || 6, def: JSON.parse(JSON.stringify(d)), ed: indevState(d.name, false) };
+   109→}
+   110→
+   111→function stateToDef(m) {
+   112→  const st = m.ed;
+   113→  if (st.isIndev) {
+   114→    return { id: m.id, type: 'indev', name: (st.name || 'В разработке').slice(0, 40) };
+   115→  }
+   116→  const { cells, ents } = st;
+   117→  const w = st.cells[0].length;
+   118→  const ground = [], bricks = [], plats = [], spikes = [];
+   119→  const singles = [], hearts = [], plushes = [], enemies = [];
+   120→  let bossCol = null;
+   121→  for (let r = 11; r < ROWS; r++) {
+   122→    let c = 0;
+   123→    while (c < w) {
+   124→      if (cells[r][c] === '#') {
+   125→        const c0 = c; while (c < w && cells[r][c] === '#') c++;
+   126→        if (!ground.some((g) => g[0] === c0 && g[1] === c - 1)) ground.push([c0, c - 1]);
+   127→      } else c++;
+   128→    }
+   129→  }
+   130→  for (let r = 0; r < ROWS; r++) {
+   131→    let c = 0;
+   132→    while (c < w) {
+   133→      const ch = cells[r][c];
+   134→      if (ch === 'B' || ch === '=' || ch === '^') {
+   135→        const c0 = c; while (c < w && cells[r][c] === ch) c++;
+   136→        if (ch === 'B') bricks.push([c0, r, c - 1, r]);
+   137→        else if (ch === '=') plats.push([c0, r, c - c0]);
+   138→        else spikes.push([c0, c - 1, r]);
+   139→      } else c++;
+   140→    }
+   141→  }
+   142→  ents.forEach((e) => {
+   143→    if (e.t === 'bottle') singles.push([e.c, e.r]);
+   144→    else if (e.t === 'heart') hearts.push([e.c, e.r]);
+   145→    else if (e.t === 'plush') plushes.push([e.c, e.r]);
+   146→    else if (e.t === 'e' || e.t === 't') enemies.push([e.t, e.c, e.r]);
+   147→    else if (e.t === 'G') bossCol = e.c;
+   148→  });
+   149→  const dlg = st.dialogs || { intro: [], outro: [], hints: [] };
+   150→  const def = {
+   151→    id: m.id, type: 'map', bg: st.bg || 'bg_fields', width: w,
+   152→    name: (st.name || 'Карта').slice(0, 40),
+   153→    ground, bricks, plats, spikes,
+   154→    bottles: { runs: [], singles },
+   155→    hearts, enemies,
+   156→    spawn: { c: st.spawn }, factory: { c: st.factory },
+   157→  };
+   158→  if (plushes.length) def.plushes = plushes;
+   159→  if (bossCol !== null) def.boss = { col: bossCol };
+   160→  if (m.def && m.def.factoryLocked) def.factoryLocked = true;
+   161→  if (dlg.intro.length || dlg.outro.length) {
+   162→    def.dialogue = { intro: dlg.intro, outro: dlg.outro };
+   163→  }
+   164→  if (dlg.hints.length) def.hints = dlg.hints.map((h) => ({ c: h.c, text: h.text }));
+   165→  return def;
+   166→}
+   167→
+   168→function validateMap(m) {
+   169→  const st = m.ed;
+   170→  if (st.isIndev) return null; // экран-заглушка — проверять нечего
+   171→  const w = st.cells[0].length;
+   172→  if (st.spawn < 1 || st.spawn > w - 2) return 'Старт Андрея вне карты';
+   173→  if (st.factory < 1 || st.factory > w - 2) return 'Завод вне карты';
+   174→  if (st.cells[10][st.spawn] !== '.') return `Старт (${st.spawn},10) занят тайлом — убери его`;
+   175→  for (const e of st.ents) {
+   176→    if (e.c < 0 || e.c >= w) return 'Сущность вне карты';
+   177→    if (e.r >= 11) return 'Сущность внутри земли — подними выше';
+   178→  }
+   179→  if (m.def && m.def.factoryLocked && !st.ents.some((e) => e.t === 'G'))
+   180→    return 'На босс-карте обязателен Вождь 👑 (без него завод не откроется)';
+   181→  return null;
+   182→}
+   183→
+   184→// ============================================================
+   185→// Черновики (localStorage, автосохранение)
+   186→// ============================================================
+   187→const DRAFT_KEY = 'adminCmsDrafts_v2';
+   188→let saveTimer = null;
+   189→function saveDrafts() {
+   190→  clearTimeout(saveTimer);
+   191→  saveTimer = setTimeout(() => {
+   192→    try {
+   193→      const out = {
+   194→        savedAt: Date.now(),
+   195→        maps: CMS.maps.map((m) => ({
+   196→          key: m.key, id: m.id, def: m.def ? JSON.parse(JSON.stringify(m.def)) : null,
+   197→          ed: { cells: m.ed.cells, ents: m.ed.ents, spawn: m.ed.spawn, factory: m.ed.factory, name: m.ed.name, bg: m.ed.bg, dialogs: m.ed.dialogs, isIndev: !!m.ed.isIndev, clean: !m.ed.dirty },
+   198→        })),
+   199→        listV: 3, // маркер: список карт уже управляет экраном «В разработке»
+   200→        intro: CMS.intro, introClean: !introDirty,
+   201→        socials: CMS.socials, socialsClean: !socialsDirty,
+   202→        textures: CMS.textures, texturesClean: !texturesDirty,
+   203→        musicActive: CMS.music.active, musicClean: !musicDirty,
+   204→        listClean: !mapsListDirty,
+   205→      };
+   206→      localStorage.setItem(DRAFT_KEY, JSON.stringify(out));
+   207→    } catch (e) { /* приватный режим */ }
+   208→  }, 300);
+   209→}
+   210→function loadDrafts() {
+   211→  try {
+   212→    const d = JSON.parse(localStorage.getItem(DRAFT_KEY) || 'null');
+   213→    return (d && d.maps) ? d : null;
+   214→  } catch (e) { return null; }
+   215→}
+   216→function applyDrafts(d) {
+   217→  let any = false;
+   218→  // черновик — источник истины по списку карт (включая добавленные/удалённые)
+   219→  const list = d.maps || [];
+   220→  const restored = [];
+   221→  list.forEach((s) => {
+   222→    const def = s.def ? JSON.parse(JSON.stringify(s.def)) : null;
+   223→    const ed = s.ed || {};
+   224→    // экран «В разработке» — отдельный вид уровня без террейна
+   225→    if (ed.isIndev || (def && def.type === 'indev')) {
+   226→      const nm = ed.name || (def && def.name) || 'В разработке';
+   227→      restored.push({ key: s.key || 'indev', id: s.id || 6, def: (def && def.type === 'indev') ? def : { id: s.id || 6, type: 'indev', name: nm }, ed: indevState(nm, ed.clean === false) });
+   228→      any = true;
+   229→      return;
+   230→    }
+   231→    const w = def ? def.width : (Array.isArray(ed.cells) && ed.cells[0] ? ed.cells[0].length : 0);
+   232→    let base = null;
+   233→    if (w >= 20 && Array.isArray(ed.cells) && ed.cells.length === ROWS && ed.cells[0] && ed.cells[0].length === w && Array.isArray(ed.ents)) {
+   234→      base = ed;
+   235→    } else if (def) {
+   236→      base = defToState(def); base.dirty = true; // битый ed — берём def как есть
+   237→    } else return; // ни валидного ed, ни def — карту пропускаем
+   238→    restored.push({
+   239→      key: s.key, id: s.id || 2, def,
+   240→      ed: {
+   241→        cells: base.cells, ents: base.ents, undo: [],
+   242→        spawn: (typeof base.spawn === 'number') ? base.spawn : 2,
+   243→        factory: (typeof base.factory === 'number') ? base.factory : (w - 6),
+   244→        name: base.name || 'Карта', bg: base.bg || 'bg_fields',
+   245→        dialogs: base.dialogs || { intro: [], outro: [], hints: [] },
+   246→        dirty: !ed.clean,
+   247→      },
+   248→    });
+   249→    any = true;
+   250→  });
+   251→  // старый черновик (сделан ДО появления управления «В разработке») — добавляем официальный экран
+   252→  if (d.listV !== 3 && !restored.some((m) => m.ed.isIndev)) {
+   253→    const iv = officialIndev();
+   254→    if (iv) { restored.push(iv); any = true; }
+   255→  }
+   256→  if (restored.length) CMS.maps = restored;
+   257→  if (d.intro && Array.isArray(d.intro.cutscene)) {
+   258→    CMS.intro = { cutscene: d.intro.cutscene, outroAfterBoss: d.intro.outroAfterBoss || [] };
+   259→    introDirty = !d.introClean; any = true;
+   260→  }
+   261→  if (Array.isArray(d.socials)) { CMS.socials = d.socials; socialsDirty = !d.socialsClean; any = true; }
+   262→  if (d.textures && typeof d.textures === 'object') { CMS.textures = d.textures; texturesDirty = !d.texturesClean; any = true; }
+   263→  if (d.musicActive !== undefined) { CMS.music.active = d.musicActive; musicDirty = !d.musicClean; }
+   264→  if (d.listClean !== undefined) mapsListDirty = !d.listClean;
+   265→  return any;
+   266→}
+   267→
+   268→// ============================================================
+   269→// РЕЖИМ КАРТ: редактор
+   270→// ============================================================
+   271→const cv = $('cv');
+   272→const IMG = {};
+   273→['andrey', 'burmaldenets', 'boss', 'checkushka', 'heart', 'plush', 'factory'].forEach((k) => {
+   274→  const im = new Image();
+   275→  im.src = 'image/' + k + '.png';
+   276→  im.onload = () => { if (mode === 'maps') draw(); };
+   277→  IMG[k] = im;
+   278→});
+   279→
+   280→function curEd() { return CMS.maps[curMap] ? CMS.maps[curMap].ed : null; }
+   281→
+   282→function buildMapTabs() {
+   283→  const box = $('lvl-tabs');
+   284→  box.innerHTML = '';
+   285→  CMS.maps.forEach((m, i) => {
+   286→    const b = document.createElement('button');
+   287→    // № — позиция в игре (катсцена = №1), а не постоянный id: цифры меняются вместе с порядком
+   288→    b.innerHTML = `${m.ed.isIndev ? '🚧 ' : ''}№${i + 2} ${m.ed.name || 'Карта'}${m.ed.dirty ? ' <span class="dirty">●</span>' : ''}`;
+   289→    b.title = m.ed.isIndev ? 'Экран «В разработке» — можно настроить или удалить' : 'Карта';
+   290→    b.onclick = () => { curMap = i; syncMapOpts(); draw(); buildMapTabs(); };
+   291→    if (i === curMap) b.classList.add('active');
+   292→    box.appendChild(b);
+   293→  });
+   294→  const add = document.createElement('button');
+   295→  add.id = 'btn-add-map';
+   296→  add.textContent = '+ ДОБАВИТЬ КАРТУ';
+   297→  add.onclick = addMap;
+   298→  box.appendChild(add);
+   299→}
+   300→function nextMapId() {
+   301→  // максимальный id среди ВСЕХ уровней (включая катсцену и «В разработке»), чтобы не было дубликатов номеров
+   302→  const maxAll = LEVELS.reduce((mx, d) => Math.max(mx, d.id || 0), 0);
+   303→  return Math.max(maxAll, CMS.maps.reduce((mx, m) => Math.max(mx, m.id), 0)) + 1;
+   304→}
+   305→function addMap() {
+   306→  const w = 60;
+   307→  const id = nextMapId();
+   308→  const ed = {
+   309→    cells: Array.from({ length: ROWS }, () => Array(w).fill('.')),
+   310→    ents: [], undo: [], dirty: true,
+   311→    spawn: 2, factory: w - 6, name: 'Новая карта ' + id, bg: 'bg_fields',
+   312→    dialogs: { intro: [], outro: [], hints: [] },
+   313→  };
+   314→  for (let c = 0; c < w; c++) { ed.cells[11][c] = '#'; ed.cells[12][c] = '#'; }
+   315→  // вставляем сразу ПОСЛЕ выбранной карты («создать в другом месте»), но перед экраном «В разработке»
+   316→  const at = (CMS.maps[curMap] && CMS.maps[curMap].ed.isIndev) ? curMap : curMap + 1;
+   317→  CMS.maps.splice(at, 0, { key: 'map-' + Date.now().toString(36), id, def: null, ed });
+   318→  curMap = at;
+   319→  mapsListDirty = true;
+   320→  saveDrafts(); markDirty();
+   321→  syncMapOpts(); draw(); buildMapTabs(); buildDlgMapSelect();
+   322→  toast('Карта вставлена на это место — стрелками ↑/↓ можно передвинуть', true);
+   323→}
+   324→function delMap() {
+   325→  const m = CMS.maps[curMap];
+   326→  if (!m) return;
+   327→  const msg = m.ed.isIndev
+   328→    ? `Удалить уровень «${m.ed.name}» (№${curMap + 2}, экран «в разработке»)? Игра будет заканчиваться финальным экраном после последней карты.`
+   329→    : `Удалить карту «${m.ed.name}» (№${curMap + 2}) из публикации? У игроков сдвинутся номера последующих карт.`;
+   330→  if (!confirm(msg)) return;
+   331→  CMS.maps.splice(curMap, 1);
+   332→  curMap = Math.max(0, Math.min(curMap, CMS.maps.length - 1));
+   333→  mapsListDirty = true;
+   334→  saveDrafts(); markDirty();
+   335→  syncMapOpts(); draw(); buildMapTabs(); buildDlgMapSelect();
+   336→  toast('Уровень удалён из списка (не забудь ОПУБЛИКОВАТЬ)', true);
+   337→}
+   338→function moveMap(dir) {
+   339→  const j = curMap + dir;
+   340→  if (!CMS.maps[curMap] || j < 0 || j >= CMS.maps.length) return;
+   341→  const [m] = CMS.maps.splice(curMap, 1);
+   342→  CMS.maps.splice(j, 0, m);
+   343→  curMap = j;
+   344→  mapsListDirty = true;
+   345→  saveDrafts(); markDirty();
+   346→  syncMapOpts(); draw(); buildMapTabs(); buildDlgMapSelect();
+   347→  toast(dir < 0 ? 'Уровень передвинут выше по порядку' : 'Уровень передвинут ниже по порядку', true);
+   348→}
+   349→function indevToMap() {
+   350→  const m = CMS.maps[curMap];
+   351→  if (!m || !m.ed.isIndev) return;
+   352→  const w = 60;
+   353→  const name = (!m.ed.name || m.ed.name === 'В разработке') ? 'Новая карта' : m.ed.name;
+   354→  const ed = { cells: Array.from({ length: ROWS }, () => Array(w).fill('.')), ents: [], undo: [], dirty: true, spawn: 2, factory: w - 6, name, bg: 'bg_fields', dialogs: { intro: [], outro: [], hints: [] } };
+   355→  for (let c = 0; c < w; c++) { ed.cells[11][c] = '#'; ed.cells[12][c] = '#'; }
+   356→  m.ed = ed; m.def = null; m.key = 'map-' + Date.now().toString(36);
+   357→  mapsListDirty = true;
+   358→  saveDrafts(); markDirty();
+   359→  syncMapOpts(); draw(); buildMapTabs(); buildDlgMapSelect();
+   360→  toast('Уровень стал обычной картой — рисуй террейн и публикуй', true);
+   361→}
+   362→function resetMap() {
+   363→  const m = CMS.maps[curMap];
+   364→  if (!m) return;
+   365→  if (m.def) {
+   366→    m.ed = defToState(m.def);
+   367→  } else {
+   368→    const w = m.ed.cells[0].length;
+   369→    const ed = { cells: Array.from({ length: ROWS }, () => Array(w).fill('.')), ents: [], undo: [], dirty: true, spawn: 2, factory: w - 6, name: m.ed.name, bg: m.ed.bg, dialogs: { intro: [], outro: [], hints: [] } };
+   370→    for (let c = 0; c < w; c++) { ed.cells[11][c] = '#'; ed.cells[12][c] = '#'; }
+   371→    m.ed = ed;
+   372→  }
+   373→  m.ed.dirty = true;
+   374→  saveDrafts(); markDirty();
+   375→  syncMapOpts(); draw(); buildMapTabs();
+   376→  toast('Карта сброшена (не забудь ОПУБЛИКОВАТЬ)', true);
+   377→}
+   378→
+   379→function syncMapOpts() {
+   380→  const m = CMS.maps[curMap];
+   381→  if (!m) return;
+   382→  const ind = !!m.ed.isIndev;
+   383→  $('indevopts').style.display = ind ? '' : 'none';
+   384→  ['toolbar', 'canvaswrap', 'cellinfo', 'mapopts'].forEach((id) => { $(id).style.display = ind ? 'none' : ''; });
+   385→  if (ind) {
+   386→    $('indevname').value = m.ed.name || '';
+   387→  } else {
+   388→    $('lvlname').value = m.ed.name || '';
+   389→    $('lvbg').value = m.ed.bg || 'bg_fields';
+   390→  }
+   391→}
+   392→
+   393→// ---------- рендер карты ----------
+   394→function fitZoom() {
+   395→  if (!curEd() || curEd().isIndev) return;
+   396→  const w = curEd().cells[0].length;
+   397→  const availW = $('canvaswrap').clientWidth - 30;
+   398→  const top = $('canvaswrap').getBoundingClientRect().top;
+   399→  const availH = Math.max(240, window.innerHeight - top - 84);
+   400→  const csW = Math.floor(availW / w);
+   401→  const csH = Math.floor((availH - 14) / ROWS);
+   402→  zoom.cs = Math.max(10, Math.min(36, Math.min(csW, csH)));
+   403→  $('zoom-val').textContent = zoom.cs + 'px';
+   404→}
+   405→function draw() {
+   406→  const st = curEd();
+   407→  if (!st || st.isIndev) return;
+   408→  const w = st.cells[0].length;
+   409→  const cs = zoom.cs;
+   410→  const TOP = 14;
+   411→  const dpr = window.devicePixelRatio || 1;
+   412→  cv.width = (w * cs) * dpr;
+   413→  cv.height = (TOP + ROWS * cs) * dpr;
+   414→  cv.style.width = (w * cs) + 'px';
+   415→  cv.style.height = (TOP + ROWS * cs) + 'px';
+   416→  const x = cv.getContext('2d');
+   417→  x.setTransform(dpr, 0, 0, dpr, 0, 0);
+   418→  x.fillStyle = '#1c1c30'; x.fillRect(0, 0, w * cs, TOP + ROWS * cs);
+   419→  x.fillStyle = '#55557a'; x.font = '9px Arial'; x.textAlign = 'center';
+   420→  for (let c = 0; c < w; c += 5) x.fillText(c, c * cs + cs / 2, 10);
+   421→  for (let r = 0; r < ROWS; r++) {
+   422→    for (let c = 0; c < w; c++) {
+   423→      const ch = st.cells[r][c];
+   424→      const px = c * cs, py = TOP + r * cs;
+   425→      if (ch === '#') { x.fillStyle = '#7a4a2b'; x.fillRect(px, py, cs, cs); x.fillStyle = '#4caf50'; x.fillRect(px, py, cs, Math.max(3, cs * .22)); }
+   426→      else if (ch === 'B') { x.fillStyle = '#9c4a2d'; x.fillRect(px, py, cs, cs); x.strokeStyle = '#5d2c1a'; x.lineWidth = 1; x.strokeRect(px + .5, py + .5, cs - 1, cs - 1); x.beginPath(); x.moveTo(px, py + cs / 2); x.lineTo(px + cs, py + cs / 2); x.stroke(); }
+   427→      else if (ch === '=') { x.fillStyle = '#b98a4a'; x.fillRect(px, py + cs * .2, cs, cs * .45); x.fillStyle = '#8a6234'; x.fillRect(px, py + cs * .5, cs, cs * .15); }
+   428→      else if (ch === '^') { x.fillStyle = '#b9b9c9'; for (let k = 0; k < 2; k++) { x.beginPath(); x.moveTo(px + k * cs / 2, py + cs); x.lineTo(px + k * cs / 2 + cs / 4, py + cs * .25); x.lineTo(px + (k + 1) * cs / 2, py + cs); x.closePath(); x.fill(); } }
+   429→      if (r === 11 && st.cells[r][c] === '.' && (st.cells[r - 1] && st.cells[r - 1][c]) !== '#') { x.fillStyle = '#22223a'; x.fillRect(px, py, cs, cs * 2 / 3); }
+   430→    }
+   431→  }
+   432→  x.strokeStyle = '#ffffff12'; x.lineWidth = 1;
+   433→  for (let c = 0; c <= w; c++) { x.beginPath(); x.moveTo(c * cs + .5, TOP); x.lineTo(c * cs + .5, TOP + ROWS * cs); x.stroke(); }
+   434→  for (let r = 0; r <= ROWS; r++) { x.beginPath(); x.moveTo(0, TOP + r * cs + .5); x.lineTo(w * cs, TOP + r * cs + .5); x.stroke(); }
+   435→  drawFactory(x, st.factory, cs, TOP);
+   436→  st.ents.forEach((e) => drawEnt(x, e, cs, TOP));
+   437→  drawSpawn(x, st.spawn, cs, TOP);
+   438→  if (hover) { x.strokeStyle = '#ffd23f'; x.lineWidth = 2; x.strokeRect(hover.c * cs + 1, TOP + hover.r * cs + 1, cs - 2, cs - 2); }
+   439→  $('cellinfo').textContent = hover ? `колонка ${hover.c}, ряд ${hover.r}` : '';
+   440→}
+   441→function imgFit(x, im, cx, bottomY, maxW, maxH) {
+   442→  if (!im.complete || !im.naturalWidth) return false;
+   443→  const k = Math.min(maxW / im.naturalWidth, maxH / im.naturalHeight);
+   444→  const dw = im.naturalWidth * k, dh = im.naturalHeight * k;
+   445→  x.drawImage(im, cx - dw / 2, bottomY - dh, dw, dh);
+   446→  return true;
+   447→}
+   448→function drawEnt(x, e, cs, TOP) {
+   449→  const cx = e.c * cs + cs / 2, by = TOP + (e.r + 1) * cs;
+   450→  const map = { e: 'burmaldenets', t: 'burmaldenets', G: 'boss', bottle: 'checkushka', heart: 'heart', plush: 'plush' };
+   451→  if (!imgFit(x, IMG[map[e.t]], cx, by, e.t === 'G' ? cs * 1.8 : cs * .95, e.t === 'G' ? cs * 1.9 : cs * .95)) {
+   452→    x.fillStyle = e.t === 'G' ? '#ffd23f' : '#e63946';
+   453→    x.beginPath(); x.arc(cx, by - cs / 2, cs * .3, 0, 7); x.fill();
+   454→  }
+   455→  if (e.t === 't') { x.fillStyle = '#fff'; x.font = 'bold 9px Arial'; x.textAlign = 'center'; x.fillText('T', cx, by - cs - 1); }
+   456→}
+   457→function drawSpawn(x, c, cs, TOP) {
+   458→  const cx = c * cs + cs / 2, by = TOP + 11 * cs;
+   459→  imgFit(x, IMG.andrey, cx, by, cs, cs * 1.2);
+   460→  x.fillStyle = '#ffd23f'; x.font = 'bold 9px Arial'; x.textAlign = 'center';
+   461→  x.fillText('СТАРТ', cx, by - cs * 1.15);
+   462→}
+   463→function drawFactory(x, c, cs, TOP) {
+   464→  const cx = c * cs + cs / 2, by = TOP + 11 * cs;
+   465→  if (!imgFit(x, IMG.factory, cx, by, cs * 4, cs * 3.2)) {
+   466→    x.fillStyle = '#8f3b2d'; x.fillRect(c * cs, by - cs * 2, cs * 2, cs * 2);
+   467→  }
+   468→  x.fillStyle = '#9fe8a0'; x.font = 'bold 9px Arial'; x.textAlign = 'center';
+   469→  x.fillText('ЗАВОД', cx, by - cs * 3.1);
+   470→}
+   471→
+   472→// ---------- ввод/инструменты ----------
+   473→let painting = false;
+   474→function cellAt(ev) {
+   475→  const rect = cv.getBoundingClientRect();
+   476→  const cs = zoom.cs, TOP = 14;
+   477→  const px = (ev.clientX - rect.left) * (cv.width / (window.devicePixelRatio || 1) / rect.width);
+   478→  const py = (ev.clientY - rect.top) * (cv.height / (window.devicePixelRatio || 1) / rect.height);
+   479→  const c = Math.floor(px / cs), r = Math.floor((py - TOP) / cs);
+   480→  const w = curEd().cells[0].length;
+   481→  if (c < 0 || c >= w || r < 0 || r >= ROWS) return null;
+   482→  return { c, r };
+   483→}
+   484→function pushUndo() {
+   485→  const st = curEd();
+   486→  st.undo.push(JSON.stringify({ cells: st.cells, ents: st.ents, spawn: st.spawn, factory: st.factory }));
+   487→  if (st.undo.length > 40) st.undo.shift();
+   488→}
+   489→function applyTool(c, r) {
+   490→  const st = curEd();
+   491→  const w = st.cells[0].length;
+   492→  const entAt = (cc, rr) => st.ents.find((e) => e.c === cc && e.r === rr);
+   493→  if (tool === 'ground') {
+   494→    if (r < 11) { toast('Земля — только нижние ряды 11–12. Выше ставь кирпич или платформу.'); return; }
+   495→    if (st.cells[r][c] !== '#') { st.cells[11][c] = '#'; st.cells[12][c] = '#'; st.dirty = true; }
+   496→  } else if (tool === 'B' || tool === '=' || tool === '^') {
+   497→    if (st.cells[r][c] !== tool) {
+   498→      if (r >= 11 && tool !== 'B' && st.cells[r][c] === '#') { toast('Сначала сотри землю ластиком.'); return; }
+   499→      st.cells[r][c] = tool; st.dirty = true;
+   500→    }
+   501→  } else if (tool === 'erase') {
+   502→    const e = entAt(c, r);
+   503→    if (e) { st.ents.splice(st.ents.indexOf(e), 1); st.dirty = true; }
+   504→    if (st.cells[r][c] !== '.') {
+   505→      if (r >= 11 && st.cells[r][c] === '#') { st.cells[11][c] = '.'; st.cells[12][c] = '.'; }
+   506→      else st.cells[r][c] = '.';
+   507→      st.dirty = true;
+   508→    }
+   509→  } else if (tool === 'spawn') {
+   510→    if (st.cells[10][c] !== '.') { toast('Клетка старта занята тайлом — сотри его.'); return; }
+   511→    if (st.spawn !== c) { st.spawn = c; st.dirty = true; }
+   512→  } else if (tool === 'factory') {
+   513→    if (st.factory !== c) { st.factory = c; st.dirty = true; }
+   514→  } else {
+   515→    if (r >= 11) { toast('В землю сущности не ставятся.'); return; }
+   516→    const e = entAt(c, r);
+   517→    if (e && e.t === tool) return;
+   518→    if (e) st.ents.splice(st.ents.indexOf(e), 1);
+   519→    st.ents.push({ t: tool, c, r: tool === 'G' ? Math.min(r, 9) : r });
+   520→    st.dirty = true;
+   521→  }
+   522→  draw(); buildMapTabs(); saveDrafts(); setStatus();
+   523→}
+   524→cv.addEventListener('pointerdown', (ev) => {
+   525→  if (!curEd()) return;
+   526→  const p = cellAt(ev); if (!p) return;
+   527→  pushUndo();
+   528→  painting = true;
+   529→  cv.setPointerCapture(ev.pointerId);
+   530→  applyTool(p.c, p.r);
+   531→});
+   532→cv.addEventListener('pointermove', (ev) => {
+   533→  const p = cellAt(ev);
+   534→  hover = p;
+   535→  if (painting && p) applyTool(p.c, p.r); else draw();
+   536→});
+   537→window.addEventListener('pointerup', () => { painting = false; });
+   538→cv.addEventListener('pointerleave', () => { hover = null; draw(); });
+   539→
+   540→document.querySelectorAll('.tool[data-tool]').forEach((b) => {
+   541→  b.onclick = () => {
+   542→    document.querySelectorAll('.tool[data-tool]').forEach((z) => z.classList.remove('active'));
+   543→    b.classList.add('active');
+   544→    tool = b.dataset.tool;
+   545→  };
+   546→});
+   547→document.querySelector('.tool[data-tool="ground"]').classList.add('active');
+   548→$('btn-undo').onclick = () => {
+   549→  const st = curEd();
+   550→  const snap = st.undo.pop();
+   551→  if (!snap) { toast('Отменять нечего'); return; }
+   552→  Object.assign(st, JSON.parse(snap));
+   553→  st.dirty = true; draw(); buildMapTabs(); saveDrafts(); setStatus();
+   554→};
+   555→document.addEventListener('keydown', (e) => {
+   556→  if ((e.ctrlKey || e.metaKey) && e.code === 'KeyZ') { e.preventDefault(); $('btn-undo').click(); }
+   557→});
+   558→$('zoom-in').onclick = () => { zoom.cs = Math.min(40, zoom.cs + 4); $('zoom-val').textContent = zoom.cs + 'px'; draw(); };
+   559→$('zoom-out').onclick = () => { zoom.cs = Math.max(10, zoom.cs - 4); $('zoom-val').textContent = zoom.cs + 'px'; draw(); };
+   560→$('lvlname').addEventListener('input', () => { curEd().name = $('lvlname').value; curEd().dirty = true; buildMapTabs(); saveDrafts(); setStatus(); });
+   561→$('lvbg').addEventListener('change', () => { curEd().bg = $('lvbg').value; curEd().dirty = true; saveDrafts(); setStatus(); });
+   562→$('btn-reset-level').onclick = resetMap;
+   563→$('btn-del-map').onclick = delMap;
+   564→$('btn-move-up').onclick = () => moveMap(-1);
+   565→$('btn-move-down').onclick = () => moveMap(1);
+   566→$('btn-indev-to-map').onclick = indevToMap;
+   567→$('btn-del-level').onclick = delMap;
+   568→$('indevname').addEventListener('input', () => {
+   569→  const m = CMS.maps[curMap];
+   570→  if (!m || !m.ed.isIndev) return;
+   571→  m.ed.name = $('indevname').value;
+   572→  m.ed.dirty = true;
+   573→  buildMapTabs(); saveDrafts(); setStatus();
+   574→});
+   575→
+   576→function markDirty() { /* все dirty-флаги уже выставлены вызывающим кодом */ }
+   577→
+   578→// ============================================================
+   579→// РЕЖИМ РАЗГОВОРЫ
+   580→// ============================================================
+   581→function buildDlgMapSelect() {
+   582→  const sel = $('dlg-map');
+   583→  sel.innerHTML = '';
+   584→  CMS.maps.forEach((m, i) => {
+   585→    if (m.ed.isIndev) return; // у экрана «В разработке» нет разговоров
+   586→    const o = document.createElement('option');
+   587→    o.value = i;
+   588→    o.textContent = `№${i + 2} ${m.ed.name || 'Карта'}`;
+   589→    sel.appendChild(o);
+   590→  });
+   591→  sel.value = String(curMap);
+   592→}
+   593→$('dlg-map').addEventListener('change', () => {
+   594→  curMap = Number($('dlg-map').value) || 0;
+   595→  syncMapOpts(); draw(); buildMapTabs();
+   596→  renderAllDialogs();
+   597→});
+   598→
+   599→function dlgLineEditor(list, i, container, onChange) {
+   600→  const line = list[i];
+   601→  const div = document.createElement('div');
+   602→  div.className = 'line';
+   603→  const top = document.createElement('div');
+   604→  top.className = 'line-top';
+   605→  const sel = document.createElement('select');
+   606→  sel.className = 'who';
+   607→  WHO_LIST.forEach(([v, n]) => {
+   608→    const o = document.createElement('option'); o.value = v; o.textContent = n; sel.appendChild(o);
+   609→  });
+   610→  sel.value = line.who || 'andrey';
+   611→  sel.addEventListener('change', () => { line.who = sel.value; onChange(); });
+   612→  top.appendChild(sel);
+   613→  const up = document.createElement('button'); up.className = 'iconbtn'; up.textContent = '↑'; up.title = 'Выше';
+   614→  up.onclick = () => { if (i > 0) { [list[i - 1], list[i]] = [list[i], list[i - 1]]; onChange(true); } };
+   615→  const down = document.createElement('button'); down.className = 'iconbtn'; down.textContent = '↓'; down.title = 'Ниже';
+   616→  down.onclick = () => { if (i < list.length - 1) { [list[i + 1], list[i]] = [list[i], list[i + 1]]; onChange(true); } };
+   617→  const del = document.createElement('button'); del.className = 'iconbtn del'; del.textContent = '✕'; del.title = 'Удалить реплику';
+   618→  del.onclick = () => { list.splice(i, 1); onChange(true); };
+   619→  top.appendChild(up); top.appendChild(down); top.appendChild(del);
+   620→  div.appendChild(top);
+   621→  const ta = document.createElement('textarea');
+   622→  ta.value = line.text || '';
+   623→  ta.placeholder = 'Текст реплики…';
+   624→  ta.addEventListener('input', () => { line.text = ta.value; onChange(); });
+   625→  div.appendChild(ta);
+   626→  container.appendChild(div);
+   627→}
+   628→function renderList(containerId, list, onChange, isHint) {
+   629→  const box = $(containerId);
+   630→  box.innerHTML = '';
+   631→  list.forEach((_, i) => {
+   632→    if (isHint) {
+   633→      const h = list[i];
+   634→      const div = document.createElement('div');
+   635→      div.className = 'line';
+   636→      const top = document.createElement('div');
+   637→      top.className = 'line-top';
+   638→      const inp = document.createElement('input');
+   639→      inp.className = 'hintc'; inp.type = 'number'; inp.min = '0'; inp.value = h.c;
+   640→      inp.addEventListener('input', () => { h.c = Number(inp.value) || 0; onChange(); });
+   641→      const lbl = document.createElement('span');
+   642→      lbl.style.cssText = 'color:#8a8aa0;font-size:12px';
+   643→      lbl.textContent = 'колонка №';
+   644→      const del = document.createElement('button'); del.className = 'iconbtn del'; del.textContent = '✕';
+   645→      del.onclick = () => { list.splice(i, 1); onChange(true); };
+   646→      top.appendChild(lbl); top.appendChild(inp); top.appendChild(del);
+   647→      div.appendChild(top);
+   648→      const ta = document.createElement('textarea');
+   649→      ta.value = h.text || '';
+   650→      ta.addEventListener('input', () => { h.text = ta.value; onChange(); });
+   651→      div.appendChild(ta);
+   652→      box.appendChild(div);
+   653→      return;
+   654→    }
+   655→    dlgLineEditor(list, i, box, onChange);
+   656→  });
+   657→  if (!list.length) {
+   658→    const e = document.createElement('div');
+   659→    e.style.cssText = 'color:#55557a;font-size:12px;padding:2px 0 8px';
+   660→    e.textContent = 'Пока пусто — добавь реплику.';
+   661→    box.appendChild(e);
+   662→  }
+   663→}
+   664→function touchIntro() { introDirty = true; saveDrafts(); setStatus(); }
+   665→function touchMapDialogs() { curEd().dirty = true; saveDrafts(); setStatus(); buildMapTabs(); }
+   666→function renderAllDialogs() {
+   667→  renderList('dlg-intro', CMS.intro.cutscene, (rebuild) => { touchIntro(); if (rebuild) renderAllDialogs(); });
+   668→  renderList('dlg-outroBoss', CMS.intro.outroAfterBoss, (rebuild) => { touchIntro(); if (rebuild) renderAllDialogs(); });
+   669→  const m = CMS.maps[curMap];
+   670→  if (m && !m.ed.isIndev) {
+   671→    renderList('dlg-mapIntro', m.ed.dialogs.intro, (rebuild) => { touchMapDialogs(); if (rebuild) renderAllDialogs(); });
+   672→    renderList('dlg-mapOutro', m.ed.dialogs.outro, (rebuild) => { touchMapDialogs(); if (rebuild) renderAllDialogs(); });
+   673→    renderList('dlg-hints', m.ed.dialogs.hints, (rebuild) => { touchMapDialogs(); if (rebuild) renderAllDialogs(); }, true);
+   674→  }
+   675→}
+   676→document.querySelectorAll('.addline[data-add]').forEach((b) => {
+   677→  b.onclick = () => {
+   678→    const k = b.dataset.add;
+   679→    const blank = { who: 'andrey', text: '' };
+   680→    if (k === 'intro') { CMS.intro.cutscene.push(blank); touchIntro(); renderAllDialogs(); }
+   681→    else if (k === 'outroBoss') { CMS.intro.outroAfterBoss.push({ who: 'boss', text: '' }); touchIntro(); renderAllDialogs(); }
+   682→    else if (k === 'mapIntro') { curEd().dialogs.intro.push(blank); touchMapDialogs(); renderAllDialogs(); }
+   683→    else if (k === 'mapOutro') { curEd().dialogs.outro.push({ who: 'enemy', text: '' }); touchMapDialogs(); renderAllDialogs(); }
+   684→    else if (k === 'hints') { curEd().dialogs.hints.push({ c: 10, text: 'Новая подсказка' }); touchMapDialogs(); renderAllDialogs(); }
+   685→  };
+   686→});
+   687→
+   688→// ============================================================
+   689→// РЕЖИМ ТЕКСТУРЫ
+   690→// ============================================================
+   691→async function uploadAsset(kind, name, base64) {
+   692→  try {
+   693→    const r = await fetch(API + '/upload', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind, name, data: base64 }) });
+   694→    const j = await r.json();
+   695→    if (!j.ok) { toast('Ошибка загрузки: ' + (j.error || r.status)); return null; }
+   696→    return j;
+   697→  } catch (e) { toast('Сервер недоступен: ' + e.message); return null; }
+   698→}
+   699→function fileToBase64(file) {
+   700→  return new Promise((resolve, reject) => {
+   701→    const fr = new FileReader();
+   702→    fr.onload = () => resolve(String(fr.result).split(',')[1]);
+   703→    fr.onerror = reject;
+   704→    fr.readAsDataURL(file);
+   705→  });
+   706→}
+   707→function renderTextures() {
+   708→  const grid = $('texgrid');
+   709→  grid.innerHTML = '';
+   710→  TEX_SLOTS.forEach(([key, title, size, note]) => {
+   711→    const custom = CMS.textures[key];
+   712→    const card = document.createElement('div');
+   713→    card.className = 'tex';
+   714→    const prev = document.createElement('div');
+   715→    prev.className = 'prev';
+   716→    const img = document.createElement('img');
+   717→    img.alt = title;
+   718→    img.src = custom ? custom.url : ('image/' + key + '.png');
+   719→    img.onerror = () => { img.style.visibility = 'hidden'; };
+   720→    prev.appendChild(img);
+   721→    card.appendChild(prev);
+   722→    const nm = document.createElement('div');
+   723→    nm.className = 'tname';
+   724→    nm.innerHTML = title + (custom ? '<span class="badge">СВОЯ</span>' : '');
+   725→    card.appendChild(nm);
+   726→    const inf = document.createElement('div');
+   727→    inf.className = 'tinfo';
+   728→    inf.textContent = `Слот ${size} • ${note}`;
+   729→    card.appendChild(inf);
+   730→    const row = document.createElement('div');
+   731→    row.className = 'trow';
+   732→    const up = document.createElement('button');
+   733→    up.className = 'addline'; up.textContent = '⬆ Загрузить'; up.style.flex = '1';
+   734→    up.onclick = () => pickTexture(key, title);
+   735→    row.appendChild(up);
+   736→    if (custom) {
+   737→      const rs = document.createElement('button');
+   738→      rs.className = 'iconbtn del'; rs.textContent = '↺'; rs.title = 'Вернуть официальную';
+   739→      rs.onclick = () => { delete CMS.textures[key]; texturesDirty = true; saveDrafts(); setStatus(); renderTextures(); };
+   740→      row.appendChild(rs);
+   741→    }
+   742→    card.appendChild(row);
+   743→    grid.appendChild(card);
+   744→  });
+   745→}
+   746→function pickTexture(key, title) {
+   747→  const inp = document.createElement('input');
+   748→  inp.type = 'file';
+   749→  inp.accept = 'image/png,image/jpeg,image/webp,image/gif';
+   750→  inp.onchange = async () => {
+   751→    const f = inp.files && inp.files[0];
+   752→    if (!f) return;
+   753→    if (f.size > 4.2e6) { toast('Слишком большой файл (макс 4 МБ)'); return; }
+   754→    toast('Загружаю…');
+   755→    const b64 = await fileToBase64(f);
+   756→    const j = await uploadAsset('texture', f.name, b64);
+   757→    if (j) {
+   758→      CMS.textures[key] = { id: j.id, url: j.url };
+   759→      texturesDirty = true;
+   760→      saveDrafts(); setStatus(); renderTextures();
+   761→      toast(`${title}: загружено! Не забудь ОПУБЛИКОВАТЬ.`, true);
+   762→    }
+   763→  };
+   764→  inp.click();
+   765→}
+   766→
+   767→// ============================================================
+   768→// РЕЖИМ МУЗЫКА
+   769→// ============================================================
+   770→function renderMusic() {
+   771→  const box = $('tracks');
+   772→  box.innerHTML = '';
+   773→  if (!CMS.music.tracks.length) {
+   774→    const e = document.createElement('div');
+   775→    e.style.cssText = 'color:#55557a;font-size:12px;padding:4px 0';
+   776→    e.textContent = 'Треков пока нет. Загрузи MP3 — он станет фоновой музыкой для всех игроков.';
+   777→    box.appendChild(e);
+   778→  }
+   779→  CMS.music.tracks.forEach((tr, i) => {
+   780→    const row = document.createElement('div');
+   781→    row.className = 'track' + (CMS.music.active === tr.id ? ' active' : '');
+   782→    const nm = document.createElement('div');
+   783→    nm.className = 'tname';
+   784→    nm.textContent = tr.name;
+   785→    row.appendChild(nm);
+   786→    if (CMS.music.active === tr.id) {
+   787→      const tag = document.createElement('span');
+   788→      tag.className = 'tagok';
+   789→      tag.textContent = 'ИГРАЕТ У ВСЕХ';
+   790→      row.appendChild(tag);
+   791→    }
+   792→    const use = document.createElement('button');
+   793→    use.className = 'act';
+   794→    use.textContent = CMS.music.active === tr.id ? '▶ Сейчас играет' : 'Сделать фоновой';
+   795→    if (CMS.music.active === tr.id) use.style.opacity = .6;
+   796→    use.onclick = () => {
+   797→      CMS.music.active = (CMS.music.active === tr.id) ? null : tr.id;
+   798→      musicDirty = true;
+   799→      saveDrafts(); setStatus(); renderMusic();
+   800→    };
+   801→    row.appendChild(use);
+   802→    const del = document.createElement('button');
+   803→    del.className = 'iconbtn del'; del.textContent = '✕'; del.title = 'Убрать из списка';
+   804→    del.onclick = () => {
+   805→      if (CMS.music.active === tr.id) { CMS.music.active = null; musicDirty = true; }
+   806→      CMS.music.tracks.splice(i, 1);
+   807→      musicDirty = true;
+   808→      saveDrafts(); setStatus(); renderMusic();
+   809→    };
+   810→    row.appendChild(del);
+   811→    box.appendChild(row);
+   812→  });
+   813→}
+   814→$('btn-mus-add').onclick = () => $('musfile').click();
+   815→$('musfile').addEventListener('change', async () => {
+   816→  const f = $('musfile').files && $('musfile').files[0];
+   817→  $('musfile').value = '';
+   818→  if (!f) return;
+   819→  if (f.size > 12e6) { toast('Слишком большой файл (макс 10 МБ)'); return; }
+   820→  toast('Загружаю трек…');
+   821→  const b64 = await fileToBase64(f);
+   822→  const j = await uploadAsset('music', f.name, b64);
+   823→  if (j) {
+   824→    CMS.music.tracks.push({ id: j.id, name: f.name.replace(/\.[a-z0-9]+$/i, '').slice(0, 40) || 'Трек', url: j.url });
+   825→    CMS.music.active = j.id;
+   826→    musicDirty = true;
+   827→    saveDrafts(); setStatus(); renderMusic();
+   828→    toast('Трек загружен! Нажми ОПУБЛИКОВАТЬ, чтобы включить у всех.', true);
+   829→  }
+   830→});
+   831→
+   832→// ============================================================
+   833→// РЕЖИМ КАНАЛЫ
+   834→// ============================================================
+   835→function renderSocials() {
+   836→  const box = $('soclist');
+   837→  box.innerHTML = '';
+   838→  CMS.socials.forEach((s, i) => {
+   839→    const row = document.createElement('div');
+   840→    row.className = 'soc';
+   841→    const nm = document.createElement('input');
+   842→    nm.className = 'name'; nm.value = s.name; nm.placeholder = 'Название';
+   843→    nm.addEventListener('input', () => { s.name = nm.value; socialsDirty = true; saveDrafts(); setStatus(); });
+   844→    const cls = document.createElement('select');
+   845→    SOC_PRESETS.forEach(([v, n]) => {
+   846→      const o = document.createElement('option'); o.value = v; o.textContent = n; cls.appendChild(o);
+   847→    });
+   848→    cls.value = s.class || 'tg';
+   849→    cls.addEventListener('change', () => { s.class = cls.value; socialsDirty = true; saveDrafts(); setStatus(); });
+   850→    const url = document.createElement('input');
+   851→    url.className = 'url'; url.value = s.url; url.placeholder = 'https://t.me/твой_канал';
+   852→    url.addEventListener('input', () => { s.url = url.value; socialsDirty = true; saveDrafts(); setStatus(); });
+   853→    const del = document.createElement('button');
+   854→    del.className = 'iconbtn del'; del.textContent = '✕'; del.title = 'Удалить канал';
+   855→    del.onclick = () => { CMS.socials.splice(i, 1); socialsDirty = true; saveDrafts(); setStatus(); renderSocials(); };
+   856→    row.appendChild(nm); row.appendChild(cls); row.appendChild(url); row.appendChild(del);
+   857→    box.appendChild(row);
+   858→  });
+   859→  if (!CMS.socials.length) {
+   860→    const e = document.createElement('div');
+   861→    e.style.cssText = 'color:#55557a;font-size:12px;padding:4px 0 10px';
+   862→    e.textContent = 'Каналов нет — на финальном экране не будет кнопок.';
+   863→    box.appendChild(e);
+   864→  }
+   865→}
+   866→$('btn-soc-add').onclick = () => {
+   867→  CMS.socials.push({ name: 'Telegram', class: 'tg', url: '' });
+   868→  socialsDirty = true;
+   869→  saveDrafts(); setStatus(); renderSocials();
+   870→};
+   871→
+   872→// ============================================================
+   873→// ПЕРЕКЛЮЧЕНИЕ РЕЖИМОВ
+   874→// ============================================================
+   875→document.querySelectorAll('#modes button').forEach((b) => {
+   876→  b.onclick = () => {
+   877→    document.querySelectorAll('#modes button').forEach((z) => z.classList.remove('active'));
+   878→    b.classList.add('active');
+   879→    mode = b.dataset.mode;
+   880→    document.querySelectorAll('.pane').forEach((p) => p.classList.remove('active'));
+   881→    $('pane-' + mode).classList.add('active');
+   882→    if (mode === 'maps') { fitZoom(); draw(); }
+   883→    if (mode === 'dialogs') { buildDlgMapSelect(); renderAllDialogs(); }
+   884→    if (mode === 'textures') renderTextures();
+   885→    if (mode === 'music') renderMusic();
+   886→    if (mode === 'socials') renderSocials();
+   887→  };
+   888→});
+   889→
+   890→// ============================================================
+   891→// ПУБЛИКАЦИЯ / ЭКСПОРТ / СБРОС
+   892→// ============================================================
+   893→function buildPayload() {
+   894→  return {
+   895→    v: 3, // маркер формата: список карт управляет экраном «В разработке» и порядком уровней
+   896→    maps: CMS.maps.map((m) => ({ key: m.key, def: stateToDef(m) })),
+   897→    intro: { cutscene: CMS.intro.cutscene, outroAfterBoss: CMS.intro.outroAfterBoss },
+   898→    textures: CMS.textures,
+   899→    music: { active: CMS.music.active, tracks: CMS.music.tracks },
+   900→    socials: CMS.socials,
+   901→  };
+   902→}
+   903→async function publish() {
+   904→  for (const m of CMS.maps) {
+   905→    const err = validateMap(m);
+   906→    if (err) { toast(`Карта №${m.id}: ${err}`); curMap = CMS.maps.indexOf(m); switchMode('maps'); syncMapOpts(); draw(); buildMapTabs(); return null; }
+   907→  }
+   908→  try {
+   909→    const r = await fetch(API, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(buildPayload()) });
+   910→    const j = await r.json();
+   911→    if (!j.ok) { toast('Ошибка публикации: ' + (j.error || r.status)); return null; }
+   912→    CMS.maps.forEach((m) => { m.ed.dirty = false; });
+   913→    introDirty = socialsDirty = texturesDirty = musicDirty = mapsListDirty = false;
+   914→    pubAt = j.updatedAt || Date.now();
+   915→    saveDrafts();
+   916→    setStatus();
+   917→    buildMapTabs();
+   918→    return j;
+   919→  } catch (e) { toast('Сервер недоступен: ' + e.message); return null; }
+   920→}
+   921→$('btn-publish').onclick = async () => { if (await publish()) toast('Опубликовано! Все игроки получат новый контент.', true); };
+   922→$('btn-test').onclick = async () => { if (await publish()) { toast('Опубликовано, открываю игру…', true); setTimeout(() => window.open('/game/index.html', '_blank'), 400); } };
+   923→$('btn-export').onclick = () => {
+   924→  const blob = new Blob([JSON.stringify(buildPayload())], { type: 'application/json' });
+   925→  const a = document.createElement('a');
+   926→  a.href = URL.createObjectURL(blob); a.download = 'game-cms.json'; a.click();
+   927→  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+   928→  toast('game-cms.json скачан — положи рядом с index.html для статичного хостинга', true);
+   929→};
+   930→$('btn-reset-all').onclick = async () => {
+   931→  if (!confirm('Убрать ВСЕ опубликованные правки (карты, текстуры, музыку, каналы) и вернуть официальные?')) return;
+   932→  try { await fetch(API, { method: 'DELETE' }); } catch (e) { toast('Сервер недоступен'); return; }
+   933→  try { localStorage.removeItem(DRAFT_KEY); } catch (e) {}
+   934→  location.reload();
+   935→};
+   936→
+   937→function anyDirty() {
+   938→  return introDirty || socialsDirty || texturesDirty || musicDirty || mapsListDirty || CMS.maps.some((m) => m.ed.dirty);
+   939→}
+   940→function setStatus() {
+   941→  const el = $('status');
+   942→  if (anyDirty()) {
+   943→    el.textContent = '⚠ Есть НЕОПУБЛИКОВАННЫЕ правки — черновик сохранён в браузере, но игроки его пока не видят. Нажми «ОПУБЛИКОВАТЬ».';
+   944→    el.classList.remove('none'); el.classList.add('dirty');
+   945→  } else if (pubAt) {
+   946→    el.textContent = 'Опубликовано: ' + new Date(pubAt).toLocaleString('ru') + ' — игроки получают контент с сервера';
+   947→    el.classList.remove('none', 'dirty');
+   948→  } else {
+   949→    el.textContent = 'Публикаций нет — у всех игроков официальный контент';
+   950→    el.classList.add('none'); el.classList.remove('dirty');
+   951→  }
+   952→}
+   953→function switchMode(m) {
+   954→  const b = document.querySelector(`#modes button[data-mode="${m}"]`);
+   955→  if (b) b.click();
+   956→}
+   957→
+   958→// ============================================================
+   959→// ЗАГРУЗКА
+   960→// ============================================================
+   961→function officialMapsToCms() {
+   962→  MAP_LEVELS.forEach((d, i) => {
+   963→    CMS.maps.push({ key: 'map-' + (i + 1), id: d.id || (i + 2), def: JSON.parse(JSON.stringify(d)), ed: defToState(d) });
+   964→  });
+   965→  const iv = officialIndev();
+   966→  if (iv) CMS.maps.push(iv); // экран «В разработке» тоже редактируется/удаляется
+   967→  CMS.intro = {
+   968→    cutscene: (DIALOGUES.intro || []).map((l) => ({ who: l.who, text: l.text })),
+   969→    outroAfterBoss: (DIALOGUES.outroAfterBoss || []).map((l) => ({ who: l.who, text: l.text })),
+   970→  };
+   971→  CMS.socials = (CONFIG.SOCIALS || []).map((s) => ({ name: s.name, class: s.class || 'tg', url: s.url || '#' }));
+   972→}
+   973→function serverMapsToCms(j) {
+   974→  const newList = j.v >= 3; // маркер публикации новой панели — список карт уже управляет экраном «В разработке»
+   975→  if (Array.isArray(j.maps) && j.maps.length) {
+   976→    CMS.maps = j.maps.filter((m) => m && m.def).map((m) => {
+   977→      if (m.def.type === 'indev') return { key: m.key || 'indev', id: m.def.id || 6, def: m.def, ed: indevState(m.def.name, false) };
+   978→      return { key: m.key, id: m.def.id || 2, def: m.def, ed: defToState(m.def) };
+   979→    });
+   980→    if (!newList && !CMS.maps.some((m) => m.ed.isIndev)) {
+   981→      const iv = officialIndev();
+   982→      if (iv) CMS.maps.push(iv); // старая публикация — добавляем официальный экран
+   983→    }
+   984→  } else if (j.levels && typeof j.levels === 'object') {
+   985→    // миграция со старого формата levels:{idx:def}
+   986→    CMS.maps = [];
+   987→    Object.keys(j.levels).map(Number).sort((a, b) => a - b).forEach((k) => {
+   988→      const def = j.levels[k];
+   989→      if (def && def.type === 'map') CMS.maps.push({ key: 'map-' + k, id: def.id || (k + 2), def, ed: defToState(def) });
+   990→    });
+   991→    if (!CMS.maps.length) officialMapsToCms();
+   992→    else { const iv = officialIndev(); if (iv) CMS.maps.push(iv); }
+   993→  } else {
+   994→    officialMapsToCms();
+   995→  }
+   996→  if (j.intro && Array.isArray(j.intro.cutscene)) {
+   997→    CMS.intro = {
+   998→      cutscene: j.intro.cutscene,
+   999→      outroAfterBoss: Array.isArray(j.intro.outroAfterBoss) ? j.intro.outroAfterBoss : [],
+  1000→    };
+  1001→  }
+  1002→  if (j.textures && typeof j.textures === 'object') CMS.textures = j.textures;
+  1003→  if (j.music && typeof j.music === 'object') CMS.music = { active: j.music.active || null, tracks: j.music.tracks || [] };
+  1004→  if (Array.isArray(j.socials)) CMS.socials = j.socials;
+  1005→}
+  1006→async function boot() {
+  1007→  let j = null;
+  1008→  try { const r = await fetch(API, { cache: 'no-store' }); j = await r.json(); if (!j || !j.ok) j = null; } catch (e) { /* нет API */ }
+  1009→  if (j) serverMapsToCms(j);
+  1010→  else officialMapsToCms();
+  1011→  // черновик браузера применяем, только если он не старше публикации с сервера
+  1012→  const dr = loadDrafts();
+  1013→  let applied = false, hadDirty = false;
+  1014→  if (dr) {
+  1015→    const pubTs = (j && j.updatedAt) ? (new Date(j.updatedAt).getTime() || 0) : 0;
+  1016→    if (!pubTs || (dr.savedAt || 0) >= pubTs) {
+  1017→      applied = applyDrafts(dr);
+  1018→      hadDirty = applied && anyDirty();
+  1019→    } else {
+  1020→      try { localStorage.removeItem(DRAFT_KEY); } catch (e) {}
+  1021→      setTimeout(() => toast('На сервере публикация новее — старый черновик отброшен', true), 600);
+  1022→    }
+  1023→  }
+  1024→  pubAt = (j && j.updatedAt) || null;
+  1025→  setStatus();
+  1026→  fitZoom(); buildMapTabs(); syncMapOpts(); draw();
+  1027→  buildDlgMapSelect(); renderAllDialogs(); renderTextures(); renderMusic(); renderSocials();
+  1028→  if (hadDirty) toast('Черновик восстановлен — есть НЕОПУБЛИКОВАННЫЕ правки', true);
+  1029→  else if (applied) toast('Черновик восстановлен из браузера', true);
+  1030→  if (j && j.updatedAt) toast('Загружено ОПУБЛИКОВАННОЕ (редактируешь его)', true);
+  1031→  if (!j) setTimeout(() => toast('Сервер недоступен — правки только как черновик/экспорт', false), 800);
+  1032→  // отладочный хук (E2E)
+  1033→  window.ADMIN = {
+  1034→    get CMS() { return CMS; },
+  1035→    get curMap() { return curMap; },
+  1036→    paint: (c, r, t) => { tool = t; applyTool(c, r); },
+  1037→    addMap, stateToDef, publish, buildPayload, switchMode, moveMap, indevToMap,
+  1038→    renderAll: { textures: renderTextures, music: renderMusic, socials: renderSocials, dialogs: renderAllDialogs },
+  1039→    get dirty() { return anyDirty(); },
+  1040→  };
+  1041→}
+  1042→window.addEventListener('resize', () => { if (mode === 'maps') { fitZoom(); draw(); } });
+  1043→boot();
+  1044→

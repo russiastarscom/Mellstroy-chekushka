@@ -58,6 +58,7 @@ const Game = (() => {
   // API для сущностей (передаётся вместо this)
   const api = {
     spawnDust, spawnStars, onPlayerHurt, playerFell, onBossDead,
+    playerDrown, onDeathStart, onDeathAnimDone, spawnBubble, spawnSplash, liquidTheme,
     get player() { return player; },
     get tomahawks() { return tomahawks; },
     get shake() { return shake; },
@@ -202,8 +203,28 @@ const Game = (() => {
   }
 
   // ---------- события ----------
+  let pendingGameOver = false; // gameOver откладывается до конца анимации смерти
   function onPlayerHurt() {
-    if (player.hp <= 0) gameOver();
+    if (player.hp <= 0) {
+      if (player.dying) pendingGameOver = true; // сначала доиграет анимацию смерти, потом экран
+      else gameOver();
+    }
+  }
+  // Утоп: касание жидкости — hp--, Андрей медленно уходит под воду (анимация), потом респаун/экран
+  function playerDrown(surfaceY) {
+    if (player.dying) return;
+    player.hp--;
+    if (player.hp <= 0) pendingGameOver = true;
+    player.startDeath('water', api, { surfaceY });
+  }
+  function onDeathStart(p) {
+    shake = Math.max(shake, p.dying === 'water' ? 0.25 : 0.45);
+  }
+  function onDeathAnimDone(p) {
+    if (pendingGameOver) { pendingGameOver = false; gameOver(); return; }
+    p.dying = null;
+    Audio8.sfx.hurt();
+    player.respawn();
   }
   function playerFell() {
     player.hp--;
@@ -244,6 +265,20 @@ const Game = (() => {
   }
   function spawnDust(x, y, n) { for (let i = 0; i < n; i++) particles.push(mkParticle(x, y, 'dust')); }
   function spawnStars(x, y) { for (let i = 0; i < 10; i++) particles.push(mkParticle(x, y, 'star')); }
+  // пузыри при утопе: всплывают, покачиваясь
+  function spawnBubble(x, y) {
+    particles.push({ x, y, vx: (Math.random() - 0.5) * 22, vy: -46 - Math.random() * 54, g: -26, life: 0.65 + Math.random() * 0.5, maxLife: 1.1, size: 2 + Math.random() * 3, color: 'bubble' });
+  }
+  // всплеск при погружении: брызги цветом жидкости + расходящееся кольцо на поверхности
+  function spawnSplash(x, y) {
+    const col = (level && theme(level.bg)) ? theme(level.bg).haz2 : '#6db3e8';
+    for (let i = 0; i < 12; i++) {
+      particles.push({ x: x + (Math.random() - 0.5) * 20, y, vx: (Math.random() - 0.5) * 260, vy: -110 - Math.random() * 190, g: 760, life: 0.35 + Math.random() * 0.35, maxLife: 0.7, size: 3, color: col });
+    }
+    particles.push({ x, y, vx: 0, vy: 0, g: 0, life: 0.5, maxLife: 0.5, size: 4, color: 'ring', ring: col });
+  }
+  // цвета жидкости текущей темы (для анимации утопа в entities.js)
+  function liquidTheme() { const t = theme(level && level.bg); return t ? { haz: t.haz, haz2: t.haz2 } : null; }
 
   // ---------- ЗЕМЛЕТРЯСЕНИЯ ----------
   // Фазы: idle → warn (2с предупреждение: баннер + крошка с неба) →
@@ -259,6 +294,7 @@ const Game = (() => {
     spawnT: 0, rumbleT: 0, crumbT: 0,
     // настройки из админ-панели (вкладка «🌍 ЗЕМЛЕТРЯСЕНИЯ», публикуются для всех)
     cfg: { enabled: true, prologue: false, rocks: true, power: 1, interval: 20, dur: 5 },
+    qOverride: null, // пер-картное землетрясение (def.quake) — приоритет над глобальными настройками
 
     setConfig(c) {
       if (!c || typeof c !== 'object') return;
@@ -271,14 +307,31 @@ const Game = (() => {
       if (typeof c.dur === 'number' && isFinite(c.dur)) n.dur = Math.max(2, Math.min(12, c.dur));
     },
 
+    // эффективные параметры: пер-картные — приоритет
+    effInterval() { return this.qOverride ? this.qOverride.interval : this.cfg.interval; },
+    effRocks() { return this.qOverride ? this.qOverride.rocks : this.cfg.rocks; },
+
     reset(def) {
       this.phase = 'idle'; this.t = 0; this.spawnT = 0; this.rumbleT = 0; this.crumbT = 0;
-      // автоземлетрясения: обычные карты (не арены боссов) — главы 1-3,
-      // пролог — только если в панели включено «И на прологе»
-      const onMap = !!(def && def.type === 'map' && !def.boss);
-      const ch = (def && def.chapter) || 0;
-      this.auto = onMap && this.cfg.enabled && (this.cfg.prologue || ch >= 1);
-      this.nextAt = this.cfg.interval * (0.45 + Math.random() * 0.35); // первый толчок — раньше
+      // пер-картное землетрясение (def.quake.on) — явный оверрайд карты:
+      // работает даже в прологе и на босс-аренах, параметры берутся из карты
+      const q = (def && def.type === 'map' && def.quake && def.quake.on) ? def.quake : null;
+      this.qOverride = q ? {
+        power: Math.max(0.3, Math.min(2.5, (typeof q.power === 'number' && isFinite(q.power)) ? q.power : 1)),
+        interval: Math.max(5, Math.min(90, (typeof q.interval === 'number' && isFinite(q.interval)) ? q.interval : 20)),
+        dur: Math.max(1.5, Math.min(15, (typeof q.dur === 'number' && isFinite(q.dur)) ? q.dur : 5)),
+        rocks: q.rocks !== false,
+      } : null;
+      if (this.qOverride) {
+        this.auto = true;
+      } else {
+        // глобальные автотолчки: обычные карты (не арены боссов) — главы 1-3,
+        // пролог — только если в панели включено «И на прологе»
+        const onMap = !!(def && def.type === 'map' && !def.boss);
+        const ch = (def && def.chapter) || 0;
+        this.auto = onMap && this.cfg.enabled && (this.cfg.prologue || ch >= 1);
+      }
+      this.nextAt = this.effInterval() * (0.45 + Math.random() * 0.35); // первый толчок — раньше
     },
 
     trigger(power = 1, dur = 5) {
@@ -313,13 +366,21 @@ const Game = (() => {
         if (!this.auto) return;
         this.nextAt -= dt;
         if (this.nextAt <= 0) {
-          // сила и длина растут с номером главы, множится на настройку панели
-          const ch = (LEVELS[levelIndex] && LEVELS[levelIndex].chapter) || 1;
-          this.trigger(
-            (0.55 + ch * 0.12 + Math.random() * 0.2) * this.cfg.power,
-            this.cfg.dur * (0.8 + Math.random() * 0.6)
-          );
-          this.nextAt = this.cfg.interval * (0.75 + Math.random() * 0.6);
+          if (this.qOverride) {
+            // пер-картная карта: сила/длина задаёт карта (с лёгкой случайностью)
+            this.trigger(
+              this.qOverride.power * (0.85 + Math.random() * 0.3),
+              this.qOverride.dur * (0.8 + Math.random() * 0.6)
+            );
+          } else {
+            // сила и длина растут с номером главы, множится на настройку панели
+            const ch = (LEVELS[levelIndex] && LEVELS[levelIndex].chapter) || 1;
+            this.trigger(
+              (0.55 + ch * 0.12 + Math.random() * 0.2) * this.cfg.power,
+              this.cfg.dur * (0.8 + Math.random() * 0.6)
+            );
+          }
+          this.nextAt = this.effInterval() * (0.75 + Math.random() * 0.6);
         }
         return;
       }
@@ -347,7 +408,7 @@ const Game = (() => {
         this.rumbleT -= dt;
         if (this.rumbleT <= 0) { this.rumbleT = 1.3; Audio8.sfx.rumble(); }
         // камни с неба (в панели можно отключить — пусть трясёт без урона)
-        if (this.cfg.rocks) {
+        if (this.effRocks()) {
         this.spawnT -= dt;
         if (this.spawnT <= 0) {
           this.spawnT = Math.max(0.14, 0.55 / this.power) * (0.6 + Math.random() * 0.8);
@@ -369,7 +430,7 @@ const Game = (() => {
       // after: афтершоки затухают (см. offset())
       if (this.t >= 2) {
         this.phase = 'idle'; this.t = 0;
-        if (this.auto) this.nextAt = this.cfg.interval * (0.75 + Math.random() * 0.6);
+        if (this.auto) this.nextAt = this.effInterval() * (0.75 + Math.random() * 0.6);
       }
     },
   };
@@ -762,17 +823,43 @@ const Game = (() => {
     tomahawks.forEach((t) => t.draw(ctx, cam));
     hatShots.forEach((s) => s.draw(ctx, cam));
     customEnts.forEach((o) => o.draw(ctx, cam));
-    if (player) player.draw(ctx, cam);
+    if (player) player.draw(ctx, cam, api);
 
     // частицы
     particles.forEach((p) => {
       ctx.globalAlpha = Math.max(0, p.life / p.maxLife);
-      ctx.fillStyle = p.color;
-      ctx.fillRect(p.x - cam - p.size / 2, p.y - p.size / 2, p.size, p.size);
+      if (p.color === 'bubble') {
+        // пузырь воздуха: окружность с бликом
+        ctx.strokeStyle = 'rgba(255,255,255,.85)';
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        ctx.arc(p.x - cam, p.y, p.size, 0, 7);
+        ctx.stroke();
+      } else if (p.color === 'ring') {
+        // расходящееся кольцо на поверхности жидкости
+        const k = 1 - p.life / p.maxLife;
+        ctx.strokeStyle = p.ring || '#ffffff';
+        ctx.lineWidth = 2.5;
+        ctx.globalAlpha = (1 - k) * 0.8;
+        ctx.beginPath();
+        ctx.ellipse(p.x - cam, p.y, 6 + k * 46, (6 + k * 46) * 0.32, 0, 0, 7);
+        ctx.stroke();
+      } else {
+        ctx.fillStyle = p.color;
+        ctx.fillRect(p.x - cam - p.size / 2, p.y - p.size / 2, p.size, p.size);
+      }
       ctx.globalAlpha = 1;
     });
 
     ctx.restore();
+
+    // —— смерть Андрея: пульсирующая красная рамка (экранное пространство) ——
+    if (player && player.dying) {
+      const da = 0.16 + 0.1 * Math.sin(tGlobal * 10);
+      ctx.strokeStyle = `rgba(255,40,40,${da})`;
+      ctx.lineWidth = 14;
+      ctx.strokeRect(4, 4, VIEW_W - 8, VIEW_H - 8);
+    }
 
     // —— землетрясение: пульсирующая рамка + баннер-предупреждение (экранное пространство) ——
     if (Quake.phase === 'warn' || Quake.phase === 'active') {
@@ -1039,8 +1126,12 @@ const Game = (() => {
       get boss() { return bossRef; },
       get level() { return level; },
       get debris() { return debris; },
-      get quakeState() { return { phase: Quake.phase, t: +Quake.t.toFixed(2), power: +Quake.power.toFixed(2), nextAt: +Quake.nextAt.toFixed(1), auto: Quake.auto, cfg: Quake.cfg }; },
+      get quakeState() { return { phase: Quake.phase, t: +Quake.t.toFixed(2), power: +Quake.power.toFixed(2), nextAt: +Quake.nextAt.toFixed(1), auto: Quake.auto, override: Quake.qOverride, cfg: Quake.cfg }; },
       quake: (p, d) => Quake.trigger(p, d),
+      get deathState() { return player ? { dying: player.dying, t: +player.deathT.toFixed(2), hp: player.hp, land: !!player.dLand, surfaceY: Math.round(player.dSurfaceY) } : null; },
+      drown: () => { if (player && !player.dying) playerDrown(player.y + player.h - 6); },
+      kill: (dir) => { if (player && !player.dying) { player.hp = 1; player.hurt(dir || 1, api, true); } },
+      get pendingGameOver() { return pendingGameOver; },
     };
     requestAnimationFrame((t) => { lastT = t; requestAnimationFrame(loop); });
   }

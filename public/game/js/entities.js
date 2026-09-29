@@ -96,6 +96,14 @@ class Player {
     this.flipDur = 0.5;  // полная длительность одного оборота
     this.flipDir = 1;    // +1 = переднее сальто (по часовой), -1 = бэкфлип
     this.flipTurns = 1;  // число оборотов (батут — двойное)
+    // —— смерть с анимацией: 'water' (утоп) | 'spike' (шипы) | 'saw' (пила) | 'hit' (враг/камень) ——
+    this.dying = null;   // null = жив; строка = идёт анимация смерти
+    this.deathT = 0;     // таймер анимации
+    this.dRot = 0;       // угол тушки (кувырок/обмякание)
+    this.dRotV = 0;      // угловая скорость кувырка
+    this.dLand = false;  // тушка долетела и лежит пластом
+    this.dSurfaceY = 0;  // Y поверхности жидкости (для утопа)
+    this.dBubT = 0;      // таймер пузырей
   }
 
   // Старт сальто: ТОЛЬКО в движении — передний переворот по направлению бега.
@@ -108,7 +116,85 @@ class Player {
     this.flipDir = this.dir || 1;
   }
 
+  // ============================================================
+  // СМЕРТЬ С АНИМАЦИЕЙ
+  // type: 'water' (утоп — медленно уходит под жидкость с пузырями),
+  //       'spike' (отскок от шипов), 'saw' (пила — быстрый кувырок),
+  //       'hit' (враг/босс/камень — подброс и пласт на землю)
+  // ============================================================
+  startDeath(type, game, o = {}) {
+    if (this.dying) return;
+    this.dying = type;
+    this.deathT = 0;
+    this.invuln = 99; // во время анимации Андрей больше не получает урон
+    this.flipT = 0;
+    this.squash = 0;
+    this.dRot = 0; this.dRotV = 0;
+    this.dLand = false;
+    this.dBubT = 0;
+    if (type === 'water') {
+      this.dSurfaceY = (typeof o.surfaceY === 'number') ? o.surfaceY : (this.y + this.h - 6);
+      this.vx = 0; this.vy = 0;
+      Audio8.sfx.splash();
+      if (game.spawnSplash) game.spawnSplash(this.x + this.w / 2, this.dSurfaceY);
+    } else {
+      // отскок от опасности: подброс + кувырок в заданную сторону
+      const dir = o.dir || 1;
+      this.vy = (o.vy !== undefined) ? o.vy : -470;
+      this.vx = dir * 230;
+      this.dRotV = dir * (type === 'saw' ? 13 : 8.5);
+      Audio8.sfx.hurt();
+    }
+    if (game.onDeathStart) game.onDeathStart(this);
+  }
+
+  // Анимация смерти: вода — медленное погружение, остальное — дуга с кувырком и пласт на земле
+  updateDeath(dt, level, game) {
+    this.deathT += dt;
+    const t = this.deathT;
+    if (this.dying === 'water') {
+      // медленно уходит под воду: разгон погружения, покачивание, пузыри
+      this.vy = Math.min(28 + t * 55, 100);
+      const maxY = this.dSurfaceY + 18; // капнет — голова скрывается под поверхностью
+      if (this.y < maxY) this.y += this.vy * dt;
+      else this.y = maxY + Math.sin(t * 3) * 1.5;
+      this.x += Math.sin(t * 5) * 14 * dt;
+      this.dRot = Math.sin(t * 2.4) * 0.24; // обмякшее покачивание
+      this.dBubT -= dt;
+      if (this.dBubT <= 0 && game.spawnBubble) {
+        this.dBubT = 0.15;
+        game.spawnBubble(this.x + this.w / 2 + (Math.random() - 0.5) * 16, this.y + 4 + Math.random() * (this.h - 8));
+      }
+      if (t >= 1.5) game.onDeathAnimDone(this);
+      return;
+    }
+    // отскок-кувырок: летит по дуге, долетел — лежит пластом
+    if (!this.dLand) {
+      this.vy = Math.min(this.vy + CONFIG.GRAVITY * 0.72 * dt, 950);
+      this.x += this.vx * dt;
+      this.y += this.vy * dt;
+      this.dRot += this.dRotV * dt;
+      const r = Math.floor((this.y + this.h) / TILE);
+      let solid = false;
+      for (let c = Math.floor(this.x / TILE); c <= Math.floor((this.x + this.w) / TILE); c++) {
+        const tt = tileAt(level, c, r);
+        if (tt === '#' || tt === 'B' || tt === '=') { solid = true; break; }
+      }
+      if (solid && this.vy > 0) {
+        this.y = r * TILE - this.h;
+        this.dLand = true;
+        const s = this.dRotV >= 0 ? 1 : -1;
+        this.dRot = s * Math.PI / 2; // лёг пластом
+        this.dRotV = 0; this.vx = 0; this.vy = 0;
+        Audio8.sfx.thud();
+        game.spawnDust(this.x + this.w / 2, this.y + this.h, 6);
+      }
+      if (t >= 2.4) game.onDeathAnimDone(this); // страховка (улетел за карту)
+    } else if (t >= 1.35) game.onDeathAnimDone(this);
+  }
+
   update(dt, input, level, game) {
+    if (this.dying) { this.updateDeath(dt, level, game); return; } // идёт анимация смерти — обычная физика выключена
     const SPEED = CONFIG.MOVE_SPEED, ACC = 2200, FRICTION = 2600;
     this.flipT = Math.max(0, this.flipT - dt);
 
@@ -173,12 +259,12 @@ class Player {
       }
     }
 
-    // жидкость (полынья/лава/кислота): касание = урон + респавн, как падение в яму
+    // жидкость (полынья/лава/кислота): начинается УТОП — медленно уходит под воду (анимация)
     if (this.invuln <= 0) {
       const c0 = Math.floor((this.x + 4) / TILE), c1 = Math.floor((this.x + this.w - 4) / TILE);
       const r0 = Math.floor((this.y + 8) / TILE), r1 = Math.floor((this.y + this.h - 1) / TILE);
       outer: for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) {
-        if (isLiquid(level, c, r)) { game.playerFell(); return; }
+        if (isLiquid(level, c, r)) { game.playerDrown(r * TILE + 12); return; }
       }
     }
 
@@ -192,7 +278,7 @@ class Player {
         const nx = Math.max(this.x, Math.min(sx, this.x + this.w));
         const ny = Math.max(this.y, Math.min(sy, this.y + this.h));
         if ((nx - sx) * (nx - sx) + (ny - sy) * (ny - sy) < R * R) {
-          this.hurt(sx < this.x + this.w / 2 ? 1 : -1, game, true); break;
+          this.hurt(sx < this.x + this.w / 2 ? 1 : -1, game, true, 'saw'); break;
         }
       }
     }
@@ -219,9 +305,15 @@ class Player {
     if (Math.abs(this.vx) > 20 && this.onGround) this.walkT += dt * Math.abs(this.vx) / 26;
   }
 
-  hurt(dir, game, fromSpike = false) {
-    if (this.invuln > 0) return;
+  hurt(dir, game, fromSpike = false, srcType = null) {
+    if (this.invuln > 0 || this.dying) return;
     this.hp--;
+    if (this.hp <= 0) {
+      // смертельный удар — анимация смерти: отскок от опасности + кувырок + пласт
+      this.startDeath(srcType || (fromSpike ? 'spike' : 'hit'), game, { dir: dir || 1, vy: fromSpike ? -500 : -430 });
+      game.onPlayerHurt();
+      return;
+    }
     this.invuln = 1.3;
     this.vy = fromSpike ? -430 : -330;
     this.vx = dir * 260;
@@ -234,9 +326,12 @@ class Player {
     this.vx = 0; this.vy = 0;
     this.invuln = 1.3;
     this.flipT = 0;
+    this.dying = null; this.deathT = 0; this.dRot = 0; this.dRotV = 0; this.dLand = false;
   }
 
-  draw(ctx, camX) {
+  draw(ctx, camX, game) {
+    if (this.dying === 'water') { this.drawDrowning(ctx, camX, game); return; }
+    if (this.dying) { this.drawDead(ctx, camX); return; }
     if (this.invuln > 0 && Math.floor(this.invuln * 12) % 2 === 0) return; // мигание
     const bob = (Math.abs(this.vx) > 20 && this.onGround) ? Math.abs(Math.sin(this.walkT * 6)) * 3 : 0;
     const sq = this.squash;
@@ -270,6 +365,59 @@ class Player {
       return;
     }
     Sprites.draw(ctx, 'andrey', x, y, w, h, this.dir < 0);
+  }
+
+  // —— УТОП: обмяк и медленно уходит под жидкость; часть тела ниже поверхности накрыта цветом воды ——
+  drawDrowning(ctx, camX, game) {
+    const x = this.x - camX, y = this.y;
+    // тень/круги на поверхности
+    ctx.fillStyle = 'rgba(0,0,0,.18)';
+    ctx.beginPath();
+    ctx.ellipse(x + this.w / 2, this.dSurfaceY + 2, 15, 3.5, 0, 0, 7);
+    ctx.fill();
+    Sprites.draw(ctx, 'andrey', x, y, this.w, this.h, false, this.dRot);
+    const th = (game && game.liquidTheme) ? game.liquidTheme() : null;
+    if (th) {
+      const surf = this.dSurfaceY;
+      const depth = Math.max(0, y + this.h - surf);
+      if (depth > 0) {
+        ctx.save();
+        ctx.globalAlpha = 0.6;
+        ctx.fillStyle = th.haz;
+        ctx.fillRect(x - 5, surf + 2, this.w + 10, depth + 44);
+        ctx.globalAlpha = 0.92;
+        ctx.fillStyle = th.haz2;
+        const wob = Math.sin(this.deathT * 7) * 1.6;
+        ctx.fillRect(x - 7, surf + wob, this.w + 14, 3); // дрожащая линия поверхности
+        ctx.restore();
+      }
+    }
+  }
+
+  // —— ОТСКОК/ПЛАСТ: кувырок в воздухе, потом серая тушкa пластом + звёзды над головой ——
+  drawDead(ctx, camX) {
+    const x = this.x - camX, y = this.y;
+    const t = this.deathT;
+    let alpha = 1;
+    if (this.dLand && t > 1.0) alpha = Math.max(0, 1 - (t - 1.0) / 0.4);
+    let filterSet = false;
+    if (this.dLand) { try { ctx.filter = 'grayscale(0.85) brightness(0.95)'; filterSet = true; } catch (e) { /* не поддерживается */ } }
+    Sprites.draw(ctx, 'andrey', x, y, this.w, this.h, false, this.dRot, alpha);
+    if (filterSet) ctx.filter = 'none';
+    if (this.dLand && alpha > 0.3) {
+      // классика: звёздочки кружат над головой
+      for (let i = 0; i < 3; i++) {
+        const a = t * 4 + i * (Math.PI * 2 / 3);
+        const sx = x + this.w / 2 + Math.cos(a) * 20;
+        const sy = y - 12 + Math.sin(a) * 5;
+        ctx.strokeStyle = 'rgba(255,210,63,' + (0.7 + 0.3 * Math.sin(a * 2)).toFixed(2) + ')';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(sx - 4, sy); ctx.lineTo(sx + 4, sy);
+        ctx.moveTo(sx, sy - 4); ctx.lineTo(sx, sy + 4);
+        ctx.stroke();
+      }
+    }
   }
 }
 

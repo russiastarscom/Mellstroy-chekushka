@@ -690,6 +690,28 @@ const LEVELS = [
   ...genChapter(3),
 ];
 
+// ============================================================
+// ЗЕМЛЕТРЯСЕНИЯ НА ОТДЕЛЬНЫХ КАРТАХ (пер-картный оверрайд)
+// on:true — карта трясётся сама (работает даже в прологе и на босс-аренах),
+// power — сила, interval — сек между толчками, dur — сек толчок, rocks — камни с неба.
+// Редактируется в админ-панели (чекбокс «🌍 Тряска» у карты).
+// ============================================================
+const MAP_QUAKES = {
+  3:  { on: true, power: 0.5, interval: 26, dur: 3,   rocks: false }, // Улицы Буримовки — первая лёгкая дрожь
+  4:  { on: true, power: 0.7, interval: 22, dur: 3.5, rocks: false }, // Заводской район
+  8:  { on: true, power: 0.8, interval: 20, dur: 4,   rocks: false }, // ГЛ.1: Замёрзший ручей
+  13: { on: true, power: 0.9, interval: 18, dur: 4.5, rocks: true  }, // ГЛ.1: Ледяные качели
+  18: { on: true, power: 1.0, interval: 17, dur: 5,   rocks: true  }, // ГЛ.1: Сосулькин навес
+  29: { on: true, power: 1.0, interval: 17, dur: 5,   rocks: true  }, // ГЛ.2: Оазис без чекушки
+  34: { on: true, power: 1.1, interval: 16, dur: 5,   rocks: true  }, // ГЛ.2: пустыня
+  39: { on: true, power: 1.2, interval: 15, dur: 5.5, rocks: true  }, // ГЛ.2: пустыня
+  49: { on: true, power: 1.2, interval: 15, dur: 5.5, rocks: true  }, // ГЛ.3: небесный завод
+  54: { on: true, power: 1.3, interval: 14, dur: 6,   rocks: true  }, // ГЛ.3
+  59: { on: true, power: 1.4, interval: 13, dur: 6,   rocks: true  }, // ГЛ.3
+  64: { on: true, power: 1.5, interval: 12, dur: 6.5, rocks: true  }, // Парадная лестница — прямо перед ШЕФОМ
+};
+LEVELS.forEach((d) => { if (d && d.type === 'map' && MAP_QUAKES[d.id]) d.quake = MAP_QUAKES[d.id]; });
+
 // Катсцены: фон для каждой реплики вступления
 const CUTSCENE_BG = ['bg_city', 'bg_city', 'bg_district', 'bg_district', 'bg_fields'];
 const CUTSCENE_BG_BY_INDEX = { 0: 'bg_city', 1: 'bg_city', 2: 'bg_district', 3: 'bg_district', 4: 'bg_fields' };

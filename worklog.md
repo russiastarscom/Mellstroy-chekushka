@@ -566,3 +566,27 @@ Stage Summary:
 - Уровни никуда не исчезали на сервере: 65 слотов в игре и 64 карты в панели на месте — «пропажа» происходила в браузере пользователя из-за старого localStorage-черновика панели, который затирал список карт
 - Теперь панель сама распознаёт черновики от старой версии официальных уровней (по OFFICIAL_REV), отбрасывает только их список карт и оставляет текстуры/музыку/объекты; в шапке панели бейдж «уровней: 64 • ревизия v2-65lvl»
 - Пользователю: обновить страницу панели (Ctrl+Shift+R) — панель сама починится; если играется на своём хостинге (Vercel) — перезалить свежий index.html/admin.* из ZIP
+
+---
+Task ID: 24-deaths-quakes
+Agent: main (Super Z)
+Task: «Землетрясение сделай, к отдельным картам добавь механику, анимацию смерти — тонет/отскакивает от шипов и т.д.»
+
+Work Log:
+- ПЕР-КАРТНЫЕ ЗЕМЛЕТРЯСЕНИЯ: levels.js — таблица MAP_QUAKES (12 карт: пролог id3/4 — лёгкая дрожь без камней; гл.1 id8/13/18; гл.2 id29/34/39; гл.3 id49/54/59; id64 «Парадная лестница» p1.5 перед ШЕФОМ), LEVELS.forEach инжектит def.quake; smoke_quakes.js: 65 слотов, 12 карт с толчками, боссы (5/15/25/35/45/55/65) чистые, поля валидны
+- main.js Quake: qOverride (эффективные параметры из def.quake — приоритет над глобальными cfg даже в прологе/на босс-аренах), effInterval/effRocks, reset(def) клэмпит power 0.3-2.5/interval 5-90/dur 1.5-15; idle-фаза: пер-картные берут power/dur карты, глобальные — старый рамп по главе; GameDebug.quakeState +override
+- АНИМАЦИИ СМЕРТИ (entities.js Player): поля dying/deathT/dRot/dRotV/dLand/dSurfaceY/dBubT; startDeath(type): 'water' (утоп) | 'spike' | 'saw' | 'hit'; updateDeath — вода: медленное погружение с капом (голова скрывается под поверхностью), покачивание dRot=sin, пузыри каждые 0.15с; остальные: дуга с кувырком (гравитация 0.72x), касание земли → dLand, dRot=±π/2 (пласт), sfx.thud; update() гард dying → updateDeath; hurt() при hp<=0 → startDeath (vy=-500 от шипов / -430 от врагов, rotV 8.5-13 рад/с), 4-й параметр srcType ('saw' от пилы); жидкость теперь game.playerDrown(surfaceY) вместо playerFell
+- Отрисовка смерти: drawDrowning (обмякший наклон, часть тела под поверхностью накрыта цветом темы жидкости haz/haz2, дрожащая линия воды, круги на поверхности), drawDead (кувырок вокруг центра, лежащая тушкa grayscale через ctx.filter с try/catch, затухание alpha, 3 звездочки над головой)
+- main.js смерть: pendingGameOver (gameover откладывается до конца анимации), playerDrown (hp--, startDeath('water')), onDeathAnimDone (pendingGameOver → gameOver, иначе respawn), onDeathStart (shake); api +playerDrown/onDeathStart/onDeathAnimDone/spawnBubble/spawnSplash/liquidTheme; частицы bubble (окружности с бликом, g=-26) и ring (расходящийся эллипс на поверхности); красная пульсирующая рамка при dying (экранное пространство); player.draw(ctx, cam, api)
+- audio.js: sfx.splash (шум+синус-провал), sfx.thud (низкий удар)
+- АДМИНКА: admin.html — чекбокс «🌍 Тряска» + панель #quakeopts (сила 0.3-2.5, каждые 5-60с, длит. 2-12с, камни) рядом с HP вождя; admin.js — defToState читает def.quake, stateToDef пишет (только если on, клэмпы) / удаляет, saveDrafts/applyDrafts/addMap/syncMapOpts + ed.quake, слушатели qkApply + слайдеры
+- route.ts validateMaps: def.quake — объект, on/rocks булевы, power/interval/dur числа
+- Сборки: build_inline.py (index.html 205696 байт), sw v27→v28; ГРАБЛИ СРЕДЫ: после рестарта окружения Next dev падал (нет @next/swc-linux-x64-gnu) — npm i --no-save @next/swc-linux-x64-gnu, сервер поднят
+- E2E Playwright (e2e_deaths_quakes.mjs / e2e_spike_retest.mjs / e2e_spike_final.mjs): (1) карта id3 — auto=true, override {0.5/26/3/no rocks}, баннер warn ✓; (2) утоп: t растёт 0.72→1.5с, hp 3→2, респаун ✓, скрин e2e-drown-mid.png — тонет в синей полынье с пузырями + красная рамка; (3) шипы (чистый): dying='spike', кувырок rot 1.56→4.53, пласт rot=1.57 на t=0.72 ✓; (4) шипы с реальным api: landed=true → ЭКРАН СМЕРТИ ✓; (5) несмертельный удар: hp 3→2, vy=-430, dying=null (обычный отскок) ✓; (6) админка: чекбокс+слайдеры → ed.quake=def.quake={1.4/15/6/rocks}, round-trip defToState(stateToDef) сохраняет ✓, публикацию в тесте НЕ делали (сервер чист), черновик вычищен
+- ГРАБЛИ E2E: kill() сразу после респауна не работает (invuln 1.3с) — ставить p.invuln=0; фейковый game-объект с пустым onPlayerHurt не ставит pendingGameOver → gameover не наступит (в игре реальный api); 404 image/tomahawk.png+heart.png+maps-override.json — штатные опциональные ассеты
+
+Stage Summary:
+- Землетрясения теперь настраиваются ДЛЯ ОТДЕЛЬНЫХ карт (12 карт уже с толчками, включая пролог — там раньше было тихо), параметры карты приоритетнее глобальных настроек панели
+- Смерти анимированы: утоп — медленно уходит под воду с пузырями и кругами, шипы/пила/враги — отскок с кувырком и пластом (серая тушкa, звезды), потом экран смерти; несмертельные удары — прежний отскок
+- Панель: у каждой карты чекбокс «🌍 Тряска» с силой/интервалом/длительностью/камнями, публикуется всем
+- Пользователю: обновить index.html + sw.js (или ZIP), панель — Ctrl+Shift+R
