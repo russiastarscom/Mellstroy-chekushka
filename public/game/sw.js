@@ -1,7 +1,7 @@
 // Service Worker — Мелстрой: Мировая Чекушка
 // Стратегия: сначала сеть (чтобы заменённые спрайты в image/ подхватывались
 // сразу), при офлайне — из кэша.
-const CACHE = 'chekushka-v30';
+const CACHE = 'chekushka-v31';
 const CORE = [
   './',
   './index.html',
@@ -10,6 +10,7 @@ const CORE = [
   './js/audio.js',
   './js/sprites.js',
   './js/levels.js',
+  './js/dialogs.js',
   './js/entities.js',
   './js/ui.js',
   './js/main.js',

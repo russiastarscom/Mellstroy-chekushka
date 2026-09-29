@@ -377,6 +377,78 @@ html, body {
   100% { transform: translateY(110vh) rotate(720deg); }
 }
 
+/* ---------- ПОБЕДНАЯ АНИМАЦИЯ (уровень пройден) ---------- */
+#confetti-win { position: absolute; inset: 0; overflow: hidden; pointer-events: none; z-index: 1; }
+#confetti-win i {
+  position: absolute;
+  top: -5vh;
+  display: block;
+  border-radius: 2px;
+  opacity: .95;
+  animation-name: win-conf-fall;
+  animation-timing-function: linear;
+  animation-fill-mode: forwards;
+}
+@keyframes win-conf-fall {
+  0%   { transform: translateY(-5vh) rotate(0deg) skewY(0deg); opacity: .95; }
+  85%  { opacity: .95; }
+  100% { transform: translateY(112vh) rotate(660deg) skewY(14deg); opacity: 0; }
+}
+.win-stamp {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  animation: win-stamp-pop .6s cubic-bezier(.2, 1.7, .35, 1) both;
+}
+@keyframes win-stamp-pop {
+  0%   { transform: scale(2.6) rotate(-9deg); opacity: 0; filter: blur(6px); }
+  55%  { transform: scale(.92) rotate(1.5deg); opacity: 1; filter: blur(0); }
+  75%  { transform: scale(1.06) rotate(-1deg); }
+  100% { transform: scale(1) rotate(0deg); opacity: 1; }
+}
+.win-rays {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 130vmin;
+  height: 130vmin;
+  max-width: 780px;
+  max-height: 780px;
+  transform: translate(-50%, -58%);
+  background: repeating-conic-gradient(#ffd23f22 0deg 11deg, transparent 11deg 22deg);
+  border-radius: 50%;
+  -webkit-mask-image: radial-gradient(circle, #000 0%, #000 34%, transparent 62%);
+          mask-image: radial-gradient(circle, #000 0%, #000 34%, transparent 62%);
+  pointer-events: none;
+  animation: win-rays-spin 14s linear infinite;
+  z-index: -1;
+}
+@keyframes win-rays-spin { from { transform: translate(-50%, -58%) rotate(0deg); } to { transform: translate(-50%, -58%) rotate(360deg); } }
+.win-bottle {
+  width: clamp(54px, 12vmin, 96px);
+  height: auto;
+  image-rendering: pixelated;
+  margin-bottom: 1.2vmin;
+  filter: drop-shadow(0 8px 14px rgba(0, 0, 0, .55)) drop-shadow(0 0 18px #ffd23f55);
+  animation: win-bottle-jump 1.15s cubic-bezier(.34, 0, .64, 1) infinite;
+  transform-origin: 50% 100%;
+}
+@keyframes win-bottle-jump {
+  0%, 100% { transform: translateY(0) rotate(-6deg); }
+  50%      { transform: translateY(-22px) rotate(6deg) scale(1.06, 0.94); }
+  62%      { transform: translateY(2px) rotate(0deg) scale(1.12, 0.88); }
+  74%      { transform: translateY(-6px) rotate(0deg) scale(.96, 1.05); }
+}
+.win-title {
+  animation: win-title-glow 1.5s ease-in-out infinite alternate;
+}
+@keyframes win-title-glow {
+  from { text-shadow: 4px 4px 0 #000, 0 0 10px #2ed57355; }
+  to   { text-shadow: 4px 4px 0 #000, 0 0 30px #2ed573cc, 0 0 60px #ffd23f88; }
+}
+
 </style>
 </head>
 <body>
@@ -509,7 +581,12 @@ html, body {
 
   <!-- Уровень пройден -->
   <div id="screen-complete" class="screen hidden">
-    <h2 class="screen-title success">КАРТА ЗАЧИЩЕНА!</h2>
+    <div id="confetti-win"></div>
+    <div id="win-stamp" class="win-stamp">
+      <div id="win-rays" class="win-rays"></div>
+      <img id="win-bottle" class="win-bottle" src="image/checkushka.png" alt="">
+      <h2 class="screen-title success win-title">КАРТА ЗАЧИЩЕНА!</h2>
+    </div>
     <p id="complete-text" class="screen-text"></p>
     <div class="menu-buttons">
       <button id="btn-next" class="big-btn">ДАЛЬШЕ →</button>
@@ -1994,6 +2071,7 @@ const CUTSCENE_BG = ['bg_city', 'bg_city', 'bg_district', 'bg_district', 'bg_fie
 const CUTSCENE_BG_BY_INDEX = { 0: 'bg_city', 1: 'bg_city', 2: 'bg_district', 3: 'bg_district', 4: 'bg_fields' };
 
 </script>
+<script src="js/dialogs.js"></script>
 <script>
 // ============================================================
 // Физика + сущности
@@ -3351,6 +3429,38 @@ const UI = (() => {
     $('complete-text').innerHTML = text;
     $('btn-next').style.display = hasNext ? '' : 'none';
     showScreen('complete');
+    buildWinConfetti();
+    replayVictoryAnim();
+    try { Audio8.sfx.win(); } catch (e) { /* звук необязателен */ }
+  }
+
+  // ---------- Победная анимация на экране «Карта зачищена» ----------
+  function buildWinConfetti() {
+    const box = $('confetti-win');
+    if (!box) return;
+    box.innerHTML = '';
+    const colors = ['#ffd23f', '#ff4757', '#2ed573', '#7ad0ff', '#c77dff', '#ffb347', '#ffffff'];
+    for (let i = 0; i < 64; i++) {
+      const p = document.createElement('i');
+      p.style.left = Math.random() * 100 + '%';
+      p.style.background = colors[i % colors.length];
+      p.style.animationDelay = (Math.random() * 1.4) + 's';
+      p.style.animationDuration = (2.6 + Math.random() * 2.2) + 's';
+      const s = 6 + Math.random() * 9;
+      if (i % 5 === 0) { p.style.borderRadius = '50%'; p.style.height = s + 'px'; p.style.width = s + 'px'; }
+      else { p.style.width = s * 0.7 + 'px'; p.style.height = (s + 6) + 'px'; }
+      box.appendChild(p);
+    }
+  }
+  function replayVictoryAnim() {
+    // перезапуск CSS-анимаций штампа и чекушки при каждом показе экрана
+    ['#win-stamp', '#win-bottle', '#win-rays'].forEach((sel) => {
+      const el = document.querySelector(sel);
+      if (!el) return;
+      el.style.animation = 'none';
+      void el.offsetWidth; // reflow — сброс анимации
+      el.style.animation = '';
+    });
   }
 
   // ---------- Конфетти на счастливой концовке ----------

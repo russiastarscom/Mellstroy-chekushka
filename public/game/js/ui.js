@@ -242,6 +242,38 @@ const UI = (() => {
     $('complete-text').innerHTML = text;
     $('btn-next').style.display = hasNext ? '' : 'none';
     showScreen('complete');
+    buildWinConfetti();
+    replayVictoryAnim();
+    try { Audio8.sfx.win(); } catch (e) { /* звук необязателен */ }
+  }
+
+  // ---------- Победная анимация на экране «Карта зачищена» ----------
+  function buildWinConfetti() {
+    const box = $('confetti-win');
+    if (!box) return;
+    box.innerHTML = '';
+    const colors = ['#ffd23f', '#ff4757', '#2ed573', '#7ad0ff', '#c77dff', '#ffb347', '#ffffff'];
+    for (let i = 0; i < 64; i++) {
+      const p = document.createElement('i');
+      p.style.left = Math.random() * 100 + '%';
+      p.style.background = colors[i % colors.length];
+      p.style.animationDelay = (Math.random() * 1.4) + 's';
+      p.style.animationDuration = (2.6 + Math.random() * 2.2) + 's';
+      const s = 6 + Math.random() * 9;
+      if (i % 5 === 0) { p.style.borderRadius = '50%'; p.style.height = s + 'px'; p.style.width = s + 'px'; }
+      else { p.style.width = s * 0.7 + 'px'; p.style.height = (s + 6) + 'px'; }
+      box.appendChild(p);
+    }
+  }
+  function replayVictoryAnim() {
+    // перезапуск CSS-анимаций штампа и чекушки при каждом показе экрана
+    ['#win-stamp', '#win-bottle', '#win-rays'].forEach((sel) => {
+      const el = document.querySelector(sel);
+      if (!el) return;
+      el.style.animation = 'none';
+      void el.offsetWidth; // reflow — сброс анимации
+      el.style.animation = '';
+    });
   }
 
   // ---------- Конфетти на счастливой концовке ----------

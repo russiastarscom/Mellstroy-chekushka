@@ -1262,8 +1262,40 @@ $('btn-export').onclick = () => {
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob); a.download = 'game-cms.json'; a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 5000);
-  toast('game-cms.json скачан — положи рядом с index.html для статичного хостинга', true);
+  toast('game-cms.json скачан — залей его на GitHub, и игра применит правки', true);
+  openGhHelp();
 };
+
+// ---------- Импорт game-cms.json обратно в панель ----------
+$('btn-import').onclick = () => $('importfile').click();
+$('importfile').addEventListener('change', (e) => {
+  const f = e.target.files && e.target.files[0];
+  e.target.value = '';
+  if (!f) return;
+  const rd = new FileReader();
+  rd.onload = () => {
+    try {
+      const j = JSON.parse(String(rd.result));
+      if (!j || typeof j !== 'object') throw new Error('это не JSON');
+      serverMapsToCms(j);
+      CMS.maps.forEach((m) => { m.ed.dirty = false; });
+      introDirty = socialsDirty = texturesDirty = musicDirty = mapsListDirty = objectsDirty = quakeDirty = false;
+      pubAt = null; curMap = 0;
+      saveDrafts(); setStatus();
+      fitZoom(); buildMapTabs(); buildCustomTools(); syncMapOpts(); draw();
+      buildDlgMapSelect(); renderAllDialogs(); renderTextures(); renderObjects(); renderMusic(); renderSocials(); renderQuake();
+      toast('Импортировано: карт ' + CMS.maps.length + ' — правь и публикуй заново', true);
+    } catch (err) { toast('Не удалось прочитать файл: ' + err.message); }
+  };
+  rd.onerror = () => toast('Файл не читается');
+  rd.readAsText(f);
+});
+
+// ---------- Инструкция: как выложить на GitHub ----------
+function openGhHelp() { const el = $('gh-help'); if (el) el.classList.add('open'); }
+$('btn-github').onclick = openGhHelp;
+$('btn-gh-close').onclick = () => $('gh-help').classList.remove('open');
+$('gh-help').addEventListener('click', (e) => { if (e.target === $('gh-help')) $('gh-help').classList.remove('open'); });
 $('btn-reset-all').onclick = async () => {
   if (!confirm('Убрать ВСЕ опубликованные правки (карты, текстуры, музыку, каналы) и вернуть официальные?')) return;
   try { await fetch(API, { method: 'DELETE' }); } catch (e) { toast('Сервер недоступен'); return; }

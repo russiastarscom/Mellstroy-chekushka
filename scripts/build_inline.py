@@ -12,7 +12,7 @@
 import pathlib
 
 GAME = pathlib.Path('/home/z/my-project/public/game')
-ORDER = ['config', 'audio', 'sprites', 'levels', 'entities', 'ui', 'main']
+ORDER = ['config', 'audio', 'sprites', 'levels', 'dialogs', 'entities', 'ui', 'main']
 
 def main():
     src_file = GAME / 'index.src.html'
@@ -29,6 +29,12 @@ def main():
     for name in ORDER:
         tag = f'<script src="js/{name}.js"></script>'
         assert tag in html, 'not found: ' + tag
+        if name == 'dialogs':
+            # dialogs.js НЕ инлайнится: он остаётся внешним файлом рядом с
+            # index.html, чтобы править тексты игры одним файлом прямо на
+            # GitHub (без пересборки). Если файла нет — игра использует
+            # тексты из levels.js, ничего не ломается.
+            continue
         js = (GAME / 'js' / f'{name}.js').read_text(encoding='utf-8')
         assert '</script' not in js.lower(), f'{name}.js contains </script>'
         assert '<!--' not in js, f'{name}.js contains <!--'

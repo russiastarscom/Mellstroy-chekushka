@@ -145,7 +145,12 @@
 
   <!-- Уровень пройден -->
   <div id="screen-complete" class="screen hidden">
-    <h2 class="screen-title success">КАРТА ЗАЧИЩЕНА!</h2>
+    <div id="confetti-win"></div>
+    <div id="win-stamp" class="win-stamp">
+      <div id="win-rays" class="win-rays"></div>
+      <img id="win-bottle" class="win-bottle" src="image/checkushka.png" alt="">
+      <h2 class="screen-title success win-title">КАРТА ЗАЧИЩЕНА!</h2>
+    </div>
     <p id="complete-text" class="screen-text"></p>
     <div class="menu-buttons">
       <button id="btn-next" class="big-btn">ДАЛЬШЕ →</button>
@@ -213,6 +218,7 @@
 <script src="js/audio.js"></script>
 <script src="js/sprites.js"></script>
 <script src="js/levels.js"></script>
+<script src="js/dialogs.js"></script>
 <script src="js/entities.js"></script>
 <script src="js/ui.js"></script>
 <script src="js/main.js"></script>

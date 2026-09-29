@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>АДМИН-ПАНЕЛЬ | Мелстрой: Мировая Чекушка</title>
-<meta name="theme-color" content="#12121f">
+<meta name="theme-color" content="#0b0b14">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -12,159 +12,268 @@
 <link rel="manifest" href="admin-manifest.json">
 <link rel="icon" href="image/icon-192.png" type="image/png">
 <style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
+  /* ==========================================================
+     АДМИН-ПАНЕЛЬ v2 — mobile-first редизайн
+     Тема: тёмный треш-аркада (красный + золото).
+     Контракт с admin.js: все id, классы .tool/.act/.pane/.line/
+     .iconbtn/.addline/.tex/.objcard/.track/.soc/.qchk/.qrow сохранены.
+     ========================================================== */
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  html { -webkit-text-size-adjust: 100%; }
   html, body { height: 100%; }
-  body { background: #12121f; color: #e8e8f0; font: 14px/1.45 Arial, sans-serif; padding-bottom: env(safe-area-inset-bottom); }
-  button { font-family: inherit; }
-  header { background: linear-gradient(90deg, #2a0a0a, #1a1a2e); border-bottom: 2px solid #e63946; padding: 8px 14px; }
-  header h1 { font-size: 17px; color: #ffd23f; letter-spacing: .4px; }
-  header h1 small { color: #8a8aa0; font-size: 11px; font-weight: normal; }
-  #status { font-size: 12px; color: #9fe8a0; margin-top: 3px; }
+  body {
+    background:
+      radial-gradient(1200px 500px at 50% -10%, #1d1030 0%, transparent 60%),
+      #0b0b14;
+    color: #e8e8f0;
+    font: 14px/1.45 system-ui, -apple-system, 'Segoe UI', Arial, sans-serif;
+    padding-bottom: calc(env(safe-area-inset-bottom) + 132px);
+  }
+  button { font-family: inherit; touch-action: manipulation; }
+  input, select, textarea { font-family: inherit; }
+  ::-webkit-scrollbar { height: 4px; width: 6px; }
+  ::-webkit-scrollbar-thumb { background: #3a3a5a; border-radius: 4px; }
+
+  /* ---------- Шапка ---------- */
+  header {
+    background: linear-gradient(180deg, #1c0d17 0%, #12121f 100%);
+    border-bottom: 1px solid #2c2c4a;
+    padding: calc(env(safe-area-inset-top) + 8px) 12px 8px;
+  }
+  .h-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  header h1 { font-size: 15px; color: #ffd23f; letter-spacing: .4px; display: flex; align-items: center; gap: 8px; flex: 1; min-width: 200px; }
+  header h1 small { color: #8a8aa0; font-size: 10px; font-weight: normal; display: block; }
+  #rev-badge { font-size: 10px; font-weight: 600; color: #9fd3ff; background: #16243a; border: 1px solid #2c4a6e; border-radius: 10px; padding: 3px 9px; white-space: nowrap; }
+  #status { font-size: 12px; color: #9fe8a0; margin-top: 5px; line-height: 1.35; }
   #status.none { color: #8a8aa0; }
   #status.dirty { color: #ffd23f; }
 
-  /* ---------- режимы ---------- */
-  #modes { display: flex; gap: 4px; padding: 8px 14px 0; overflow-x: auto; scrollbar-width: none; }
+  /* ---------- Вкладки-режимы ---------- */
+  #modes {
+    position: sticky; top: 0; z-index: 29;
+    display: flex; gap: 6px; padding: 8px 10px;
+    background: rgba(13, 13, 24, .92);
+    backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+    overflow-x: auto; scrollbar-width: none;
+    border-bottom: 1px solid #23233a;
+  }
   #modes::-webkit-scrollbar { display: none; }
-  #modes button { background: #23233a; color: #cfcfe6; border: 1px solid #3a3a5a; border-radius: 10px 10px 0 0; padding: 9px 13px; cursor: pointer; font-weight: bold; font-size: 13px; white-space: nowrap; }
-  #modes button.active { background: #e63946; color: #fff; border-color: #e63946; }
+  #modes button {
+    background: #1d1d33; color: #cfcfe6;
+    border: 1px solid #32325a; border-radius: 12px;
+    padding: 10px 14px; cursor: pointer; font-weight: 700; font-size: 13px;
+    white-space: nowrap; min-height: 44px;
+  }
+  #modes button.active { background: linear-gradient(180deg, #ff4d5e, #d42f42); color: #fff; border-color: #ff6b7a; box-shadow: 0 3px 14px #e6394655; }
   #modes button .dot { color: #ffd23f; }
 
   .pane { display: none; }
   .pane.active { display: block; }
 
   /* ---------- КАРТЫ ---------- */
-  #lvl-tabs { display: flex; gap: 6px; padding: 10px 14px 0; overflow-x: auto; scrollbar-width: none; align-items: center; }
+  #lvl-tabs { display: flex; gap: 6px; padding: 10px 10px 0; overflow-x: auto; scrollbar-width: none; align-items: center; }
   #lvl-tabs::-webkit-scrollbar { display: none; }
-  #lvl-tabs button { background: #23233a; color: #cfcfe6; border: 1px solid #3a3a5a; border-radius: 8px; padding: 8px 11px; cursor: pointer; font-weight: bold; white-space: nowrap; }
-  #lvl-tabs button.active { background: #4a1d6e; border-color: #9a4de6; color: #fff; }
+  #lvl-tabs button { background: #1d1d33; color: #cfcfe6; border: 1px solid #32325a; border-radius: 10px; padding: 9px 12px; min-height: 40px; cursor: pointer; font-weight: bold; white-space: nowrap; font-size: 13px; }
+  #lvl-tabs button.active { background: linear-gradient(180deg, #3c1e63, #2a1445); border-color: #9a4de6; color: #fff; }
   #lvl-tabs button .dirty { color: #ffd23f; }
-  #btn-add-map { background: #2a6a3a !important; border-color: #2a6a3a !important; color: #fff !important; }
-  #toolbar { display: flex; gap: 6px; align-items: center; padding: 9px 14px; background: #1a1a2b; border-bottom: 1px solid #2c2c46; overflow-x: auto; scrollbar-width: none; }
-  #toolbar::-webkit-scrollbar { display: none; }
-  .tool { background: #23233a; border: 2px solid #3a3a5a; color: #cfcfe6; border-radius: 8px; padding: 7px 9px; cursor: pointer; font-size: 12px; min-width: 46px; text-align: center; flex: 0 0 auto; }
-  .tool.active { border-color: #ffd23f; background: #3a3a20; color: #ffe9a8; }
-  .tool b { display: block; font-size: 15px; }
-  .sep { width: 1px; height: 30px; background: #3a3a5a; margin: 0 4px; flex: 0 0 auto; }
-  #mapopts { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; padding: 8px 14px 0; }
-  #lvlname { background: #23233a; border: 1px solid #3a3a5a; color: #fff; border-radius: 8px; padding: 8px 10px; width: 190px; font-weight: bold; font-size: 14px; }
-  #lvbg { background: #23233a; border: 1px solid #3a3a5a; color: #fff; border-radius: 8px; padding: 8px; font-size: 13px; }
-  #canvaswrap { overflow: auto; padding: 10px 14px; background: #0d0d18; }
-  #cv { background: #1c1c30; border: 1px solid #33335a; touch-action: none; cursor: crosshair; image-rendering: pixelated; }
-  #cellinfo { padding: 0 14px; color: #6fc0ff; font-size: 12px; min-height: 18px; }
-  #hint { padding: 2px 14px 8px; color: #8a8aa0; font-size: 12px; }
+  #btn-add-map { background: #1d5c33 !important; border-color: #2ed57355 !important; color: #fff !important; }
 
-  /* ---------- action bar (публикация) ---------- */
-  #actionbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; padding: 10px 14px; border-top: 1px solid #2c2c46; background: #16162a; }
-  .act { background: #2a6a3a; border: none; color: #fff; border-radius: 8px; padding: 10px 13px; cursor: pointer; font-weight: bold; font-size: 13px; }
-  .act.warn { background: #8a3a3a; }
-  .act.gray { background: #3a3a5a; }
-  .act.big { background: #e63946; font-size: 15px; }
+  #toolbar {
+    display: flex; gap: 6px; align-items: center; padding: 10px;
+    background: #12121f; border-bottom: 1px solid #23233a;
+    overflow-x: auto; scrollbar-width: none;
+  }
+  #toolbar::-webkit-scrollbar { display: none; }
+  .tool {
+    background: #1d1d33; border: 2px solid #32325a; color: #cfcfe6;
+    border-radius: 12px; padding: 8px 10px; cursor: pointer; font-size: 11px;
+    min-width: 56px; min-height: 52px; text-align: center; flex: 0 0 auto;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+  }
+  .tool.active { border-color: #ffd23f; background: #2e2a15; color: #ffe9a8; box-shadow: 0 0 0 1px #ffd23f66, 0 3px 12px #ffd23f22; }
+  .tool b { display: block; font-size: 19px; line-height: 1; }
+  .sep { width: 1px; height: 34px; background: #32325a; margin: 0 4px; flex: 0 0 auto; }
+
+  .opts-card {
+    margin: 10px; padding: 12px;
+    background: #16162a; border: 1px solid #2c2c4a; border-radius: 14px;
+    display: flex; gap: 10px; flex-wrap: wrap; align-items: center;
+  }
+  .opts-card label { color: #8a8aa0; font-size: 13px; display: flex; align-items: center; gap: 6px; }
+  #lvlname { background: #10101f; border: 1px solid #32325a; color: #fff; border-radius: 10px; padding: 10px 12px; width: 190px; font-weight: bold; font-size: 16px; }
+  #lvbg { background: #10101f; border: 1px solid #32325a; color: #fff; border-radius: 10px; padding: 10px; font-size: 14px; max-width: 46vw; }
+  #bosshp { background: #10101f; border: 1px solid #32325a; color: #fff; border-radius: 10px; padding: 10px; width: 70px; font-size: 16px; }
+  #lvquake { width: 20px; height: 20px; accent-color: #e63946; }
+  #quakeopts { display: none; gap: 12px; align-items: center; flex-wrap: wrap; color: #8a8aa0; width: 100%; }
+  #quakeopts label { display: flex; align-items: center; gap: 6px; font-size: 13px; }
+  #quakeopts input[type=range] { width: 90px; accent-color: #e63946; }
+  #quakeopts b { color: #fff; min-width: 30px; display: inline-block; }
+  #qkrocks { width: 18px; height: 18px; accent-color: #e63946; }
+
+  #canvaswrap { overflow: auto; padding: 8px; background: #0b0b14; -webkit-overflow-scrolling: touch; }
+  #cv { background: #16162c; border: 1px solid #33335a; border-radius: 8px; touch-action: none; cursor: crosshair; image-rendering: pixelated; }
+  #cellinfo { padding: 0 12px; color: #6fc0ff; font-size: 12px; min-height: 18px; }
+  #hint { padding: 2px 12px 10px; color: #8a8aa0; font-size: 12px; line-height: 1.5; }
+
+  /* ---------- Кнопки-действия ---------- */
+  .act {
+    background: #1d5c33; border: none; color: #fff; border-radius: 12px;
+    padding: 12px 14px; cursor: pointer; font-weight: bold; font-size: 14px; min-height: 46px;
+  }
+  .act:active { transform: scale(.97); }
+  .act.warn { background: #6e2634; }
+  .act.gray { background: #2c2c4a; }
+  .act.big {
+    background: linear-gradient(180deg, #ff4d5e, #d42f42);
+    font-size: 15px; box-shadow: 0 4px 16px #e6394655;
+  }
 
   /* ---------- РАЗГОВОРЫ ---------- */
-  .dlg-wrap { padding: 12px 14px; }
-  .dlg-block { background: #1a1a2b; border: 1px solid #2c2c46; border-radius: 12px; padding: 12px; margin-bottom: 14px; }
+  .dlg-wrap { padding: 12px 10px; }
+  .dlg-block { background: #16162a; border: 1px solid #2c2c4a; border-radius: 14px; padding: 12px; margin-bottom: 14px; }
   .dlg-block h3 { font-size: 14px; color: #ffd23f; margin-bottom: 8px; }
-  .dlg-block .sub { color: #8a8aa0; font-size: 12px; margin-bottom: 8px; }
-  .line { background: #23233a; border: 1px solid #3a3a5a; border-radius: 10px; padding: 8px; margin-bottom: 8px; }
-  .line-top { display: flex; gap: 6px; align-items: center; margin-bottom: 6px; }
-  .line-top select, .line-top input { background: #17172b; border: 1px solid #3a3a5a; color: #fff; border-radius: 7px; padding: 7px 8px; font-size: 13px; }
+  .dlg-block .sub { color: #8a8aa0; font-size: 12px; margin-bottom: 8px; line-height: 1.45; }
+  .line { background: #1d1d33; border: 1px solid #32325a; border-radius: 12px; padding: 9px; margin-bottom: 9px; }
+  .line-top { display: flex; gap: 6px; align-items: center; margin-bottom: 6px; flex-wrap: wrap; }
+  .line-top select, .line-top input { background: #10101f; border: 1px solid #32325a; color: #fff; border-radius: 9px; padding: 10px 9px; font-size: 16px; }
   .line-top select.who { width: 150px; }
-  .line-top input.hintc { width: 64px; }
-  .line-top .grow { flex: 1; }
-  .line textarea { width: 100%; min-height: 54px; background: #17172b; border: 1px solid #3a3a5a; color: #e8e8f0; border-radius: 7px; padding: 7px 8px; font: 13px/1.4 Arial, sans-serif; resize: vertical; }
-  .iconbtn { background: #3a3a5a; border: none; color: #fff; border-radius: 7px; width: 34px; height: 34px; cursor: pointer; font-size: 14px; flex: 0 0 auto; }
-  .iconbtn.del { background: #8a3a3a; }
-  .addline { background: #2a6a3a; border: none; color: #fff; border-radius: 8px; padding: 9px 12px; cursor: pointer; font-weight: bold; }
-  .who-grid { display: flex; gap: 8px; flex-wrap: wrap; }
+  .line-top input.hintc { width: 66px; }
+  .line-top .grow { flex: 1; min-width: 120px; }
+  .line textarea, .dlg-block textarea { width: 100%; min-height: 64px; background: #10101f; border: 1px solid #32325a; color: #e8e8f0; border-radius: 9px; padding: 9px 10px; font: 16px/1.4 system-ui, Arial, sans-serif; resize: vertical; }
+  .iconbtn { background: #32325a; border: none; color: #fff; border-radius: 9px; width: 42px; height: 42px; cursor: pointer; font-size: 16px; flex: 0 0 auto; }
+  .iconbtn.del { background: #6e2634; }
+  .addline { background: #1d5c33; border: none; color: #fff; border-radius: 10px; padding: 11px 14px; cursor: pointer; font-weight: bold; font-size: 14px; min-height: 44px; }
+  .who-grid { display: flex; gap: 10px; flex-wrap: wrap; }
+  .who-grid > div { flex: 1; min-width: 260px; }
+  .col-label { color: #9fe8a0; font-size: 12px; margin: 6px 0; }
 
   /* ---------- ТЕКСТУРЫ ---------- */
-  #texgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 12px; padding: 12px 14px; }
-  .tex { background: #1a1a2b; border: 1px solid #2c2c46; border-radius: 12px; padding: 10px; }
-  .tex .prev { height: 84px; display: flex; align-items: center; justify-content: center; background: repeating-conic-gradient(#22223a 0 25%, #1a1a2e 0 50%) 0 0/16px 16px; border-radius: 8px; margin-bottom: 8px; overflow: hidden; }
+  #texgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; padding: 12px 10px; }
+  .tex { background: #16162a; border: 1px solid #2c2c4a; border-radius: 14px; padding: 10px; }
+  .tex .prev { height: 84px; display: flex; align-items: center; justify-content: center; background: repeating-conic-gradient(#1c1c30 0 25%, #14142a 0 50%) 0 0/16px 16px; border-radius: 10px; margin-bottom: 8px; overflow: hidden; }
   .tex .prev img { max-width: 100%; max-height: 84px; image-rendering: pixelated; }
   .tex .tname { font-weight: bold; font-size: 13px; }
   .tex .tinfo { color: #8a8aa0; font-size: 11px; margin: 2px 0 8px; }
-  .tex .trow { display: flex; gap: 6px; }
-  .tex .badge { display: inline-block; background: #2a6a3a; color: #fff; font-size: 10px; padding: 2px 7px; border-radius: 8px; margin-left: 6px; vertical-align: middle; }
+  .tex .trow { display: flex; gap: 6px; flex-wrap: wrap; }
+  .tex .badge { display: inline-block; background: #1d5c33; color: #fff; font-size: 10px; padding: 2px 7px; border-radius: 8px; margin-left: 6px; vertical-align: middle; }
 
   /* ---------- ОБЪЕКТЫ (скриптуемые) ---------- */
-  #objlist { padding: 12px 14px 4px; display: flex; flex-direction: column; gap: 12px; }
-  .objcard { background: #1a1a2b; border: 1px solid #2c2c46; border-radius: 12px; padding: 12px; }
+  #objlist { padding: 12px 10px 4px; display: flex; flex-direction: column; gap: 12px; }
+  .objcard { background: #16162a; border: 1px solid #2c2c4a; border-radius: 14px; padding: 12px; }
   .objcard .orow { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; }
-  .objcard input, .objcard select { background: #17172b; border: 1px solid #3a3a5a; color: #fff; border-radius: 7px; padding: 8px; font-size: 13px; }
-  .objcard input.emoji { width: 56px; text-align: center; font-size: 18px; }
+  .objcard input, .objcard select { background: #10101f; border: 1px solid #32325a; color: #fff; border-radius: 9px; padding: 10px; font-size: 16px; }
+  .objcard input.emoji { width: 58px; text-align: center; font-size: 18px; }
   .objcard input.nm { width: 150px; font-weight: bold; }
-  .objcard input.dim { width: 64px; }
-  .objcard .prev { width: 74px; height: 74px; flex: 0 0 auto; display: flex; align-items: center; justify-content: center; background: repeating-conic-gradient(#22223a 0 25%, #1a1a2e 0 50%) 0 0/14px 14px; border-radius: 8px; overflow: hidden; }
+  .objcard input.dim { width: 70px; }
+  .objcard .prev { width: 74px; height: 74px; flex: 0 0 auto; display: flex; align-items: center; justify-content: center; background: repeating-conic-gradient(#1c1c30 0 25%, #14142a 0 50%) 0 0/14px 14px; border-radius: 10px; overflow: hidden; }
   .objcard .prev img { max-width: 100%; max-height: 100%; image-rendering: pixelated; }
   .objcard .prev span { font-size: 30px; }
-  .objcard textarea.script { width: 100%; min-height: 130px; background: #12121f; border: 1px solid #3a3a5a; color: #d7e4ff; border-radius: 8px; padding: 9px; font: 12px/1.5 'Courier New', monospace; resize: vertical; white-space: pre; }
+  .objcard textarea.script { width: 100%; min-height: 140px; background: #0d0d18; border: 1px solid #32325a; color: #d7e4ff; border-radius: 10px; padding: 10px; font: 12px/1.55 'Courier New', monospace; resize: vertical; white-space: pre; }
   .objcard .apinote { color: #6a6a85; font-size: 11px; line-height: 1.55; margin-top: 6px; }
   .objcard .apinote b { color: #9fd8b4; font-weight: bold; }
-  .objcard label.chk { color: #9fe8a0; font-size: 12px; display: flex; gap: 5px; align-items: center; cursor: pointer; }
+  .objcard label.chk { color: #9fe8a0; font-size: 13px; display: flex; gap: 6px; align-items: center; cursor: pointer; }
+  .objcard label.chk input { width: 18px; height: 18px; accent-color: #2ed573; }
 
   /* ---------- МУЗЫКА ---------- */
-  .mus-wrap { padding: 12px 14px; }
-  .track { display: flex; gap: 8px; align-items: center; background: #1a1a2b; border: 1px solid #2c2c46; border-radius: 10px; padding: 9px 10px; margin-bottom: 8px; flex-wrap: wrap; }
+  .mus-wrap { padding: 12px 10px; }
+  .track { display: flex; gap: 8px; align-items: center; background: #16162a; border: 1px solid #2c2c4a; border-radius: 12px; padding: 10px; margin-bottom: 8px; flex-wrap: wrap; }
   .track .tname { flex: 1; min-width: 140px; font-weight: bold; word-break: break-all; }
-  .track.active { border-color: #2a8a4a; }
-  .tagok { background: #2a8a4a; color: #fff; font-size: 10px; padding: 3px 8px; border-radius: 8px; }
-  .note { color: #8a8aa0; font-size: 12px; padding: 0 14px 10px; }
+  .track.active { border-color: #2ed57388; }
+  .tagok { background: #1d5c33; color: #fff; font-size: 10px; padding: 3px 8px; border-radius: 8px; }
+  .note { color: #8a8aa0; font-size: 12px; padding: 12px 12px 10px; line-height: 1.5; }
 
   /* ---------- ЗЕМЛЕТРЯСЕНИЯ ---------- */
-  .qk-wrap { padding: 12px 14px; }
-  .qchk { display: flex; gap: 8px; align-items: center; background: #1a1a2b; border: 1px solid #2c2c46; border-radius: 10px; padding: 10px 12px; margin-bottom: 8px; cursor: pointer; font-weight: bold; }
-  .qchk input { width: 18px; height: 18px; accent-color: #e63946; }
-  .qchk small { color: #8a8aa0; font-weight: normal; }
-  .qrow { background: #1a1a2b; border: 1px solid #2c2c46; border-radius: 10px; padding: 10px 12px; margin-bottom: 8px; }
-  .qrow .qtop { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px; color: #cfcfe6; }
+  .qk-wrap { padding: 12px 10px; }
+  .qchk { display: flex; gap: 10px; align-items: center; background: #16162a; border: 1px solid #2c2c4a; border-radius: 12px; padding: 12px; margin-bottom: 8px; cursor: pointer; font-weight: bold; font-size: 14px; }
+  .qchk input { width: 22px; height: 22px; accent-color: #e63946; flex: 0 0 auto; }
+  .qchk small { color: #8a8aa0; font-weight: normal; display: block; font-size: 12px; }
+  .qrow { background: #16162a; border: 1px solid #2c2c4a; border-radius: 12px; padding: 12px; margin-bottom: 8px; }
+  .qrow .qtop { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; color: #cfcfe6; font-size: 14px; }
   .qrow .qtop b { color: #ffd23f; font-size: 15px; }
-  .qrow input[type=range] { width: 100%; accent-color: #e63946; }
+  .qrow input[type=range] { width: 100%; height: 34px; accent-color: #e63946; }
 
   /* ---------- КАНАЛЫ ---------- */
-  .soc-wrap { padding: 12px 14px; }
-  .soc { display: flex; gap: 6px; align-items: center; background: #1a1a2b; border: 1px solid #2c2c46; border-radius: 10px; padding: 8px; margin-bottom: 8px; flex-wrap: wrap; }
-  .soc input, .soc select { background: #17172b; border: 1px solid #3a3a5a; color: #fff; border-radius: 7px; padding: 8px; font-size: 13px; }
+  .soc-wrap { padding: 12px 10px; }
+  .soc { display: flex; gap: 6px; align-items: center; background: #16162a; border: 1px solid #2c2c4a; border-radius: 12px; padding: 9px; margin-bottom: 8px; flex-wrap: wrap; }
+  .soc input, .soc select { background: #10101f; border: 1px solid #32325a; color: #fff; border-radius: 9px; padding: 10px; font-size: 16px; }
   .soc input.name { width: 130px; }
-  .soc input.url { flex: 1; min-width: 160px; }
+  .soc input.url { flex: 1; min-width: 150px; }
 
-  #toast { position: fixed; left: 50%; bottom: 78px; transform: translateX(-50%); background: #e63946; color: #fff; padding: 10px 18px; border-radius: 10px; font-weight: bold; opacity: 0; transition: opacity .25s; pointer-events: none; max-width: 92vw; z-index: 50; }
-  #toast.ok { background: #2a8a4a; }
+  /* ---------- Нижняя панель действий ---------- */
+  #actionbar {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 40;
+    display: flex; gap: 8px; align-items: stretch; flex-wrap: wrap;
+    padding: 10px 12px calc(env(safe-area-inset-bottom) + 10px);
+    background: rgba(18, 18, 31, .96);
+    backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+    border-top: 1px solid #2c2c4a;
+    box-shadow: 0 -8px 24px rgba(0, 0, 0, .5);
+  }
+  #actionbar .row { display: flex; gap: 8px; width: 100%; }
+  #actionbar .row .act { flex: 1; }
+
+  /* ---------- Тост ---------- */
+  #toast {
+    position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom) + 122px);
+    transform: translateX(-50%);
+    background: #d42f42; color: #fff; padding: 11px 18px; border-radius: 12px;
+    font-weight: bold; font-size: 13px; opacity: 0; transition: opacity .25s;
+    pointer-events: none; max-width: 92vw; z-index: 60; text-align: center;
+    box-shadow: 0 6px 24px rgba(0, 0, 0, .5);
+  }
+  #toast.ok { background: #1d8a4a; }
   #toast.show { opacity: 1; }
-  #zoombox { display: flex; gap: 4px; align-items: center; color: #8a8aa0; flex: 0 0 auto; }
-  #zoombox button { width: 34px; height: 34px; border-radius: 6px; border: 1px solid #3a3a5a; background: #23233a; color: #fff; cursor: pointer; font-size: 16px; }
 
-  /* ---------- МОБИЛЬНАЯ АДАПТАЦИЯ ---------- */
+  /* ---------- Зум ---------- */
+  #zoombox { display: flex; gap: 4px; align-items: center; color: #8a8aa0; flex: 0 0 auto; }
+  #zoombox button { width: 40px; height: 40px; border-radius: 9px; border: 1px solid #32325a; background: #1d1d33; color: #fff; cursor: pointer; font-size: 18px; }
+  #zoom-val { font-size: 12px; min-width: 34px; text-align: center; }
+
+  /* ---------- GitHub-инструкция (модалка) ---------- */
+  #gh-help {
+    position: fixed; inset: 0; z-index: 80; display: none;
+    background: rgba(5, 5, 12, .78); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
+    align-items: flex-end; justify-content: center;
+  }
+  #gh-help.open { display: flex; }
+  .gh-card {
+    background: #16162a; border: 1px solid #32325a; border-radius: 18px 18px 0 0;
+    width: 100%; max-width: 640px; max-height: 86vh; overflow: auto;
+    padding: 18px 16px calc(env(safe-area-inset-bottom) + 18px);
+  }
+  .gh-card h3 { color: #ffd23f; font-size: 16px; margin-bottom: 10px; }
+  .gh-card ol { padding-left: 20px; display: grid; gap: 10px; font-size: 13.5px; line-height: 1.5; color: #d8d8ea; }
+  .gh-card b { color: #ffd23f; }
+  .gh-card code { background: #0d0d18; border: 1px solid #32325a; border-radius: 6px; padding: 1px 6px; font-size: 12px; color: #9fd3ff; word-break: break-all; }
+  .gh-card .gh-note { margin-top: 12px; color: #8a8aa0; font-size: 12.5px; line-height: 1.5; border-top: 1px solid #2c2c4a; padding-top: 10px; }
+  #btn-gh-close { position: sticky; top: 0; float: right; background: #32325a; border: none; color: #fff; width: 38px; height: 38px; border-radius: 10px; font-size: 16px; cursor: pointer; }
+
+  /* ---------- Планшет/десктоп ---------- */
+  @media (min-width: 761px) {
+    body { padding-bottom: 132px; }
+    header, #modes, #lvl-tabs, #toolbar, .dlg-wrap, #texgrid, #objlist, .mus-wrap, .qk-wrap, .soc-wrap { max-width: 1100px; margin-left: auto; margin-right: auto; }
+    header { padding-left: 0; padding-right: 0; }
+    .h-row, #status { max-width: 1100px; margin-left: auto; margin-right: auto; }
+    #actionbar { max-width: 1100px; left: 50%; transform: translateX(-50%); border-radius: 16px 16px 0 0; border: 1px solid #2c2c4a; border-bottom: none; }
+    #toast { left: 50%; }
+    .line textarea { min-height: 56px; font-size: 14px; }
+    #lvlname { font-size: 14px; }
+    .line-top select, .line-top input, .soc input, .soc select, .objcard input { font-size: 14px; }
+    #gh-help { align-items: center; }
+    .gh-card { border-radius: 18px; }
+  }
   @media (max-width: 760px) {
-    header { padding: 5px 10px; }
-    header h1 { font-size: 13px; }
-    #status { font-size: 11px; }
-    #modes, #lvl-tabs, #toolbar { padding-left: 8px; padding-right: 8px; }
-    #modes button { padding: 10px 12px; font-size: 13px; }
-    .tool { padding: 8px 10px; min-width: 50px; font-size: 11px; }
-    .tool b { font-size: 16px; }
-    #mapopts { padding: 6px 8px 0; gap: 6px; }
-    #mapopts label { font-size: 12px; }
-    #lvlname { width: 130px; padding: 7px 8px; }
-    #lvbg { padding: 7px; font-size: 12px; }
-    #mapopts .act { padding: 8px 10px; font-size: 12px; }
-    #canvaswrap { padding: 6px; }
-    #cellinfo { padding: 0 8px; min-height: 15px; font-size: 11px; }
+    #texgrid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
     #hint { display: none; }
-    #actionbar { padding: 8px; gap: 6px; position: sticky; bottom: 0; z-index: 6; box-shadow: 0 -6px 18px rgba(0,0,0,.5); }
-    .act { padding: 12px 14px; font-size: 14px; }
-    .act.big { flex: 1; }
-    #texgrid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; padding: 10px 8px; }
-    .line textarea { min-height: 64px; font-size: 15px; }
-    .dlg-wrap, .mus-wrap, .soc-wrap { padding: 10px 8px; }
-    #toast { bottom: 96px; }
   }
 </style>
 </head>
 <body>
 <header>
-  <h1>⚙ АДМИН-ПАНЕЛЬ <small>(временная, убирается по команде)</small> <span id="rev-badge" style="font-size:12px;font-weight:600;color:#9fd3ff;background:#16243a;border:1px solid #2c4a6e;border-radius:10px;padding:2px 10px;vertical-align:middle;white-space:nowrap"></span></h1>
+  <div class="h-row">
+    <h1>⚙ АДМИН-ПАНЕЛЬ <small>временная • правки для всех игроков</small></h1>
+    <span id="rev-badge"></span>
+  </div>
   <div id="status" class="none">загрузка…</div>
 </header>
 
@@ -175,7 +284,7 @@
   <button data-mode="objects">🧩 ОБЪЕКТЫ</button>
   <button data-mode="music">🎵 МУЗЫКА</button>
   <button data-mode="socials">📢 КАНАЛЫ</button>
-  <button data-mode="quake">🌍 ЗЕМЛЕТРЯСЕНИЯ</button>
+  <button data-mode="quake">🌍 ТРЯСКА</button>
 </div>
 
 <!-- ================= КАРТЫ ================= -->
@@ -184,7 +293,7 @@
   <div id="toolbar">
     <button class="tool" data-tool="ground" title="Земля, только 2 нижних ряда"><b>▓</b>земля</button>
     <button class="tool" data-tool="B" title="Кирпич — твёрдый, любой ряд"><b>🧱</b>кирпич</button>
-    <button class="tool" data-tool="=" title="Платформа — можно спрыгнуть вниз"><b>▬</b>платформа</button>
+    <button class="tool" data-tool="=" title="Платформа — можно спрыгнуть вниз"><b>▬</b>платф.</button>
     <button class="tool" data-tool="^" title="Шипы — урон"><b>▲</b>шипы</button>
     <button class="tool" data-tool="L" title="Жидкость (полынья/лава/кислота) — урон, на дне ям"><b>🌊</b>жижа</button>
     <button class="tool" data-tool="v" title="Батут — подброс (на бегу — двойное сальто)"><b>🤸</b>батут</button>
@@ -208,33 +317,33 @@
     <button class="tool" id="btn-undo" title="Отменить (Ctrl+Z)"><b>↩</b>отмена</button>
     <div id="zoombox"><button id="zoom-out">−</button><span id="zoom-val"></span><button id="zoom-in">+</button></div>
   </div>
-  <div id="mapopts">
-    <label style="color:#8a8aa0">Название: <input id="lvlname"></label>
-    <label style="color:#8a8aa0">Фон: <select id="lvbg">
+  <div class="opts-card" id="mapopts">
+    <label>Название: <input id="lvlname"></label>
+    <label>Фон: <select id="lvbg">
       <option value="bg_fields">Поля</option>
       <option value="bg_city">Город</option>
       <option value="bg_district">Район</option>
       <option value="bg_plant">Завод (ночь)</option>
     </select></label>
-    <label style="color:#8a8aa0" title="Здоровье вождя, если он стоит на карте">HP вождя: <input id="bosshp" type="number" min="1" max="30" value="6" style="background:#23233a;border:1px solid #3a3a5a;color:#fff;border-radius:8px;padding:8px;width:64px;font-size:13px"></label>
-    <label style="color:#8a8aa0" title="Землетрясение именно на ЭТОЙ карте — работает даже в прологе и на босс-аренах">🌍 Тряска: <input id="lvquake" type="checkbox" style="transform:scale(1.2);vertical-align:middle"></label>
-    <span id="quakeopts" style="display:none;gap:12px;align-items:center;flex-wrap:wrap;color:#8a8aa0">
-      <label title="Сила толчков">сила <input id="qkpow" type="range" min="0.3" max="2.5" step="0.1" value="1" style="width:64px;vertical-align:middle"><b id="qkpowv" style="color:#fff;min-width:26px;display:inline-block">1.0</b></label>
-      <label title="Секунд между толчками">каждые <input id="qkint" type="range" min="5" max="60" step="1" value="20" style="width:64px;vertical-align:middle"><b id="qkintv" style="color:#fff;min-width:30px;display:inline-block">20с</b></label>
-      <label title="Длительность одного толчка, сек">длит. <input id="qkdur" type="range" min="2" max="12" step="0.5" value="5" style="width:64px;vertical-align:middle"><b id="qkdurv" style="color:#fff;min-width:30px;display:inline-block">5с</b></label>
+    <label title="Здоровье вождя, если он стоит на карте">HP вождя: <input id="bosshp" type="number" min="1" max="30" value="6"></label>
+    <label title="Землетрясение именно на ЭТОЙ карте — работает даже в прологе и на босс-аренах">🌍 Тряска: <input id="lvquake" type="checkbox"></label>
+    <span id="quakeopts">
+      <label title="Сила толчков">сила <input id="qkpow" type="range" min="0.3" max="2.5" step="0.1" value="1"><b id="qkpowv">1.0</b></label>
+      <label title="Секунд между толчками">каждые <input id="qkint" type="range" min="5" max="60" step="1" value="20"><b id="qkintv">20с</b></label>
+      <label title="Длительность одного толчка, сек">длит. <input id="qkdur" type="range" min="2" max="12" step="0.5" value="5"><b id="qkdurv">5с</b></label>
       <label title="Камни сыплются с неба во время толчка"><input id="qkrocks" type="checkbox" checked> камни</label>
     </span>
     <button class="act gray" id="btn-move-up" title="Передвинуть уровень выше по порядку">↑ Выше</button>
     <button class="act gray" id="btn-move-down" title="Передвинуть уровень ниже по порядку">↓ Ниже</button>
-    <button class="act warn" id="btn-reset-level">Сброс этой карты</button>
+    <button class="act warn" id="btn-reset-level">Сброс карты</button>
     <button class="act warn" id="btn-del-map">🗑 Удалить карту</button>
   </div>
   <div id="indevopts" style="display:none">
-    <div class="dlg-block" style="margin-bottom:0">
+    <div class="dlg-block" style="margin:10px">
       <h3>🚧 ЭКРАН «В РАЗРАБОТКЕ»</h3>
       <div class="sub">Это финальная заглушка в конце игры. Можно: переименовать её, превратить в обычную играбельную карту или удалить совсем — тогда игра будет заканчиваться финальным экраном сразу после последней карты.</div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-        <label style="color:#8a8aa0">Название: <input id="indevname" style="background:#23233a;border:1px solid #3a3a5a;color:#fff;border-radius:8px;padding:8px 10px;width:190px;font-weight:bold;font-size:14px"></label>
+        <label style="color:#8a8aa0">Название: <input id="indevname" style="background:#10101f;border:1px solid #32325a;color:#fff;border-radius:10px;padding:10px 12px;width:190px;font-weight:bold;font-size:16px"></label>
         <button class="act" id="btn-indev-to-map">🔧 Сделать обычной картой</button>
         <button class="act warn" id="btn-del-level">🗑 Удалить уровень</button>
       </div>
@@ -242,7 +351,7 @@
   </div>
   <div id="canvaswrap"><canvas id="cv"></canvas></div>
   <div id="cellinfo"></div>
-  <div id="hint">Земля — два нижних ряда (11–12), ластик пробивает ямы насквозь. Новое: жижа на дне ям, батуты, сыпучие мосты, пилы, летуны/прыгуны/щитоносцы (стомп не берёт — бей плюшкой). HP вождя — поле рядом с фоном. «↑/↓» — порядок уровней. Всё публикуется одной кнопкой внизу.</div>
+  <div id="hint">Земля — два нижних ряда, ластик пробивает ямы насквозь. Жижа на дне ям, батуты, сыпучие мосты, пилы, летуны/прыгуны/щитоносцы (стомп не берёт — бей плюшкой). HP вождя — рядом с фоном. «↑/↓» — порядок уровней. Публикация — внизу.</div>
 </div>
 
 <!-- ================= РАЗГОВОРЫ ================= -->
@@ -250,7 +359,7 @@
   <div class="dlg-wrap">
     <div class="dlg-block">
       <h3>🎬 ВСТУПЛЕНИЕ (катсцена в начале игры)</h3>
-      <div class="sub">Показывается один раз перед первой картой.</div>
+      <div class="sub">Показывается один раз перед первой картой. Тексты живут в файле <b style="color:#9fd3ff">js/dialogs.js</b> — его можно переписать целиком с помощью ИИ и залить на GitHub.</div>
       <div id="dlg-intro"></div>
       <button class="addline" data-add="intro">+ Реплика</button>
     </div>
@@ -262,15 +371,15 @@
     </div>
     <div class="dlg-block">
       <h3>🗺 РАЗГОВОРЫ КАРТЫ</h3>
-      <div class="sub"><select id="dlg-map" style="background:#17172b;border:1px solid #3a3a5a;color:#fff;border-radius:7px;padding:7px 8px;font-size:13px"></select></div>
+      <div class="sub"><select id="dlg-map" style="background:#10101f;border:1px solid #32325a;color:#fff;border-radius:9px;padding:10px;font-size:16px;max-width:100%"></select></div>
       <div class="who-grid">
-        <div style="flex:1;min-width:280px">
-          <div style="color:#9fe8a0;font-size:12px;margin:6px 0">ВСТУПЛЕНИЕ карты (при старте)</div>
+        <div>
+          <div class="col-label">ВСТУПЛЕНИЕ карты (при старте)</div>
           <div id="dlg-mapIntro"></div>
           <button class="addline" data-add="mapIntro">+ Реплика</button>
         </div>
-        <div style="flex:1;min-width:280px">
-          <div style="color:#9fe8a0;font-size:12px;margin:6px 0">ФИНАЛ карты (после завода)</div>
+        <div>
+          <div class="col-label">ФИНАЛ карты (после завода)</div>
           <div id="dlg-mapOutro"></div>
           <button class="addline" data-add="mapOutro">+ Реплика</button>
         </div>
@@ -287,15 +396,15 @@
 
 <!-- ================= ТЕКСТУРЫ ================= -->
 <div class="pane" id="pane-textures">
-  <div class="note" style="padding-top:12px">PNG с прозрачным фоном для персонажей. Картинка вписывается в слот целиком — лучше заранее обрезать лишние поля. Текстура применяется для ВСЕХ игроков после «ОПУБЛИКОВАТЬ».</div>
+  <div class="note">PNG с прозрачным фоном для персонажей. Картинка вписывается в слот целиком — лучше заранее обрезать лишние поля. Текстура применяется для ВСЕХ игроков после «ОПУБЛИКОВАТЬ».</div>
   <div id="texgrid"></div>
 </div>
 
 <!-- ================= ОБЪЕКТЫ (скриптуемые) ================= -->
 <div class="pane" id="pane-objects">
-  <div class="note" style="padding-top:12px">Свои объекты: загрузи PNG и задай поведение JS-скриптом (шаблоны — подставятся сами). Объект появится кнопкой в редакторе карт — кликай по карте, чтобы ставить. Всё — для всех игроков после «ОПУБЛИКОВАТЬ».</div>
+  <div class="note">Свои объекты: загрузи PNG и задай поведение JS-скриптом (шаблоны — подставятся сами). Объект появится кнопкой в редакторе карт — кликай по карте, чтобы ставить. Всё — для всех игроков после «ОПУБЛИКОВАТЬ».</div>
   <div id="objlist"></div>
-  <div style="padding:4px 14px 12px"><button class="addline" id="btn-obj-add">+ СОЗДАТЬ ОБЪЕКТ</button></div>
+  <div style="padding:4px 10px 12px"><button class="addline" id="btn-obj-add">+ СОЗДАТЬ ОБЪЕКТ</button></div>
 </div>
 
 <!-- ================= МУЗЫКА ================= -->
@@ -349,15 +458,42 @@
 </div>
 
 <div id="actionbar">
-  <button class="act big" id="btn-publish">🚀 ОПУБЛИКОВАТЬ ДЛЯ ВСЕХ</button>
-  <button class="act" id="btn-test">▶ Тест</button>
-  <button class="act gray" id="btn-export">⬇ Экспорт</button>
-  <button class="act warn" id="btn-reset-all">СБРОС ВСЕГО</button>
+  <div class="row">
+    <button class="act big" id="btn-publish">🚀 ОПУБЛИКОВАТЬ ДЛЯ ВСЕХ</button>
+    <button class="act gray" id="btn-test">▶ Тест</button>
+  </div>
+  <div class="row">
+    <button class="act" id="btn-export">⬇ Экспорт</button>
+    <button class="act gray" id="btn-import">⬆ Импорт</button>
+    <button class="act gray" id="btn-github">📦 GitHub</button>
+    <button class="act warn" id="btn-reset-all">СБРОС</button>
+  </div>
+  <input type="file" id="importfile" accept="application/json,.json" style="display:none">
+</div>
+
+<!-- ================= GitHub-инструкция ================= -->
+<div id="gh-help">
+  <div class="gh-card">
+    <button id="btn-gh-close">✕</button>
+    <h3>📦 Как выложить изменения на GitHub</h3>
+    <ol>
+      <li>Нажми <b>«⬇ Экспорт»</b> — скачается файл <b>game-cms.json</b> со всеми твоими правками (карты, разговоры, текстуры, музыка, каналы, тряска).</li>
+      <li>Открой репозиторий игры на GitHub: <code>github.com/russiastarscom/Mellstroy-chekushka</code></li>
+      <li>Ветку выбери <b>gh-pages</b> (именно там живёт сайт игры), папка <code>public/game</code> не нужна — файл кладётся <b>в корень</b> рядом с <code>index.html</code>.</li>
+      <li>Нажми <b>Add file → Upload files</b>, перетащи game-cms.json и нажми <b>Commit changes</b>.</li>
+      <li>Через минуту обнови игру — GitHub Pages сам отдаст файл, и ВСЕ игроки увидят правки. Публиковать на сервере для этого не нужно.</li>
+    </ol>
+    <div class="gh-note">
+      💡 Обратно в панель: <b>«⬆ Импорт»</b> читает game-cms.json и загружает его в редактор — можно продолжить правки с другого устройства.<br>
+      💡 Тексты игры (все диалоги) лежат одним файлом <code>js/dialogs.js</code> — его тоже можно переписать с помощью ИИ и так же залить в папку <code>js/</code> в ветке gh-pages.
+    </div>
+  </div>
 </div>
 
 <div id="toast"></div>
 <script src="js/config.js"></script>
 <script src="js/levels.js"></script>
-<script src="admin.js?v=5"></script>
+<script src="js/dialogs.js"></script>
+<script src="admin.js?v=6"></script>
 </body>
 </html>

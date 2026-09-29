@@ -637,3 +637,24 @@ Stage Summary:
 - Любую воду/лаву/кислоту можно перепрыгнуть: ямы капнуты до 4 тайлов (генератор + нормализация + валидатор), прыжок 4-тайловой проходит с запасом 21px
 - Три разных утопа: вода — пузыри/круги, лава — обугливание/пламя/искры/шипение, кислота — зелёный раствор/пена/пшик; утоп больше не красит лаву синим (пофикшен цвет темы)
 - Пользователю: жёстко обновить игру (Ctrl+Shift+R), панель — Ctrl+Shift+R (бейдж ревизии v4-liquid)
+
+---
+Task ID: 27
+Agent: main (Super Z)
+Task: Победная анимация уровня; редизайн админ-панели (mobile-first) + экспорт/импорт game-cms.json с GitHub-инструкцией; диалоги одним файлом (js/dialogs.js); деплой на GitHub Pages
+
+Work Log:
+- Победная анимация: index.src.html — экран complete получил #confetti-win, #win-stamp (внутри: #win-rays вращающиеся золотые лучи, #win-bottle прыгающая чекушка image/checkushka.png, заголовок .win-title со свечением); css/style.css — keyframes win-conf-fall/win-stamp-pop/win-rays-spin/win-bottle-jump/win-title-glow; js/ui.js — showComplete теперь строит 64 конфетти (чередование круглых/полосок), replayVictoryAnim() перезапускает CSS-анимации через reflow и играет Audio8.sfx.win()
+- Диалоги одним файлом: scripts/gen_dialogs.py (Node-проба исполняет levels.js, дампит DIALOGUES+LEVELS) → public/game/js/dialogs.js 40.9 КБ: window.GAME_DIALOGS { common (intro/outroAfterBoss/happyAfterBoss/happyOutro), byId — все 65 карт (intro/outro/hints, outro:null боссов сохранён) } + блок applyGameDialogs (in-place splice для common — ссылки катсцены/боссов живут, byId — замена диалогов/подсказок по id)
+- Подключение dialogs.js: index.src.html (после levels.js), admin.html (после levels.js), build_inline.py ORDER=['config','audio','sprites','levels','dialogs','entities','ui','main'], НО dialogs.js НЕ инлайнится в standalone index.html (внешний тег сохраняется) — правка одного файла на GitHub доходит до игры без пересборки; отсутствующий файл не ломает игру (fallback на тексты levels.js); sw.js CORE += './js/dialogs.js', кэш v30→v31
+- Приоритет текстов: CMS (панель/game-cms.json) > dialogs.js > старые инлайн-тексты levels.js (там больше не редактировать)
+- Админ-панель v2 (admin.html переписан): mobile-first тема (фон #0b0b14, карточки #16162a, красный #e63946/золото #ffd23f), шапка+бейдж ревизии, чипсы-вкладки #modes (44px, sticky), тулбар с крупными tool-кнопками (56×52), opts-card настроек карты, fixed actionbar в 2 ряда (ОПУБЛИКОВАТЬ+Тест / Экспорт+Импорт+GitHub+Сброс), safe-area, 16px инпуты на мобиле (без iOS-зума), тост над панелью, десктоп max-width 1100px; ВСЕ id/классы контракта admin.js сохранены
+- admin.js: btn-export теперь открывает инструкцию; НОВОЕ — btn-import+importfile (FileReader→JSON→serverMapsToCms→сброс dirty→полный rerender→saveDrafts), btn-github+gh-help модалка «Как выложить изменения на GitHub» (5 шагов: экспорт → репозиторий → ветка gh-pages → Add file→Upload files → Commit; + подсказка про импорт и js/dialogs.js), cache-bust admin.js?v=6
+- E2E scripts/e2e_victory_admin.mjs: 28/28 ✅ (dialogs×8: файл/65 карт/common/оверрайд/cutscene-ссылки/хинты/внешний тег; victory×5: экран/конфетти/штамп/заголовок/анимация; admin×15: нет JS-ошибок, 7 вкладок, бейдж v4-liquid, 19+ инструментов, канвас, 64 таба карт, импорт/GitHub-кнопки, диалоги из dialogs.js, переключение вкладок, модалка открывается/закрывается, экспорт строит payload>5КБ, actionbar прижат/2 ряда/чипсы скроллятся); скриншоты e2e-victory.png, e2e-admin-mobile.png, e2e-admin-maps.png, e2e-admin-dialogs.png; грабль: page.evaluate(() => GameDebug.finishLevel()) дедлочил на await UI.dialogue(outro) — фикс: без возврата промиса + skipDialogue
+- Деплой: git push origin main (исходники+скрипты); gh-pages пересобрана из public/game/* + .nojekyll (общий токен-remote), Pages API статус building→built
+
+Stage Summary:
+- Победа на уровне: лучи + прыгающая чекушка + конфетти + фанфара sfx.win на каждом «КАРТА ЗАЧИЩЕНА!»
+- Все тексты игры в ОДНОМ файле js/dialogs.js — можно переписывать ИИ целиком и заливать на GitHub (gh-pages, папка js/), игра подхватит без пересборки
+- Админка полностью перерисована под телефон; экспорт game-cms.json + импорт обратно + встроенная пошаговая GitHub-инструкция
+- GitHub Pages: https://russiastarscom.github.io/Mellstroy-chekushka/ (v31)
