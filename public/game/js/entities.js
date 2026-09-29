@@ -118,7 +118,7 @@ class Player {
 
   // ============================================================
   // СМЕРТЬ С АНИМАЦИЕЙ
-  // type: 'water' (утоп — медленно уходит под жидкость с пузырями),
+  // type: 'water' (утоп — свой сценарий для воды/лавы/кислоты по dKind),
   //       'spike' (отскок от шипов), 'saw' (пила — быстрый кувырок),
   //       'hit' (враг/босс/камень — подброс и пласт на землю)
   // ============================================================
@@ -132,10 +132,15 @@ class Player {
     this.dRot = 0; this.dRotV = 0;
     this.dLand = false;
     this.dBubT = 0;
+    this.dKind = (type === 'water') ? (o.kind || 'water') : null;
+    this.dMaxY = undefined; // дно для погружения (считается в updateDeath, где есть level)
     if (type === 'water') {
       this.dSurfaceY = (typeof o.surfaceY === 'number') ? o.surfaceY : (this.y + this.h - 6);
       this.vx = 0; this.vy = 0;
-      Audio8.sfx.splash();
+      // свой звук на каждую жижу: вода — всплеск, лава — шипение, кислота — пшик
+      if (this.dKind === 'lava') Audio8.sfx.sizzle();
+      else if (this.dKind === 'acid') Audio8.sfx.fizz();
+      else Audio8.sfx.splash();
       if (game.spawnSplash) game.spawnSplash(this.x + this.w / 2, this.dSurfaceY);
     } else {
       // отскок от опасности: подброс + кувырок в заданную сторону
@@ -148,24 +153,41 @@ class Player {
     if (game.onDeathStart) game.onDeathStart(this);
   }
 
-  // Анимация смерти: вода — медленное погружение, остальное — дуга с кувырком и пласт на земле
+  // Анимация смерти: утоп — свой сценарий на воду/лаву/кислоту, остальное — дуга с кувырком и пласт
   updateDeath(dt, level, game) {
     this.deathT += dt;
     const t = this.deathT;
     if (this.dying === 'water') {
-      // медленно уходит под воду: разгон погружения, покачивание, пузыри
-      this.vy = Math.min(28 + t * 55, 100);
-      const maxY = this.dSurfaceY + 18; // капнет — голова скрывается под поверхностью
+      const kind = this.dKind || 'water';
+      const lava = kind === 'lava', acid = kind === 'acid';
+      // дно: в мелких ямах нельзя провалиться сквозь грунт — ищем твёрдый пол
+      if (this.dMaxY === undefined) {
+        this.dMaxY = Infinity;
+        this.dFloorY = undefined;
+        const cc = Math.floor((this.x + this.w / 2) / TILE);
+        for (let rr = Math.floor(this.dSurfaceY / TILE); rr < ROWS; rr++) {
+          const tt = tileAt(level, cc, rr);
+          if (tt === '#' || tt === 'B' || tt === '=') { this.dMaxY = rr * TILE - this.h - 2; this.dFloorY = rr * TILE; break; }
+        }
+      }
+      // погружение: вода — плавное, кислота — бодрее, лава — резко тащит вниз
+      this.vy = Math.min(28 + t * (lava ? 115 : acid ? 78 : 55), lava ? 175 : acid ? 135 : 100);
+      const maxY = Math.min(this.dSurfaceY + (lava ? 14 : 18), this.dMaxY);
       if (this.y < maxY) this.y += this.vy * dt;
       else this.y = maxY + Math.sin(t * 3) * 1.5;
       this.x += Math.sin(t * 5) * 14 * dt;
-      this.dRot = Math.sin(t * 2.4) * 0.24; // обмякшее покачивание
+      this.dRot = Math.sin(t * (lava ? 3.4 : 2.4)) * (lava ? 0.34 : 0.24); // обмякшее покачивание
+      // вода — пузыри, кислота — зелёные пузыри, лава — искры над поверхностью
       this.dBubT -= dt;
-      if (this.dBubT <= 0 && game.spawnBubble) {
-        this.dBubT = 0.15;
-        game.spawnBubble(this.x + this.w / 2 + (Math.random() - 0.5) * 16, this.y + 4 + Math.random() * (this.h - 8));
+      if (this.dBubT <= 0) {
+        this.dBubT = lava ? 0.09 : 0.15;
+        const cx = this.x + this.w / 2 + (Math.random() - 0.5) * 16;
+        const cy = this.y + 4 + Math.random() * (this.h - 8);
+        if (lava) { if (game.spawnEmber) game.spawnEmber(cx, this.dSurfaceY - 2); }
+        else if (acid) { if (game.spawnBubble) game.spawnBubble(cx, cy, '#b8ffc8'); }
+        else if (game.spawnBubble) game.spawnBubble(cx, cy);
       }
-      if (t >= 1.5) game.onDeathAnimDone(this);
+      if (t >= (lava ? 1.3 : 1.5)) game.onDeathAnimDone(this);
       return;
     }
     // отскок-кувырок: летит по дуге, долетел — лежит пластом
@@ -367,31 +389,102 @@ class Player {
     Sprites.draw(ctx, 'andrey', x, y, w, h, this.dir < 0);
   }
 
-  // —— УТОП: обмяк и медленно уходит под жидкость; часть тела ниже поверхности накрыта цветом воды ——
+  // —— УТОП: свой вид для каждой жидкости ——
+  // вода: обмяк и медленно уходит под воду, пузыри и круги;
+  // лава: обугливается, языки пламени, искры, оранжевое свечение;
+  // кислота: зеленеет, растворяется, зелёные пузыри и пена
   drawDrowning(ctx, camX, game) {
     const x = this.x - camX, y = this.y;
+    const kind = this.dKind || 'water';
+    const lava = kind === 'lava', acid = kind === 'acid';
     // тень/круги на поверхности
     ctx.fillStyle = 'rgba(0,0,0,.18)';
     ctx.beginPath();
     ctx.ellipse(x + this.w / 2, this.dSurfaceY + 2, 15, 3.5, 0, 0, 7);
     ctx.fill();
-    Sprites.draw(ctx, 'andrey', x, y, this.w, this.h, false, this.dRot);
+    if (lava || acid) {
+      // лава — обугленный силуэт, кислота — зеленеет и растворяется
+      ctx.save();
+      try {
+        ctx.filter = lava
+          ? 'brightness(.42) saturate(1.5) sepia(.55) hue-rotate(-18deg)'
+          : 'sepia(.7) saturate(2.4) hue-rotate(52deg) brightness(.92)';
+      } catch (e) { /* старые браузеры без фильтров — рисуем как есть */ }
+      const a = acid ? Math.max(0.45, 1 - this.deathT * 0.3) : 1;
+      Sprites.draw(ctx, 'andrey', x, y, this.w, this.h, false, this.dRot, a);
+      ctx.restore();
+    } else {
+      Sprites.draw(ctx, 'andrey', x, y, this.w, this.h, false, this.dRot);
+    }
     const th = (game && game.liquidTheme) ? game.liquidTheme() : null;
     if (th) {
       const surf = this.dSurfaceY;
       const depth = Math.max(0, y + this.h - surf);
       if (depth > 0) {
-        ctx.save();
-        ctx.globalAlpha = 0.6;
-        ctx.fillStyle = th.haz;
-        ctx.fillRect(x - 5, surf + 2, this.w + 10, depth + 44);
-        ctx.globalAlpha = 0.92;
-        ctx.fillStyle = th.haz2;
-        const wob = Math.sin(this.deathT * 7) * 1.6;
-        ctx.fillRect(x - 7, surf + wob, this.w + 14, 3); // дрожащая линия поверхности
-        ctx.restore();
+        // затоп не должен протекать под дно мелкой ямы — клэмп по твёрдому полу
+        const floorY = (this.dFloorY !== undefined) ? this.dFloorY : surf + depth + 44;
+        const coverH = Math.max(0, Math.min(depth + 44, floorY - surf));
+        if (coverH > 0) {
+          ctx.save();
+          ctx.globalAlpha = lava ? 0.78 : 0.6;
+          ctx.fillStyle = th.haz;
+          ctx.fillRect(x - 5, surf + 2, this.w + 10, coverH);
+          ctx.globalAlpha = 0.92;
+          ctx.fillStyle = th.haz2;
+          const wob = Math.sin(this.deathT * (lava ? 11 : 7)) * (lava ? 2.6 : 1.6);
+          ctx.fillRect(x - 7, surf + wob, this.w + 14, 3); // дрожащая линия поверхности
+          ctx.restore();
+        }
       }
+      if (lava) this.drawLavaSurface(ctx, x, surf, th);
+      if (acid) this.drawAcidSurface(ctx, x, surf, th);
     }
+  }
+
+  // лава: свечение + языки пламени над поверхностью рядом с Андреем
+  drawLavaSurface(ctx, x, surf, th) {
+    const t = this.deathT;
+    ctx.save();
+    try {
+      const gl = ctx.createRadialGradient(x + this.w / 2, surf, 4, x + this.w / 2, surf, 44);
+      gl.addColorStop(0, 'rgba(255,150,40,.5)');
+      gl.addColorStop(1, 'rgba(255,120,30,0)');
+      ctx.fillStyle = gl;
+      ctx.fillRect(x - 46, surf - 44, this.w + 92, 88);
+    } catch (e) { /* без градиентов — просто пламя */ }
+    for (let i = 0; i < 4; i++) {
+      const fx = x + 3 + i * 8 + Math.sin(t * 9 + i * 2.1) * 2.2;
+      const fh = 9 + Math.sin(t * 13 + i * 1.7) * 5;
+      ctx.fillStyle = (i % 2) ? th.haz2 : '#ff9a3a';
+      ctx.beginPath();
+      ctx.moveTo(fx - 3.5, surf + 2);
+      ctx.quadraticCurveTo(fx, surf - fh, fx + 3.5, surf + 2);
+      ctx.closePath();
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  // кислота: зелёные пузыри, поднимающиеся над поверхностью, и пена
+  drawAcidSurface(ctx, x, surf, th) {
+    const t = this.deathT;
+    ctx.save();
+    for (let i = 0; i < 3; i++) {
+      const bx = x + 6 + i * 9 + Math.sin(t * 5 + i) * 2;
+      const bp = (t * 1.4 + i * 0.37) % 1;
+      ctx.globalAlpha = 0.8 * (1 - bp);
+      ctx.strokeStyle = th.haz2;
+      ctx.lineWidth = 1.4;
+      ctx.beginPath();
+      ctx.arc(bx, surf - bp * 16, 2.5 + i, 0, 7);
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 0.85;
+    ctx.fillStyle = th.haz2;
+    for (let i = 0; i < 5; i++) {
+      ctx.fillRect(x - 4 + i * 8 + Math.sin(t * 7 + i * 2) * 2, surf + Math.sin(t * 9 + i) * 1.5, 4, 2.5);
+    }
+    ctx.restore();
   }
 
   // —— ОТСКОК/ПЛАСТ: кувырок в воздухе, потом серая тушкa пластом + звёзды над головой ——

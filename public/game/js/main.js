@@ -58,7 +58,7 @@ const Game = (() => {
   // API для сущностей (передаётся вместо this)
   const api = {
     spawnDust, spawnStars, onPlayerHurt, playerFell, onBossDead,
-    playerDrown, onDeathStart, onDeathAnimDone, spawnBubble, spawnSplash, liquidTheme,
+    playerDrown, onDeathStart, onDeathAnimDone, spawnBubble, spawnEmber, spawnSplash, liquidTheme,
     get player() { return player; },
     get tomahawks() { return tomahawks; },
     get shake() { return shake; },
@@ -210,15 +210,16 @@ const Game = (() => {
       else gameOver();
     }
   }
-  // Утоп: касание жидкости — hp--, Андрей медленно уходит под воду (анимация), потом респаун/экран
+  // Утоп: касание жидкости — hp--, Андрей уходит под воду/лаву/кислоту (своя анимация), потом респаун/экран
   function playerDrown(surfaceY) {
     if (player.dying) return;
     player.hp--;
     if (player.hp <= 0) pendingGameOver = true;
-    player.startDeath('water', api, { surfaceY });
+    const th = liquidTheme();
+    player.startDeath('water', api, { surfaceY, kind: th ? th.kind : 'water' });
   }
   function onDeathStart(p) {
-    shake = Math.max(shake, p.dying === 'water' ? 0.25 : 0.45);
+    shake = Math.max(shake, p.dying === 'water' ? (p.dKind === 'lava' ? 0.45 : 0.25) : 0.45);
   }
   function onDeathAnimDone(p) {
     if (pendingGameOver) { pendingGameOver = false; gameOver(); return; }
@@ -265,20 +266,38 @@ const Game = (() => {
   }
   function spawnDust(x, y, n) { for (let i = 0; i < n; i++) particles.push(mkParticle(x, y, 'dust')); }
   function spawnStars(x, y) { for (let i = 0; i < 10; i++) particles.push(mkParticle(x, y, 'star')); }
-  // пузыри при утопе: всплывают, покачиваясь
-  function spawnBubble(x, y) {
-    particles.push({ x, y, vx: (Math.random() - 0.5) * 22, vy: -46 - Math.random() * 54, g: -26, life: 0.65 + Math.random() * 0.5, maxLife: 1.1, size: 2 + Math.random() * 3, color: 'bubble' });
+  // пузыри при утопе: всплывают, покачиваясь (col — свой цвет, например кислота)
+  function spawnBubble(x, y, col) {
+    particles.push({ x, y, vx: (Math.random() - 0.5) * 22, vy: -46 - Math.random() * 54, g: -26, life: 0.65 + Math.random() * 0.5, maxLife: 1.1, size: 2 + Math.random() * 3, color: col ? 'bubbleC' : 'bubble', tint: col || null });
+  }
+  // искры лавы при утопе в ней: взлетают над поверхностью и гаснут
+  function spawnEmber(x, y) {
+    particles.push({ x, y, vx: (Math.random() - 0.5) * 34, vy: -55 - Math.random() * 75, g: -42, life: 0.45 + Math.random() * 0.4, maxLife: 0.85, size: 2 + Math.random() * 2.5, color: 'ember' });
   }
   // всплеск при погружении: брызги цветом жидкости + расходящееся кольцо на поверхности
+  // (в лаве ещё искры, в кислоте — пузыри)
   function spawnSplash(x, y) {
-    const col = (level && theme(level.bg)) ? theme(level.bg).haz2 : '#6db3e8';
+    const th = liquidTheme();
+    const col = th ? th.haz2 : '#6db3e8';
+    const kind = th ? th.kind : 'water';
     for (let i = 0; i < 12; i++) {
       particles.push({ x: x + (Math.random() - 0.5) * 20, y, vx: (Math.random() - 0.5) * 260, vy: -110 - Math.random() * 190, g: 760, life: 0.35 + Math.random() * 0.35, maxLife: 0.7, size: 3, color: col });
     }
     particles.push({ x, y, vx: 0, vy: 0, g: 0, life: 0.5, maxLife: 0.5, size: 4, color: 'ring', ring: col });
+    if (kind === 'lava') for (let i = 0; i < 6; i++) spawnEmber(x + (Math.random() - 0.5) * 26, y - 4);
+    if (kind === 'acid') for (let i = 0; i < 5; i++) spawnBubble(x + (Math.random() - 0.5) * 26, y - 2, th.haz2);
   }
   // цвета жидкости текущей темы (для анимации утопа в entities.js)
-  function liquidTheme() { const t = theme(level && level.bg); return t ? { haz: t.haz, haz2: t.haz2 } : null; }
+  // kind: вода (поля/город/район/снег), лава (пустыня/вулкан), кислота (завод/небо/финал)
+  // ВАЖНО: bg живёт в level.def.bg (у самого level поля bg нет)
+  function liquidTheme() {
+    const bg = (level && level.def) ? level.def.bg : null;
+    if (!bg) return null;
+    const t = theme(bg); if (!t) return null;
+    const kind = (bg === 'bg_desert' || bg === 'bg_volcano') ? 'lava'
+      : (bg === 'bg_plant' || bg === 'bg_sky' || bg === 'bg_final') ? 'acid' : 'water';
+    return { haz: t.haz, haz2: t.haz2, kind };
+  }
 
   // ---------- ЗЕМЛЕТРЯСЕНИЯ ----------
   // Фазы: idle → warn (2с предупреждение: баннер + крошка с неба) →
@@ -844,13 +863,20 @@ const Game = (() => {
     // частицы
     particles.forEach((p) => {
       ctx.globalAlpha = Math.max(0, p.life / p.maxLife);
-      if (p.color === 'bubble') {
-        // пузырь воздуха: окружность с бликом
-        ctx.strokeStyle = 'rgba(255,255,255,.85)';
+      if (p.color === 'bubble' || p.color === 'bubbleC') {
+        // пузырь воздуха/кислоты: окружность с бликом
+        ctx.strokeStyle = p.color === 'bubbleC' ? (p.tint || '#a8f0a8') : 'rgba(255,255,255,.85)';
         ctx.lineWidth = 1.2;
         ctx.beginPath();
         ctx.arc(p.x - cam, p.y, p.size, 0, 7);
         ctx.stroke();
+      } else if (p.color === 'ember') {
+        // искра лавы: оранжевая точка, мерцает и сжимается, пока гаснет
+        const k = p.life / p.maxLife;
+        ctx.fillStyle = (Math.floor(p.life * 24) % 2) ? '#ffb347' : '#ff7a2a';
+        ctx.beginPath();
+        ctx.arc(p.x - cam, p.y, Math.max(0.5, p.size * k), 0, 7);
+        ctx.fill();
       } else if (p.color === 'ring') {
         // расходящееся кольцо на поверхности жидкости
         const k = 1 - p.life / p.maxLife;

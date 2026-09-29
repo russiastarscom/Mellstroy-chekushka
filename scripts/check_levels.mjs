@@ -1,5 +1,6 @@
 // Валидатор уровней: лут в шипах/пилах/жиже/батутах/стенах, лут без опоры,
-// враги в опасностях/стенах, спавн/завод на опасных тайлах. node scripts/check_levels.mjs
+// враги в опасностях/стенах, спавн/завод на опасных тайлах,
+// жижа шире 4 тайлов (не перепрыгнуть). node scripts/check_levels.mjs
 import fs from 'fs';
 import vm from 'vm';
 const SRC = '/home/z/my-project/public/game/js/levels.js';
@@ -59,6 +60,12 @@ for (const def of LEVELS) {
   if (HAZ.has(tile(lv, sc, 10))) iss.push(`спавн (${sc}) на опасности`);
   const fc = lv.factoryC;
   if (HAZ.has(tile(lv, fc, 10)) || tile(lv, fc, 10) === 'v') iss.push(`завод (${fc}) на «${tile(lv, fc, 10)}»`);
+  // перепрыгиваемость: в сетке не должно остаться жижи шире 4 тайлов подряд
+  let run = 0;
+  for (let c = 0; c <= lv.w; c++) {
+    if (tile(lv, c, 12) === 'L') run++;
+    else { if (run > 4) iss.push(`жижа шире 4 (${c - run}..${c - 1}, ${run} т.) — не перепрыгнуть`); run = 0; }
+  }
   if (iss.length) { issues.push(tag); iss.forEach((m) => issues.push('  ✗ ' + m)); }
 }
 console.log(`Карт: ${maps}, ROWS=${ROWS}, TILE=${TILE}`);
