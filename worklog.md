@@ -694,3 +694,20 @@ Stage Summary:
 - Все диалоги игры заменены на новую комедийную редакцию: 8 реплик катсцены, финалы, 64 карты, подсказки
 - Живо уже: https://russiastarscom.github.io/Mellstroy-chekushka/ (жёсткое обновление Ctrl+Shift+R для кэша)
 - Тест админки больше не привязан к конкретным фразам — переживёт следующие правки текстов
+
+---
+Task ID: 30
+Agent: main (Super Z)
+Task: Окно «СПАСИБО, ЛЕГЕНДА!» при запуске игры
+
+Work Log:
+- index.src.html: новый экран #screen-thanks ПЕРЕД 18+ гейтом — переиспользованы универсальные win-классы (.win-stamp pop, .win-rays вращение, .win-bottle прыжки image/checkushka.png), заголовок «СПАСИБО, ЛЕГЕНДА!», текст «Мелстрой — не просто стритер, но и ЛЕГЕНДА. Эта игра — фанатское „спасибо" за движ. Погнали возвращать заводы!», кнопка «ПОГНАЛИ ▶», мигающий хинт «дальше — проверка 18+»
+- css/style.css: .thanks-title (золото #ffd23f + thanks-glow свечение красным/золотом), .thanks-text b (золото), .thanks-hint (thanks-blink мигание); грабль: переменной --gold нет в :root — заменено на литерал
+- ui.js: SCREENS += 'thanks' (первым), btn-thanks-ok → Audio8.resume()+click+showScreen('gate') (аудио разблокируется первым жестом); main.js: boot UI.showScreen('gate') → UI.showScreen('thanks'); гейт/tooyoung не тронуты, ADMIN CMS OVERRIDE не тронут
+- Сборка: build_inline.py → index.html 227794 байт (thanks инлайнен); sw.js v31→v32; окно показывается при КАЖДОМ запуске (как и гейт)
+- E2E e2e_victory_admin.mjs +5 проверок (thanks.shownAtLaunch/title/legendText/bottleAndBtn/thenGate): 36/36 ✅; скриншот e2e-thanks-window.png (лучи, чекушка, свечение — ок)
+- Деплой: main dba8808; gh-pages 0f2f37e→3781090; на Pages index.html содержит screen-thanks (3 вхождения), sw.js v32
+
+Stage Summary:
+- При каждом запуске игры сначала окно «СПАСИБО, ЛЕГЕНДА!» (золотые лучи + чекушка), по клику «ПОГНАЛИ ▶» — 18+ гейт, дальше как раньше
+- Задеплоено: https://russiastarscom.github.io/Mellstroy-chekushka/ — жёсткое обновление (Ctrl+Shift+R), SW v32
