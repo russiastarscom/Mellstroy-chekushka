@@ -1,0 +1,377 @@
+// ============================================================
+// Загрузчик спрайтов из папки image/
+// Файл есть  → используется он (замена «на лету» при следующей загрузке)
+// Файла нет  → рисуется встроенная пиксельная заглушка
+// Просто закинь свои PNG с этими именами в папку image/:
+//   andrey.png burmaldenets.png boss.png checkushka.png factory.png
+//   tomahawk.png heart.png bg_fields.png bg_city.png bg_district.png bg_plant.png
+// ============================================================
+const Sprites = (() => {
+  const DEFS = {
+    // portrait: [верх, низ] — какая вертикальная полоса спрайта идёт в иконку диалога
+    andrey:       { file: 'image/andrey.png',       w: 48,  h: 56, portrait: [0.14, 0.95] },
+    burmaldenets: { file: 'image/burmaldenets.png', w: 44,  h: 52  },
+    boss:         { file: 'image/boss.png',         w: 76,  h: 92  },
+    checkushka:   { file: 'image/checkushka.png',   w: 24,  h: 32  },
+    factory:      { file: 'image/factory.png',      w: 176, h: 140 },
+    tomahawk:     { file: 'image/tomahawk.png',     w: 20,  h: 20  },
+    heart:        { file: 'image/heart.png',        w: 26,  h: 24  },
+    plush:        { file: 'image/plush.png',        w: 36,  h: 32  },
+    flyer:        { file: 'image/flyer.png',        w: 60,  h: 52  },
+    jumper:       { file: 'image/jumper.png',       w: 52,  h: 72  },
+    armored:      { file: 'image/armored.png',      w: 56,  h: 64  },
+    bg_fields:    { file: 'image/bg_fields.png',    bg: true },
+    bg_city:      { file: 'image/bg_city.png',      bg: true },
+    bg_district:  { file: 'image/bg_district.png',  bg: true },
+    bg_plant:     { file: 'image/bg_plant.png',     bg: true },
+    bg_snow:      { file: 'image/bg_snow.png',      bg: true },
+    bg_desert:    { file: 'image/bg_desert.png',    bg: true },
+    bg_sky:       { file: 'image/bg_sky.png',       bg: true },
+    bg_volcano:   { file: 'image/bg_volcano.png',   bg: true },
+    bg_final:     { file: 'image/bg_final.png',     bg: true },
+  };
+
+  const store = {}; // key -> {img, fallback, w, h}
+  let loaded = false;
+
+  // ---------- вспомогалки для пиксель-арта ----------
+  function mkCanvas(w, h) {
+    const c = document.createElement('canvas');
+    c.width = w; c.height = h;
+    const x = c.getContext('2d');
+    x.imageSmoothingEnabled = false;
+    return [c, x];
+  }
+  function px(x, gx, gy, gw, gh, color, s = 4) {
+    x.fillStyle = color;
+    x.fillRect(gx * s, gy * s, gw * s, gh * s);
+  }
+
+  // ---------- ЗАГЛУШКА: Андрей ----------
+  function fbAndrey() {
+    const [c, x] = mkCanvas(48, 56);
+    const S = 4, W = 12, H = 14;
+    px(x, 3, 0, 6, 2, '#2b2118', S);              // волосы
+    px(x, 3, 2, 6, 3, '#e8b287', S);              // лицо
+    px(x, 7, 3, 1, 1, '#1a1a1a', S);              // глаз
+    px(x, 4, 4, 5, 1, '#a4795a', S);              // щетина
+    px(x, 2, 5, 8, 6, '#1d1d24', S);              // худи
+    px(x, 6, 5, 1, 6, '#3a3a46', S);              // молния
+    px(x, 1, 6, 1, 4, '#1d1d24', S);              // рука Л
+    px(x, 10, 6, 1, 4, '#1d1d24', S);             // рука П
+    px(x, 1, 9, 1, 1, '#e8b287', S);              // кисть
+    px(x, 10, 9, 1, 1, '#e8b287', S);
+    px(x, 3, 11, 3, 2, '#23232e', S);             // штаны
+    px(x, 6, 11, 3, 2, '#23232e', S);
+    px(x, 2, 13, 3, 1, '#e8e8e8', S);             // кроссы
+    px(x, 7, 13, 3, 1, '#e8e8e8', S);
+    return c;
+  }
+
+  // ---------- ЗАГЛУШКА: Бурмалденец ----------
+  function fbEnemy() {
+    const [c, x] = mkCanvas(44, 52);
+    const S = 4, W = 11, H = 13;
+    px(x, 4, 0, 1, 1, '#e63946', S);              // перья
+    px(x, 6, 0, 1, 1, '#ffd23f', S);
+    px(x, 5, 1, 1, 1, '#e63946', S);
+    px(x, 3, 2, 5, 1, '#c1272d', S);              // повязка
+    px(x, 3, 3, 5, 2, '#c68642', S);              // лицо
+    px(x, 6, 3, 1, 1, '#1a1a1a', S);              // злой глаз
+    px(x, 3, 5, 5, 4, '#a9714b', S);              // торс
+    px(x, 2, 5, 1, 3, '#c68642', S);              // руки
+    px(x, 8, 5, 1, 3, '#c68642', S);
+    px(x, 3, 9, 5, 1, '#8b5a2b', S);              // набедренная
+    px(x, 3, 10, 2, 2, '#c68642', S);             // ноги
+    px(x, 6, 10, 2, 2, '#c68642', S);
+    px(x, 2, 12, 2, 1, '#5d4037', S);             // мокасины
+    px(x, 7, 12, 2, 1, '#5d4037', S);
+    px(x, 9, 3, 1, 5, '#795548', S);              // томагавк ручка
+    px(x, 8, 2, 3, 2, '#9e9e9e', S);              // камень
+    return c;
+  }
+
+  // ---------- ЗАГЛУШКА: Вождь ----------
+  function fbBoss() {
+    const [c, x] = mkCanvas(76, 92);
+    const S = 4, W = 19, H = 23;
+    for (let i = 0; i < 5; i++) px(x, 5 + i, 0, 1, 2, i % 2 ? '#ffd23f' : '#e63946', S); // корона перьев
+    px(x, 4, 2, 11, 3, '#e6b422', S);             // шапка вождя
+    px(x, 5, 5, 9, 3, '#c68642', S);              // лицо
+    px(x, 7, 6, 1, 1, '#1a1a1a', S);              // глаза
+    px(x, 11, 6, 1, 1, '#1a1a1a', S);
+    px(x, 7, 7, 5, 1, '#7a4a2b', S);              // рот-крик
+    px(x, 4, 8, 11, 7, '#a9714b', S);             // торс-гора
+    px(x, 2, 9, 2, 5, '#c68642', S);              // руки
+    px(x, 15, 9, 2, 5, '#c68642', S);
+    px(x, 3, 8, 3, 2, '#c68642', S);              // кулаки
+    px(x, 13, 8, 3, 2, '#c68642', S);
+    px(x, 6, 15, 3, 1, '#8b5a2b', S);             // набедренная
+    px(x, 10, 15, 3, 1, '#8b5a2b', S);
+    px(x, 6, 16, 3, 5, '#a9714b', S);             // ноги
+    px(x, 10, 16, 3, 5, '#a9714b', S);
+    px(x, 5, 21, 4, 2, '#5d4037', S);             // сапоги
+    px(x, 10, 21, 4, 2, '#5d4037', S);
+    px(x, 16, 4, 2, 10, '#795548', S);            // дубовый томагавк
+    px(x, 14, 2, 5, 4, '#9e9e9e', S);             // камень
+    return c;
+  }
+
+  // ---------- ЗАГЛУШКА: Чекушка ----------
+  function fbBottle() {
+    const [c, x] = mkCanvas(24, 32);
+    px(x, 9, 0, 6, 2, '#2e6fb7');                 // крышка
+    px(x, 8, 2, 8, 3, '#9fd8b4');                 // горлышко
+    px(x, 8, 2, 2, 3, '#c9efe0');                 // блик
+    px(x, 5, 5, 14, 25, '#8fcaa6');               // бутылка
+    px(x, 5, 5, 3, 25, '#c9efe0');                // блик
+    px(x, 6, 12, 12, 9, '#f2f2f2');               // этикетка
+    x.fillStyle = '#c1272d';
+    x.font = 'bold 8px Arial';
+    x.fillText('МЧ', 8, 19);
+    return c;
+  }
+
+  // ---------- ЗАГЛУШКА: Завод ----------
+  function fbFactory() {
+    const [c, x] = mkCanvas(176, 140);
+    // трубы
+    for (const cx of [10, 34]) {
+      for (let i = 0; i < 7; i++) {
+        x.fillStyle = i % 2 ? '#e8e8e8' : '#c1272d';
+        x.fillRect(cx, 6 + i * 8, 10, 8);
+      }
+    }
+    px(x, 2, 54, 172, 84, '#8f3b2d');             // корпус
+    px(x, 2, 54, 172, 6, '#6d2c21');              // тень крыши
+    // окна
+    for (let i = 0; i < 5; i++) px(x, 8 + i * 9, 64, 6, 8, '#ffd97a');
+    for (let i = 0; i < 5; i++) px(x, 8 + i * 9, 80, 6, 8, '#ffd97a');
+    // вывеска
+    px(x, 30, 92, 60, 16, '#f2f2f2');
+    x.fillStyle = '#1a1a1a'; x.font = 'bold 11px Arial'; x.textAlign = 'center';
+    x.fillText('ЧЕКУШКА', 60, 103);
+    x.textAlign = 'left';
+    // ворота
+    px(x, 70, 108, 36, 32, '#3a2a22');
+    px(x, 86, 108, 2, 32, '#211712');
+    return c;
+  }
+
+  // ---------- ЗАГЛУШКА: Томагавк ----------
+  function fbTomahawk() {
+    const [c, x] = mkCanvas(20, 20);
+    x.strokeStyle = '#795548'; x.lineWidth = 3;
+    x.beginPath(); x.moveTo(4, 16); x.lineTo(15, 4); x.stroke();
+    x.fillStyle = '#9e9e9e';
+    x.fillRect(11, 1, 8, 6);
+    return c;
+  }
+
+  // ---------- ЗАГЛУШКА: Сердечко ----------
+  function fbHeart() {
+    const [c, x] = mkCanvas(26, 24);
+    x.fillStyle = '#ff4757';
+    x.beginPath();
+    x.arc(8, 8, 7, 0, 7); x.arc(18, 8, 7, 0, 7); x.fill();
+    x.beginPath();
+    x.moveTo(1, 11); x.lineTo(13, 23); x.lineTo(25, 11); x.closePath(); x.fill();
+    return c;
+  }
+
+  // ---------- ЗАГЛУШКА: Плюшка (снаряд) ----------
+  function fbPlush() {
+    const [c, x] = mkCanvas(36, 32);
+    x.fillStyle = '#e8a0b4';
+    x.beginPath();
+    x.ellipse(18, 19, 15, 12, 0, 0, 7); x.fill();
+    x.beginPath();
+    x.ellipse(18, 10, 8, 8, 0, 0, 7); x.fill();
+    x.fillStyle = '#c97f95';
+    x.beginPath();
+    x.ellipse(18, 13, 5, 6, 0, 0, 7); x.fill();
+    return c;
+  }
+
+  // ---------- ЗАГЛУШКИ: новые враги глав 1-3 ----------
+  function fbFlyer() {   // Летун — крылатый бурмалденец
+    const [c, x] = mkCanvas(60, 52);
+    const S = 4, W = 15, H = 13;
+    px(x, 0, 2, 4, 1, '#3a3a46', S);              // крыло Л
+    px(x, 11, 2, 4, 1, '#3a3a46', S);             // крыло П
+    px(x, 1, 3, 2, 1, '#55555f', S);
+    px(x, 12, 3, 2, 1, '#55555f', S);
+    px(x, 6, 0, 3, 1, '#e63946', S);              // перья
+    px(x, 5, 2, 5, 1, '#c1272d', S);              // повязка
+    px(x, 5, 3, 5, 2, '#c68642', S);              // лицо
+    px(x, 8, 3, 1, 1, '#1a1a1a', S);              // глаз
+    px(x, 5, 5, 5, 3, '#a9714b', S);              // торс
+    px(x, 4, 6, 1, 2, '#c68642', S);              // руки
+    px(x, 10, 6, 1, 2, '#c68642', S);
+    px(x, 5, 8, 5, 2, '#8b5a2b', S);              // набедренная
+    px(x, 5, 10, 2, 2, '#c68642', S);             // ноги
+    px(x, 8, 10, 2, 2, '#c68642', S);
+    return c;
+  }
+  function fbJumper() {  // Прыгун — бурмалденец на пружинах
+    const [c, x] = mkCanvas(52, 72);
+    const S = 4, W = 13, H = 18;
+    px(x, 5, 0, 3, 1, '#e63946', S);              // перья
+    px(x, 4, 2, 5, 1, '#c1272d', S);              // повязка
+    px(x, 4, 3, 5, 2, '#c68642', S);              // лицо
+    px(x, 7, 3, 1, 1, '#1a1a1a', S);              // глаз
+    px(x, 4, 5, 5, 4, '#a9714b', S);              // торс
+    px(x, 3, 5, 1, 3, '#c68642', S);              // руки
+    px(x, 9, 5, 1, 3, '#c68642', S);
+    px(x, 4, 9, 5, 2, '#8b5a2b', S);              // набедренная
+    px(x, 6, 11, 1, 5, '#9e9e9e', S);             // пружина
+    for (let i = 0; i < 3; i++) px(x, 5, 11 + i * 2, 3, 1, '#7a7a85', S);
+    px(x, 4, 16, 5, 1, '#3a3a46', S);             // база
+    return c;
+  }
+  function fbArmored() { // Щитоносец — бурмалденец со щитом
+    const [c, x] = mkCanvas(56, 64);
+    const S = 4, W = 14, H = 16;
+    px(x, 8, 0, 3, 1, '#e63946', S);              // перья
+    px(x, 7, 2, 5, 1, '#c1272d', S);              // повязка
+    px(x, 7, 3, 5, 2, '#c68642', S);              // лицо
+    px(x, 10, 3, 1, 1, '#1a1a1a', S);             // глаз
+    px(x, 7, 5, 5, 4, '#a9714b', S);              // торс
+    px(x, 2, 2, 4, 12, '#795548', S);             // щит-створка
+    px(x, 2, 2, 4, 1, '#9e9e9e', S);              // оковка
+    px(x, 2, 13, 4, 1, '#9e9e9e', S);
+    px(x, 3, 7, 2, 2, '#ffd23f', S);              // заклёпка
+    px(x, 12, 5, 2, 3, '#c68642', S);             // рука сзади
+    px(x, 7, 9, 5, 2, '#8b5a2b', S);              // набедренная
+    px(x, 7, 11, 2, 4, '#c68642', S);             // ноги
+    px(x, 10, 11, 2, 4, '#c68642', S);
+    px(x, 7, 15, 2, 1, '#5d4037', S);             // мокасины
+    px(x, 10, 15, 2, 1, '#5d4037', S);
+    return c;
+  }
+
+  const FALLBACKS = {
+    andrey: fbAndrey, burmaldenets: fbEnemy, boss: fbBoss, checkushka: fbBottle,
+    factory: fbFactory, tomahawk: fbTomahawk, heart: fbHeart, plush: fbPlush,
+    flyer: fbFlyer, jumper: fbJumper, armored: fbArmored,
+  };
+
+  // ---------- Загрузка ----------
+  function loadOne(key, def) {
+    return new Promise((resolve) => {
+      const img = new Image();
+      const done = (ok) => {
+        store[key] = {
+          img: ok ? img : null,
+          fallback: FALLBACKS[key] ? FALLBACKS[key]() : null,
+          w: def.w, h: def.h, bg: !!def.bg, pr: def.portrait || null,
+        };
+        resolve();
+      };
+      img.onload = () => done(true);
+      img.onerror = () => done(false);
+      img.src = def.file;
+    });
+  }
+
+  async function load() {
+    if (loaded) return;
+    await Promise.all(Object.entries(DEFS).map(([k, d]) => loadOne(k, d)));
+    loaded = true;
+  }
+
+  // Подмена спрайтов с сервера (админ-панель): {key: url}
+  // Картинка вписывается в тот же слот w/h, фолбэк и портрет остаются.
+  function setCustom(map) {
+    Object.entries(map || {}).forEach(([key, url]) => {
+      const def = DEFS[key];
+      if (!def || !url) return;
+      const img = new Image();
+      img.onload = () => {
+        if (store[key]) store[key].img = img;
+        else store[key] = { img, fallback: FALLBACKS[key] ? FALLBACKS[key]() : null, w: def.w, h: def.h, bg: !!def.bg, pr: def.portrait || null };
+      };
+      img.src = url;
+    });
+  }
+
+  // Динамический слот (кастомные объекты из админ-панели): создаёт ключ
+  // спрайта с нуля — 'obj-<id>'. color — цвет заглушки, пока PNG не грузится.
+  function addSlot(key, { w, h, url, color, portrait }) {
+    if (!key || !url) return;
+    const img = new Image();
+    img.onload = () => {
+      store[key] = { img, fallback: null, w: w || 32, h: h || 32, bg: false, pr: portrait || null };
+    };
+    img.src = url;
+    // мгновенная заглушка, чтобы объект был виден даже до загрузки PNG
+    if (!store[key]) {
+      const [c, x] = mkCanvas(Math.max(8, Math.round(w || 32)), Math.max(8, Math.round(h || 32)));
+      x.fillStyle = color || '#9a4de6';
+      x.fillRect(0, 0, c.width, c.height);
+      x.fillStyle = 'rgba(255,255,255,.35)';
+      x.fillRect(0, 0, c.width, Math.max(2, c.height * 0.18));
+      store[key] = { img: null, fallback: c, w: w || 32, h: h || 32, bg: false, pr: portrait || null };
+    }
+  }
+
+  function get(key) { return store[key]; }
+
+  // Нарисовать спрайт (img или фолбэк).
+  // flip — зеркально; rot — поворот в радианах ВОКРУГ ЦЕНТРА; alpha — прозрачность.
+  function draw(ctx, key, x, y, w, h, flip = false, rot = 0, alpha = 1) {
+    const s = store[key];
+    if (!s) return;
+    const src = s.img || s.fallback;
+    if (!src) return;
+    ctx.save();
+    if (alpha < 1) ctx.globalAlpha *= Math.max(0, Math.min(1, alpha));
+    ctx.translate(x + w / 2, y + h / 2);
+    if (rot) ctx.rotate(rot);
+    ctx.scale(flip ? -1 : 1, 1);
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(src, -w / 2, -h / 2, w, h);
+    ctx.restore();
+  }
+
+  // Портрет для диалогов: контент по альфе -> верхние ~2/3 -> вписать без искажений
+  function portrait(key, canvas) {
+    const s = store[key];
+    const x = canvas.getContext('2d');
+    x.clearRect(0, 0, canvas.width, canvas.height);
+    x.imageSmoothingEnabled = false;
+    if (!s) return;
+    const src = s.img || s.fallback;
+    if (!src) return;
+    let bx = 0, by = 0, bw = src.width, bh = src.height;
+    try {
+      const t = document.createElement('canvas');
+      t.width = src.width; t.height = src.height;
+      const tx = t.getContext('2d');
+      tx.drawImage(src, 0, 0);
+      const d = tx.getImageData(0, 0, t.width, t.height).data;
+      let x0 = t.width, y0 = t.height, x1 = -1, y1 = -1;
+      for (let yy = 0; yy < t.height; yy++) {
+        for (let xx = 0; xx < t.width; xx++) {
+          if (d[(yy * t.width + xx) * 4 + 3] > 24) {
+            if (xx < x0) x0 = xx;
+            if (xx > x1) x1 = xx;
+            if (yy < y0) y0 = yy;
+            if (yy > y1) y1 = yy;
+          }
+        }
+      }
+      if (x1 > x0 && y1 > y0) { bx = x0; by = y0; bw = x1 - x0 + 1; bh = y1 - y0 + 1; }
+    } catch (e) { /* tainted canvas — используем весь кадр */ }
+    // вертикальная полоса портрета: персональная (pr) или верхние ~2/3 (голова и плечи)
+    const band = s.pr || [0, 0.66];
+    const py0 = by + Math.round(bh * band[0]);
+    const py1 = Math.min(by + bh, by + Math.round(bh * band[1]));
+    const hh = Math.max(1, py1 - py0);
+    const sc = Math.min(canvas.width / bw, canvas.height / hh);
+    const dw = bw * sc, dh = hh * sc;
+    x.drawImage(src, bx, py0, bw, hh, (canvas.width - dw) / 2, (canvas.height - dh) / 2, dw, dh);
+  }
+
+  return { load, setCustom, addSlot, get, draw, portrait, isReady: () => loaded, SLOTS: Object.keys(DEFS) };
+})();

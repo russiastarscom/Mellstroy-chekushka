@@ -1,0 +1,17 @@
+{
+  "name": "Мелстрой: Мировая Чекушка",
+  "short_name": "Чекушка",
+  "description": "18+. Треш-платформер: Андрей отбивает заводы мировой чекушки у бурмалденцев. Мат и чёрный юмор.",
+  "lang": "ru",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "background_color": "#0d0d1a",
+  "theme_color": "#0d0d1a",
+  "icons": [
+    { "src": "image/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "image/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "image/icon-512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
