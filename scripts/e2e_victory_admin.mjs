@@ -12,6 +12,27 @@ const ok = (k, v) => { res[k] = v; console.log((v ? '  ✅' : '  ❌') + ' ' + k
 
 await page.goto(BASE + '/index.html', { waitUntil: 'load' });
 await page.waitForFunction(() => !!window.GameDebug, null, { timeout: 15000 });
+
+// ---------- 0. Окно «СПАСИБО, ЛЕГЕНДА!» при запуске ----------
+const th = await page.evaluate(() => {
+  const s = document.getElementById('screen-thanks');
+  return {
+    visible: !!s && !s.classList.contains('hidden'),
+    title: (s.querySelector('.thanks-title') || {}).textContent || '',
+    text: (s.querySelector('.thanks-text') || {}).textContent || '',
+    hasBottle: !!s.querySelector('.win-bottle'),
+    hasBtn: !!document.getElementById('btn-thanks-ok'),
+    gateHidden: document.getElementById('screen-gate').classList.contains('hidden'),
+  };
+});
+ok('thanks.shownAtLaunch', th.visible && th.gateHidden);
+ok('thanks.title', /СПАСИБО, ЛЕГЕНДА/i.test(th.title));
+ok('thanks.legendText', /не просто стритер/i.test(th.text) && /ЛЕГЕНДА/i.test(th.text));
+ok('thanks.bottleAndBtn', th.hasBottle && th.hasBtn);
+await page.click('#btn-thanks-ok');
+await sleep(250);
+ok('thanks.thenGate', await page.evaluate(() => !document.getElementById('screen-gate').classList.contains('hidden')));
+
 await page.evaluate(() => { [...document.querySelectorAll('#screen-gate button')].find((b) => /18/.test(b.textContent)).click(); });
 await sleep(400);
 

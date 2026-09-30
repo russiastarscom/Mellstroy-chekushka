@@ -1154,7 +1154,7 @@ const Game = (() => {
     UI.init(callbacks);
     bindInput();
     registerSW();
-    UI.showScreen('gate'); // сначала 18+
+    UI.showScreen('thanks'); // сначала «СПАСИБО, ЛЕГЕНДА!», потом 18+
     state = 'menu';
     // отладочный хук (можно дёргать из консоли)
     window.GameDebug = {
