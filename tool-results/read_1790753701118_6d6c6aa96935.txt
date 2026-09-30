@@ -1,0 +1,500 @@
+     1→<!DOCTYPE html>
+     2→<html lang="ru">
+     3→<head>
+     4→<meta charset="utf-8">
+     5→<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+     6→<title>АДМИН-ПАНЕЛЬ | Мелстрой: Мировая Чекушка</title>
+     7→<meta name="theme-color" content="#0b0b14">
+     8→<meta name="mobile-web-app-capable" content="yes">
+     9→<meta name="apple-mobile-web-app-capable" content="yes">
+    10→<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    11→<meta name="apple-mobile-web-app-title" content="АДМИН Чекушка">
+    12→<link rel="manifest" href="admin-manifest.json">
+    13→<link rel="icon" href="image/icon-192.png" type="image/png">
+    14→<style>
+    15→  /* ==========================================================
+    16→     АДМИН-ПАНЕЛЬ v2 — mobile-first редизайн
+    17→     Тема: тёмный треш-аркада (красный + золото).
+    18→     Контракт с admin.js: все id, классы .tool/.act/.pane/.line/
+    19→     .iconbtn/.addline/.tex/.objcard/.track/.soc/.qchk/.qrow сохранены.
+    20→     ========================================================== */
+    21→  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+    22→  html { -webkit-text-size-adjust: 100%; }
+    23→  html, body { height: 100%; }
+    24→  body {
+    25→    background:
+    26→      radial-gradient(1200px 500px at 50% -10%, #1d1030 0%, transparent 60%),
+    27→      #0b0b14;
+    28→    color: #e8e8f0;
+    29→    font: 14px/1.45 system-ui, -apple-system, 'Segoe UI', Arial, sans-serif;
+    30→    padding-bottom: calc(env(safe-area-inset-bottom) + 132px);
+    31→  }
+    32→  button { font-family: inherit; touch-action: manipulation; }
+    33→  input, select, textarea { font-family: inherit; }
+    34→  ::-webkit-scrollbar { height: 4px; width: 6px; }
+    35→  ::-webkit-scrollbar-thumb { background: #3a3a5a; border-radius: 4px; }
+    36→
+    37→  /* ---------- Шапка ---------- */
+    38→  header {
+    39→    background: linear-gradient(180deg, #1c0d17 0%, #12121f 100%);
+    40→    border-bottom: 1px solid #2c2c4a;
+    41→    padding: calc(env(safe-area-inset-top) + 8px) 12px 8px;
+    42→  }
+    43→  .h-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    44→  header h1 { font-size: 15px; color: #ffd23f; letter-spacing: .4px; display: flex; align-items: center; gap: 8px; flex: 1; min-width: 200px; }
+    45→  header h1 small { color: #8a8aa0; font-size: 10px; font-weight: normal; display: block; }
+    46→  #rev-badge { font-size: 10px; font-weight: 600; color: #9fd3ff; background: #16243a; border: 1px solid #2c4a6e; border-radius: 10px; padding: 3px 9px; white-space: nowrap; }
+    47→  #status { font-size: 12px; color: #9fe8a0; margin-top: 5px; line-height: 1.35; }
+    48→  #status.none { color: #8a8aa0; }
+    49→  #status.dirty { color: #ffd23f; }
+    50→
+    51→  /* ---------- Вкладки-режимы ---------- */
+    52→  #modes {
+    53→    position: sticky; top: 0; z-index: 29;
+    54→    display: flex; gap: 6px; padding: 8px 10px;
+    55→    background: rgba(13, 13, 24, .92);
+    56→    backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+    57→    overflow-x: auto; scrollbar-width: none;
+    58→    border-bottom: 1px solid #23233a;
+    59→  }
+    60→  #modes::-webkit-scrollbar { display: none; }
+    61→  #modes button {
+    62→    background: #1d1d33; color: #cfcfe6;
+    63→    border: 1px solid #32325a; border-radius: 12px;
+    64→    padding: 10px 14px; cursor: pointer; font-weight: 700; font-size: 13px;
+    65→    white-space: nowrap; min-height: 44px;
+    66→  }
+    67→  #modes button.active { background: linear-gradient(180deg, #ff4d5e, #d42f42); color: #fff; border-color: #ff6b7a; box-shadow: 0 3px 14px #e6394655; }
+    68→  #modes button .dot { color: #ffd23f; }
+    69→
+    70→  .pane { display: none; }
+    71→  .pane.active { display: block; }
+    72→
+    73→  /* ---------- КАРТЫ ---------- */
+    74→  #lvl-tabs { display: flex; gap: 6px; padding: 10px 10px 0; overflow-x: auto; scrollbar-width: none; align-items: center; }
+    75→  #lvl-tabs::-webkit-scrollbar { display: none; }
+    76→  #lvl-tabs button { background: #1d1d33; color: #cfcfe6; border: 1px solid #32325a; border-radius: 10px; padding: 9px 12px; min-height: 40px; cursor: pointer; font-weight: bold; white-space: nowrap; font-size: 13px; }
+    77→  #lvl-tabs button.active { background: linear-gradient(180deg, #3c1e63, #2a1445); border-color: #9a4de6; color: #fff; }
+    78→  #lvl-tabs button .dirty { color: #ffd23f; }
+    79→  #btn-add-map { background: #1d5c33 !important; border-color: #2ed57355 !important; color: #fff !important; }
+    80→
+    81→  #toolbar {
+    82→    display: flex; gap: 6px; align-items: center; padding: 10px;
+    83→    background: #12121f; border-bottom: 1px solid #23233a;
+    84→    overflow-x: auto; scrollbar-width: none;
+    85→  }
+    86→  #toolbar::-webkit-scrollbar { display: none; }
+    87→  .tool {
+    88→    background: #1d1d33; border: 2px solid #32325a; color: #cfcfe6;
+    89→    border-radius: 12px; padding: 8px 10px; cursor: pointer; font-size: 11px;
+    90→    min-width: 56px; min-height: 52px; text-align: center; flex: 0 0 auto;
+    91→    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+    92→  }
+    93→  .tool.active { border-color: #ffd23f; background: #2e2a15; color: #ffe9a8; box-shadow: 0 0 0 1px #ffd23f66, 0 3px 12px #ffd23f22; }
+    94→  .tool b { display: block; font-size: 19px; line-height: 1; }
+    95→  .sep { width: 1px; height: 34px; background: #32325a; margin: 0 4px; flex: 0 0 auto; }
+    96→
+    97→  .opts-card {
+    98→    margin: 10px; padding: 12px;
+    99→    background: #16162a; border: 1px solid #2c2c4a; border-radius: 14px;
+   100→    display: flex; gap: 10px; flex-wrap: wrap; align-items: center;
+   101→  }
+   102→  .opts-card label { color: #8a8aa0; font-size: 13px; display: flex; align-items: center; gap: 6px; }
+   103→  #lvlname { background: #10101f; border: 1px solid #32325a; color: #fff; border-radius: 10px; padding: 10px 12px; width: 190px; font-weight: bold; font-size: 16px; }
+   104→  #lvbg { background: #10101f; border: 1px solid #32325a; color: #fff; border-radius: 10px; padding: 10px; font-size: 14px; max-width: 46vw; }
+   105→  #bosshp { background: #10101f; border: 1px solid #32325a; color: #fff; border-radius: 10px; padding: 10px; width: 70px; font-size: 16px; }
+   106→  #lvquake { width: 20px; height: 20px; accent-color: #e63946; }
+   107→  #quakeopts { display: none; gap: 12px; align-items: center; flex-wrap: wrap; color: #8a8aa0; width: 100%; }
+   108→  #quakeopts label { display: flex; align-items: center; gap: 6px; font-size: 13px; }
+   109→  #quakeopts input[type=range] { width: 90px; accent-color: #e63946; }
+   110→  #quakeopts b { color: #fff; min-width: 30px; display: inline-block; }
+   111→  #qkrocks { width: 18px; height: 18px; accent-color: #e63946; }
+   112→
+   113→  #canvaswrap { overflow: auto; padding: 8px; background: #0b0b14; -webkit-overflow-scrolling: touch; }
+   114→  #cv { background: #16162c; border: 1px solid #33335a; border-radius: 8px; touch-action: none; cursor: crosshair; image-rendering: pixelated; }
+   115→  #cellinfo { padding: 0 12px; color: #6fc0ff; font-size: 12px; min-height: 18px; }
+   116→  #hint { padding: 2px 12px 10px; color: #8a8aa0; font-size: 12px; line-height: 1.5; }
+   117→
+   118→  /* ---------- Кнопки-действия ---------- */
+   119→  .act {
+   120→    background: #1d5c33; border: none; color: #fff; border-radius: 12px;
+   121→    padding: 12px 14px; cursor: pointer; font-weight: bold; font-size: 14px; min-height: 46px;
+   122→  }
+   123→  .act:active { transform: scale(.97); }
+   124→  .act.warn { background: #6e2634; }
+   125→  .act.gray { background: #2c2c4a; }
+   126→  .act.big {
+   127→    background: linear-gradient(180deg, #ff4d5e, #d42f42);
+   128→    font-size: 15px; box-shadow: 0 4px 16px #e6394655;
+   129→  }
+   130→
+   131→  /* ---------- РАЗГОВОРЫ ---------- */
+   132→  .dlg-wrap { padding: 12px 10px; }
+   133→  .dlg-block { background: #16162a; border: 1px solid #2c2c4a; border-radius: 14px; padding: 12px; margin-bottom: 14px; }
+   134→  .dlg-block h3 { font-size: 14px; color: #ffd23f; margin-bottom: 8px; }
+   135→  .dlg-block .sub { color: #8a8aa0; font-size: 12px; margin-bottom: 8px; line-height: 1.45; }
+   136→  .line { background: #1d1d33; border: 1px solid #32325a; border-radius: 12px; padding: 9px; margin-bottom: 9px; }
+   137→  .line-top { display: flex; gap: 6px; align-items: center; margin-bottom: 6px; flex-wrap: wrap; }
+   138→  .line-top select, .line-top input { background: #10101f; border: 1px solid #32325a; color: #fff; border-radius: 9px; padding: 10px 9px; font-size: 16px; }
+   139→  .line-top select.who { width: 150px; }
+   140→  .line-top input.hintc { width: 66px; }
+   141→  .line-top .grow { flex: 1; min-width: 120px; }
+   142→  .line textarea, .dlg-block textarea { width: 100%; min-height: 64px; background: #10101f; border: 1px solid #32325a; color: #e8e8f0; border-radius: 9px; padding: 9px 10px; font: 16px/1.4 system-ui, Arial, sans-serif; resize: vertical; }
+   143→  .iconbtn { background: #32325a; border: none; color: #fff; border-radius: 9px; width: 42px; height: 42px; cursor: pointer; font-size: 16px; flex: 0 0 auto; }
+   144→  .iconbtn.del { background: #6e2634; }
+   145→  .addline { background: #1d5c33; border: none; color: #fff; border-radius: 10px; padding: 11px 14px; cursor: pointer; font-weight: bold; font-size: 14px; min-height: 44px; }
+   146→  .who-grid { display: flex; gap: 10px; flex-wrap: wrap; }
+   147→  .who-grid > div { flex: 1; min-width: 260px; }
+   148→  .col-label { color: #9fe8a0; font-size: 12px; margin: 6px 0; }
+   149→
+   150→  /* ---------- ТЕКСТУРЫ ---------- */
+   151→  #texgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; padding: 12px 10px; }
+   152→  .tex { background: #16162a; border: 1px solid #2c2c4a; border-radius: 14px; padding: 10px; }
+   153→  .tex .prev { height: 84px; display: flex; align-items: center; justify-content: center; background: repeating-conic-gradient(#1c1c30 0 25%, #14142a 0 50%) 0 0/16px 16px; border-radius: 10px; margin-bottom: 8px; overflow: hidden; }
+   154→  .tex .prev img { max-width: 100%; max-height: 84px; image-rendering: pixelated; }
+   155→  .tex .tname { font-weight: bold; font-size: 13px; }
+   156→  .tex .tinfo { color: #8a8aa0; font-size: 11px; margin: 2px 0 8px; }
+   157→  .tex .trow { display: flex; gap: 6px; flex-wrap: wrap; }
+   158→  .tex .badge { display: inline-block; background: #1d5c33; color: #fff; font-size: 10px; padding: 2px 7px; border-radius: 8px; margin-left: 6px; vertical-align: middle; }
+   159→
+   160→  /* ---------- ОБЪЕКТЫ (скриптуемые) ---------- */
+   161→  #objlist { padding: 12px 10px 4px; display: flex; flex-direction: column; gap: 12px; }
+   162→  .objcard { background: #16162a; border: 1px solid #2c2c4a; border-radius: 14px; padding: 12px; }
+   163→  .objcard .orow { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; }
+   164→  .objcard input, .objcard select { background: #10101f; border: 1px solid #32325a; color: #fff; border-radius: 9px; padding: 10px; font-size: 16px; }
+   165→  .objcard input.emoji { width: 58px; text-align: center; font-size: 18px; }
+   166→  .objcard input.nm { width: 150px; font-weight: bold; }
+   167→  .objcard input.dim { width: 70px; }
+   168→  .objcard .prev { width: 74px; height: 74px; flex: 0 0 auto; display: flex; align-items: center; justify-content: center; background: repeating-conic-gradient(#1c1c30 0 25%, #14142a 0 50%) 0 0/14px 14px; border-radius: 10px; overflow: hidden; }
+   169→  .objcard .prev img { max-width: 100%; max-height: 100%; image-rendering: pixelated; }
+   170→  .objcard .prev span { font-size: 30px; }
+   171→  .objcard textarea.script { width: 100%; min-height: 140px; background: #0d0d18; border: 1px solid #32325a; color: #d7e4ff; border-radius: 10px; padding: 10px; font: 12px/1.55 'Courier New', monospace; resize: vertical; white-space: pre; }
+   172→  .objcard .apinote { color: #6a6a85; font-size: 11px; line-height: 1.55; margin-top: 6px; }
+   173→  .objcard .apinote b { color: #9fd8b4; font-weight: bold; }
+   174→  .objcard label.chk { color: #9fe8a0; font-size: 13px; display: flex; gap: 6px; align-items: center; cursor: pointer; }
+   175→  .objcard label.chk input { width: 18px; height: 18px; accent-color: #2ed573; }
+   176→
+   177→  /* ---------- МУЗЫКА ---------- */
+   178→  .mus-wrap { padding: 12px 10px; }
+   179→  .track { display: flex; gap: 8px; align-items: center; background: #16162a; border: 1px solid #2c2c4a; border-radius: 12px; padding: 10px; margin-bottom: 8px; flex-wrap: wrap; }
+   180→  .track .tname { flex: 1; min-width: 140px; font-weight: bold; word-break: break-all; }
+   181→  .track.active { border-color: #2ed57388; }
+   182→  .tagok { background: #1d5c33; color: #fff; font-size: 10px; padding: 3px 8px; border-radius: 8px; }
+   183→  .note { color: #8a8aa0; font-size: 12px; padding: 12px 12px 10px; line-height: 1.5; }
+   184→
+   185→  /* ---------- ЗЕМЛЕТРЯСЕНИЯ ---------- */
+   186→  .qk-wrap { padding: 12px 10px; }
+   187→  .qchk { display: flex; gap: 10px; align-items: center; background: #16162a; border: 1px solid #2c2c4a; border-radius: 12px; padding: 12px; margin-bottom: 8px; cursor: pointer; font-weight: bold; font-size: 14px; }
+   188→  .qchk input { width: 22px; height: 22px; accent-color: #e63946; flex: 0 0 auto; }
+   189→  .qchk small { color: #8a8aa0; font-weight: normal; display: block; font-size: 12px; }
+   190→  .qrow { background: #16162a; border: 1px solid #2c2c4a; border-radius: 12px; padding: 12px; margin-bottom: 8px; }
+   191→  .qrow .qtop { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; color: #cfcfe6; font-size: 14px; }
+   192→  .qrow .qtop b { color: #ffd23f; font-size: 15px; }
+   193→  .qrow input[type=range] { width: 100%; height: 34px; accent-color: #e63946; }
+   194→
+   195→  /* ---------- КАНАЛЫ ---------- */
+   196→  .soc-wrap { padding: 12px 10px; }
+   197→  .soc { display: flex; gap: 6px; align-items: center; background: #16162a; border: 1px solid #2c2c4a; border-radius: 12px; padding: 9px; margin-bottom: 8px; flex-wrap: wrap; }
+   198→  .soc input, .soc select { background: #10101f; border: 1px solid #32325a; color: #fff; border-radius: 9px; padding: 10px; font-size: 16px; }
+   199→  .soc input.name { width: 130px; }
+   200→  .soc input.url { flex: 1; min-width: 150px; }
+   201→
+   202→  /* ---------- Нижняя панель действий ---------- */
+   203→  #actionbar {
+   204→    position: fixed; left: 0; right: 0; bottom: 0; z-index: 40;
+   205→    display: flex; gap: 8px; align-items: stretch; flex-wrap: wrap;
+   206→    padding: 10px 12px calc(env(safe-area-inset-bottom) + 10px);
+   207→    background: rgba(18, 18, 31, .96);
+   208→    backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+   209→    border-top: 1px solid #2c2c4a;
+   210→    box-shadow: 0 -8px 24px rgba(0, 0, 0, .5);
+   211→  }
+   212→  #actionbar .row { display: flex; gap: 8px; width: 100%; }
+   213→  #actionbar .row .act { flex: 1; }
+   214→
+   215→  /* ---------- Тост ---------- */
+   216→  #toast {
+   217→    position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom) + 122px);
+   218→    transform: translateX(-50%);
+   219→    background: #d42f42; color: #fff; padding: 11px 18px; border-radius: 12px;
+   220→    font-weight: bold; font-size: 13px; opacity: 0; transition: opacity .25s;
+   221→    pointer-events: none; max-width: 92vw; z-index: 60; text-align: center;
+   222→    box-shadow: 0 6px 24px rgba(0, 0, 0, .5);
+   223→  }
+   224→  #toast.ok { background: #1d8a4a; }
+   225→  #toast.show { opacity: 1; }
+   226→
+   227→  /* ---------- Зум ---------- */
+   228→  #zoombox { display: flex; gap: 4px; align-items: center; color: #8a8aa0; flex: 0 0 auto; }
+   229→  #zoombox button { width: 40px; height: 40px; border-radius: 9px; border: 1px solid #32325a; background: #1d1d33; color: #fff; cursor: pointer; font-size: 18px; }
+   230→  #zoom-val { font-size: 12px; min-width: 34px; text-align: center; }
+   231→
+   232→  /* ---------- GitHub-инструкция (модалка) ---------- */
+   233→  #gh-help {
+   234→    position: fixed; inset: 0; z-index: 80; display: none;
+   235→    background: rgba(5, 5, 12, .78); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
+   236→    align-items: flex-end; justify-content: center;
+   237→  }
+   238→  #gh-help.open { display: flex; }
+   239→  .gh-card {
+   240→    background: #16162a; border: 1px solid #32325a; border-radius: 18px 18px 0 0;
+   241→    width: 100%; max-width: 640px; max-height: 86vh; overflow: auto;
+   242→    padding: 18px 16px calc(env(safe-area-inset-bottom) + 18px);
+   243→  }
+   244→  .gh-card h3 { color: #ffd23f; font-size: 16px; margin-bottom: 10px; }
+   245→  .gh-card ol { padding-left: 20px; display: grid; gap: 10px; font-size: 13.5px; line-height: 1.5; color: #d8d8ea; }
+   246→  .gh-card b { color: #ffd23f; }
+   247→  .gh-card code { background: #0d0d18; border: 1px solid #32325a; border-radius: 6px; padding: 1px 6px; font-size: 12px; color: #9fd3ff; word-break: break-all; }
+   248→  .gh-card .gh-note { margin-top: 12px; color: #8a8aa0; font-size: 12.5px; line-height: 1.5; border-top: 1px solid #2c2c4a; padding-top: 10px; }
+   249→  #btn-gh-close { position: sticky; top: 0; float: right; background: #32325a; border: none; color: #fff; width: 38px; height: 38px; border-radius: 10px; font-size: 16px; cursor: pointer; }
+   250→
+   251→  /* ---------- Планшет/десктоп ---------- */
+   252→  @media (min-width: 761px) {
+   253→    body { padding-bottom: 132px; }
+   254→    header, #modes, #lvl-tabs, #toolbar, .dlg-wrap, #texgrid, #objlist, .mus-wrap, .qk-wrap, .soc-wrap { max-width: 1100px; margin-left: auto; margin-right: auto; }
+   255→    header { padding-left: 0; padding-right: 0; }
+   256→    .h-row, #status { max-width: 1100px; margin-left: auto; margin-right: auto; }
+   257→    #actionbar { max-width: 1100px; left: 50%; transform: translateX(-50%); border-radius: 16px 16px 0 0; border: 1px solid #2c2c4a; border-bottom: none; }
+   258→    #toast { left: 50%; }
+   259→    .line textarea { min-height: 56px; font-size: 14px; }
+   260→    #lvlname { font-size: 14px; }
+   261→    .line-top select, .line-top input, .soc input, .soc select, .objcard input { font-size: 14px; }
+   262→    #gh-help { align-items: center; }
+   263→    .gh-card { border-radius: 18px; }
+   264→  }
+   265→  @media (max-width: 760px) {
+   266→    #texgrid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+   267→    #hint { display: none; }
+   268→  }
+   269→</style>
+   270→</head>
+   271→<body>
+   272→<header>
+   273→  <div class="h-row">
+   274→    <h1>⚙ АДМИН-ПАНЕЛЬ <small>временная • правки для всех игроков</small></h1>
+   275→    <span id="rev-badge"></span>
+   276→  </div>
+   277→  <div id="status" class="none">загрузка…</div>
+   278→</header>
+   279→
+   280→<div id="modes">
+   281→  <button data-mode="maps" class="active">🗺 КАРТЫ</button>
+   282→  <button data-mode="dialogs">💬 РАЗГОВОРЫ</button>
+   283→  <button data-mode="textures">🖼 ТЕКСТУРЫ</button>
+   284→  <button data-mode="objects">🧩 ОБЪЕКТЫ</button>
+   285→  <button data-mode="music">🎵 МУЗЫКА</button>
+   286→  <button data-mode="socials">📢 КАНАЛЫ</button>
+   287→  <button data-mode="quake">🌍 ТРЯСКА</button>
+   288→</div>
+   289→
+   290→<!-- ================= КАРТЫ ================= -->
+   291→<div class="pane active" id="pane-maps">
+   292→  <div id="lvl-tabs"></div>
+   293→  <div id="toolbar">
+   294→    <button class="tool" data-tool="ground" title="Земля, только 2 нижних ряда"><b>▓</b>земля</button>
+   295→    <button class="tool" data-tool="B" title="Кирпич — твёрдый, любой ряд"><b>🧱</b>кирпич</button>
+   296→    <button class="tool" data-tool="=" title="Платформа — можно спрыгнуть вниз"><b>▬</b>платф.</button>
+   297→    <button class="tool" data-tool="^" title="Шипы — урон"><b>▲</b>шипы</button>
+   298→    <button class="tool" data-tool="L" title="Жидкость (полынья/лава/кислота) — урон, на дне ям"><b>🌊</b>жижа</button>
+   299→    <button class="tool" data-tool="v" title="Батут — подброс (на бегу — двойное сальто)"><b>🤸</b>батут</button>
+   300→    <button class="tool" data-tool="C" title="Сыпучая платформа — обрушается, если постоять"><b>🪨</b>сыпучая</button>
+   301→    <button class="tool" data-tool="S" title="Пила — крутится, урон при касании"><b>🪚</b>пила</button>
+   302→    <button class="tool" data-tool="erase" title="Ластик — стереть тайл/сущность"><b>⌫</b>ластик</button>
+   303→    <div class="sep"></div>
+   304→    <button class="tool" data-tool="e" title="Рядовой бурмалдинец"><b>👊</b>враг</button>
+   305→    <button class="tool" data-tool="t" title="Метатель томагавков"><b>🪓</b>метатель</button>
+   306→    <button class="tool" data-tool="f" title="Летун — летает синусоидой"><b>🕊</b>летун</button>
+   307→    <button class="tool" data-tool="j" title="Прыгун — скачет по таймеру"><b>🦘</b>прыгун</button>
+   308→    <button class="tool" data-tool="a" title="Щитоносец — стомп не берёт, только плюшка"><b>🛡</b>щит.</button>
+   309→    <button class="tool" data-tool="G" title="Вождь (босс)"><b>👑</b>вождь</button>
+   310→    <button class="tool" data-tool="bottle" title="Чекушка (+1)"><b>🍾</b>чекушка</button>
+   311→    <button class="tool" data-tool="heart" title="Сердечко (+1 HP)"><b>❤</b>сердце</button>
+   312→    <button class="tool" data-tool="plush" title="Гора плюшек (+3 снаряда)"><b>🧸</b>плюшки</button>
+   313→    <button class="tool" data-tool="spawn" title="Старт Андрея"><b>🚩</b>старт</button>
+   314→    <button class="tool" data-tool="factory" title="Завод (выход)"><b>🏭</b>завод</button>
+   315→    <span id="custom-tools" style="display:contents"></span>
+   316→    <div class="sep"></div>
+   317→    <button class="tool" id="btn-undo" title="Отменить (Ctrl+Z)"><b>↩</b>отмена</button>
+   318→    <div id="zoombox"><button id="zoom-out">−</button><span id="zoom-val"></span><button id="zoom-in">+</button></div>
+   319→  </div>
+   320→  <div class="opts-card" id="mapopts">
+   321→    <label>Название: <input id="lvlname"></label>
+   322→    <label>Фон: <select id="lvbg">
+   323→      <option value="bg_fields">Поля</option>
+   324→      <option value="bg_city">Город</option>
+   325→      <option value="bg_district">Район</option>
+   326→      <option value="bg_plant">Завод (ночь)</option>
+   327→    </select></label>
+   328→    <label title="Здоровье вождя, если он стоит на карте">HP вождя: <input id="bosshp" type="number" min="1" max="30" value="6"></label>
+   329→    <label title="Землетрясение именно на ЭТОЙ карте — работает даже в прологе и на босс-аренах">🌍 Тряска: <input id="lvquake" type="checkbox"></label>
+   330→    <span id="quakeopts">
+   331→      <label title="Сила толчков">сила <input id="qkpow" type="range" min="0.3" max="2.5" step="0.1" value="1"><b id="qkpowv">1.0</b></label>
+   332→      <label title="Секунд между толчками">каждые <input id="qkint" type="range" min="5" max="60" step="1" value="20"><b id="qkintv">20с</b></label>
+   333→      <label title="Длительность одного толчка, сек">длит. <input id="qkdur" type="range" min="2" max="12" step="0.5" value="5"><b id="qkdurv">5с</b></label>
+   334→      <label title="Камни сыплются с неба во время толчка"><input id="qkrocks" type="checkbox" checked> камни</label>
+   335→    </span>
+   336→    <button class="act gray" id="btn-move-up" title="Передвинуть уровень выше по порядку">↑ Выше</button>
+   337→    <button class="act gray" id="btn-move-down" title="Передвинуть уровень ниже по порядку">↓ Ниже</button>
+   338→    <button class="act warn" id="btn-reset-level">Сброс карты</button>
+   339→    <button class="act warn" id="btn-del-map">🗑 Удалить карту</button>
+   340→  </div>
+   341→  <div id="indevopts" style="display:none">
+   342→    <div class="dlg-block" style="margin:10px">
+   343→      <h3>🚧 ЭКРАН «В РАЗРАБОТКЕ»</h3>
+   344→      <div class="sub">Это финальная заглушка в конце игры. Можно: переименовать её, превратить в обычную играбельную карту или удалить совсем — тогда игра будет заканчиваться финальным экраном сразу после последней карты.</div>
+   345→      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+   346→        <label style="color:#8a8aa0">Название: <input id="indevname" style="background:#10101f;border:1px solid #32325a;color:#fff;border-radius:10px;padding:10px 12px;width:190px;font-weight:bold;font-size:16px"></label>
+   347→        <button class="act" id="btn-indev-to-map">🔧 Сделать обычной картой</button>
+   348→        <button class="act warn" id="btn-del-level">🗑 Удалить уровень</button>
+   349→      </div>
+   350→    </div>
+   351→  </div>
+   352→  <div id="canvaswrap"><canvas id="cv"></canvas></div>
+   353→  <div id="cellinfo"></div>
+   354→  <div id="hint">Земля — два нижних ряда, ластик пробивает ямы насквозь. Жижа на дне ям, батуты, сыпучие мосты, пилы, летуны/прыгуны/щитоносцы (стомп не берёт — бей плюшкой). HP вождя — рядом с фоном. «↑/↓» — порядок уровней. Публикация — внизу.</div>
+   355→</div>
+   356→
+   357→<!-- ================= РАЗГОВОРЫ ================= -->
+   358→<div class="pane" id="pane-dialogs">
+   359→  <div class="dlg-wrap">
+   360→    <div class="dlg-block">
+   361→      <h3>🎬 ВСТУПЛЕНИЕ (катсцена в начале игры)</h3>
+   362→      <div class="sub">Показывается один раз перед первой картой. Тексты живут в файле <b style="color:#9fd3ff">js/dialogs.js</b> — его можно переписать целиком с помощью ИИ и залить на GitHub.</div>
+   363→      <div id="dlg-intro"></div>
+   364→      <button class="addline" data-add="intro">+ Реплика</button>
+   365→    </div>
+   366→    <div class="dlg-block">
+   367→      <h3>🏆 ФИНАЛ ПОСЛЕ БОССА</h3>
+   368→      <div class="sub">Диалог после победы над вождём, перед финальным экраном.</div>
+   369→      <div id="dlg-outroBoss"></div>
+   370→      <button class="addline" data-add="outroBoss">+ Реплика</button>
+   371→    </div>
+   372→    <div class="dlg-block">
+   373→      <h3>🗺 РАЗГОВОРЫ КАРТЫ</h3>
+   374→      <div class="sub"><select id="dlg-map" style="background:#10101f;border:1px solid #32325a;color:#fff;border-radius:9px;padding:10px;font-size:16px;max-width:100%"></select></div>
+   375→      <div class="who-grid">
+   376→        <div>
+   377→          <div class="col-label">ВСТУПЛЕНИЕ карты (при старте)</div>
+   378→          <div id="dlg-mapIntro"></div>
+   379→          <button class="addline" data-add="mapIntro">+ Реплика</button>
+   380→        </div>
+   381→        <div>
+   382→          <div class="col-label">ФИНАЛ карты (после завода)</div>
+   383→          <div id="dlg-mapOutro"></div>
+   384→          <button class="addline" data-add="mapOutro">+ Реплика</button>
+   385→        </div>
+   386→      </div>
+   387→    </div>
+   388→    <div class="dlg-block">
+   389→      <h3>💡 ПОДСКАЗКИ НА КАРТЕ</h3>
+   390→      <div class="sub">Плавающие подсказки: колонка на карте + текст.</div>
+   391→      <div id="dlg-hints"></div>
+   392→      <button class="addline" data-add="hints">+ Подсказка</button>
+   393→    </div>
+   394→  </div>
+   395→</div>
+   396→
+   397→<!-- ================= ТЕКСТУРЫ ================= -->
+   398→<div class="pane" id="pane-textures">
+   399→  <div class="note">PNG с прозрачным фоном для персонажей. Картинка вписывается в слот целиком — лучше заранее обрезать лишние поля. Текстура применяется для ВСЕХ игроков после «ОПУБЛИКОВАТЬ».</div>
+   400→  <div id="texgrid"></div>
+   401→</div>
+   402→
+   403→<!-- ================= ОБЪЕКТЫ (скриптуемые) ================= -->
+   404→<div class="pane" id="pane-objects">
+   405→  <div class="note">Свои объекты: загрузи PNG и задай поведение JS-скриптом (шаблоны — подставятся сами). Объект появится кнопкой в редакторе карт — кликай по карте, чтобы ставить. Всё — для всех игроков после «ОПУБЛИКОВАТЬ».</div>
+   406→  <div id="objlist"></div>
+   407→  <div style="padding:4px 10px 12px"><button class="addline" id="btn-obj-add">+ СОЗДАТЬ ОБЪЕКТ</button></div>
+   408→</div>
+   409→
+   410→<!-- ================= МУЗЫКА ================= -->
+   411→<div class="pane" id="pane-music">
+   412→  <div class="mus-wrap">
+   413→    <div class="dlg-block">
+   414→      <h3>🎵 ФОНОВАЯ МУЗЫКА (для всех игроков)</h3>
+   415→      <div class="sub">MP3/OGG/WAV до 10 МБ. Активный трек играет вместо чиптюна во время игры.</div>
+   416→      <input type="file" id="musfile" accept="audio/*" style="display:none">
+   417→      <button class="addline" id="btn-mus-add">⬆ Загрузить трек</button>
+   418→      <div id="tracks" style="margin-top:10px"></div>
+   419→    </div>
+   420→  </div>
+   421→</div>
+   422→
+   423→<!-- ================= ЗЕМЛЕТРЯСЕНИЯ ================= -->
+   424→<div class="pane" id="pane-quake">
+   425→  <div class="qk-wrap">
+   426→    <div class="dlg-block">
+   427→      <h3>🌍 ЗЕМЛЕТРЯСЕНИЯ (для всех игроков)</h3>
+   428→      <div class="sub">Автотолчки на картах: баннер «⚠ ЗЕМЛЕТРЯСЕНИЕ!» → тряска экрана и камни с неба → афтершоки. Камни бьют игрока и прибивают мелких врагов. Ручной толчок — в скрипте объекта: <b style="color:#9fd8b4">api.quake(сила, сек)</b>.</div>
+   429→      <label class="qchk"><input type="checkbox" id="qk-enabled"> <span>Авто-землетрясения ВКЛ <small>— на обычных картах глав</small></span></label>
+   430→      <label class="qchk"><input type="checkbox" id="qk-prologue"> <span>И на прологе <small>— первые карты без глав</small></span></label>
+   431→      <label class="qchk"><input type="checkbox" id="qk-rocks"> <span>Камни с неба <small>— выключи, если пусть трясёт без урона</small></span></label>
+   432→      <div class="qrow">
+   433→        <div class="qtop"><span>Сила толчка</span><b id="qk-power-val"></b></div>
+   434→        <input type="range" id="qk-power" min="0.5" max="2" step="0.1">
+   435→      </div>
+   436→      <div class="qrow">
+   437→        <div class="qtop"><span>Интервал между толчками</span><b id="qk-interval-val"></b></div>
+   438→        <input type="range" id="qk-interval" min="8" max="40" step="1">
+   439→      </div>
+   440→      <div class="qrow">
+   441→        <div class="qtop"><span>Длительность толчка</span><b id="qk-dur-val"></b></div>
+   442→        <input type="range" id="qk-dur" min="2" max="10" step="1">
+   443→      </div>
+   444→    </div>
+   445→  </div>
+   446→</div>
+   447→
+   448→<!-- ================= КАНАЛЫ ================= -->
+   449→<div class="pane" id="pane-socials">
+   450→  <div class="soc-wrap">
+   451→    <div class="dlg-block">
+   452→      <h3>📢 КАНАЛЫ НА ФИНАЛЬНОМ ЭКРАНЕ</h3>
+   453→      <div class="sub">Кнопки «Подпишись» в конце игры. Вставь свои ссылки — Telegram, YouTube, TikTok и любые другие.</div>
+   454→      <div id="soclist"></div>
+   455→      <button class="addline" id="btn-soc-add">+ Добавить канал</button>
+   456→    </div>
+   457→  </div>
+   458→</div>
+   459→
+   460→<div id="actionbar">
+   461→  <div class="row">
+   462→    <button class="act big" id="btn-publish">🚀 ОПУБЛИКОВАТЬ ДЛЯ ВСЕХ</button>
+   463→    <button class="act gray" id="btn-test">▶ Тест</button>
+   464→  </div>
+   465→  <div class="row">
+   466→    <button class="act" id="btn-export">⬇ Экспорт</button>
+   467→    <button class="act gray" id="btn-import">⬆ Импорт</button>
+   468→    <button class="act gray" id="btn-github">📦 GitHub</button>
+   469→    <button class="act warn" id="btn-reset-all">СБРОС</button>
+   470→  </div>
+   471→  <input type="file" id="importfile" accept="application/json,.json" style="display:none">
+   472→</div>
+   473→
+   474→<!-- ================= GitHub-инструкция ================= -->
+   475→<div id="gh-help">
+   476→  <div class="gh-card">
+   477→    <button id="btn-gh-close">✕</button>
+   478→    <h3>📦 Как выложить изменения на GitHub</h3>
+   479→    <ol>
+   480→      <li>Нажми <b>«⬇ Экспорт»</b> — скачается файл <b>game-cms.json</b> со всеми твоими правками (карты, разговоры, текстуры, музыка, каналы, тряска).</li>
+   481→      <li>Открой репозиторий игры на GitHub: <code>github.com/russiastarscom/Mellstroy-chekushka</code></li>
+   482→      <li>Ветку выбери <b>gh-pages</b> (именно там живёт сайт игры), папка <code>public/game</code> не нужна — файл кладётся <b>в корень</b> рядом с <code>index.html</code>.</li>
+   483→      <li>Нажми <b>Add file → Upload files</b>, перетащи game-cms.json и нажми <b>Commit changes</b>.</li>
+   484→      <li>Через минуту обнови игру — GitHub Pages сам отдаст файл, и ВСЕ игроки увидят правки. Публиковать на сервере для этого не нужно.</li>
+   485→    </ol>
+   486→    <div class="gh-note">
+   487→      💡 Обратно в панель: <b>«⬆ Импорт»</b> читает game-cms.json и загружает его в редактор — можно продолжить правки с другого устройства.<br>
+   488→      💡 Тексты игры (все диалоги) лежат одним файлом <code>js/dialogs.js</code> — его тоже можно переписать с помощью ИИ и так же залить в папку <code>js/</code> в ветке gh-pages.
+   489→    </div>
+   490→  </div>
+   491→</div>
+   492→
+   493→<div id="toast"></div>
+   494→<script src="js/config.js"></script>
+   495→<script src="js/levels.js"></script>
+   496→<script src="js/dialogs.js"></script>
+   497→<script src="admin.js?v=6"></script>
+   498→</body>
+   499→</html>
+   500→

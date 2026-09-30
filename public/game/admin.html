@@ -212,6 +212,21 @@
   #actionbar .row { display: flex; gap: 8px; width: 100%; }
   #actionbar .row .act { flex: 1; }
 
+  /* ---------- Ручка сворачивания панели ---------- */
+  #bar-handle {
+    flex: 0 0 100%;
+    display: flex; flex-direction: column; align-items: center; gap: 3px;
+    background: transparent; border: none; cursor: pointer;
+    color: #8a8aa0; font-size: 10px; font-weight: 800; letter-spacing: .8px;
+    padding: 5px 0 3px; min-height: 34px;
+  }
+  #bar-handle .grab { width: 46px; height: 5px; border-radius: 3px; background: #3a3a5a; }
+  #bar-handle b { font-size: 10px; color: #b0b0c8; }
+  #actionbar.collapsed { padding-top: 6px; padding-bottom: calc(env(safe-area-inset-bottom) + 6px); }
+  #actionbar.collapsed .row { display: none; }
+  body.bar-collapsed { padding-bottom: calc(env(safe-area-inset-bottom) + 56px); }
+  body.bar-collapsed #toast { bottom: calc(env(safe-area-inset-bottom) + 62px); }
+
   /* ---------- Тост ---------- */
   #toast {
     position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom) + 122px);
@@ -251,6 +266,8 @@
   /* ---------- Планшет/десктоп ---------- */
   @media (min-width: 761px) {
     body { padding-bottom: 132px; }
+    body.bar-collapsed { padding-bottom: 52px; }
+    body.bar-collapsed #toast { bottom: 58px; }
     header, #modes, #lvl-tabs, #toolbar, .dlg-wrap, #texgrid, #objlist, .mus-wrap, .qk-wrap, .soc-wrap { max-width: 1100px; margin-left: auto; margin-right: auto; }
     header { padding-left: 0; padding-right: 0; }
     .h-row, #status { max-width: 1100px; margin-left: auto; margin-right: auto; }
@@ -351,7 +368,7 @@
   </div>
   <div id="canvaswrap"><canvas id="cv"></canvas></div>
   <div id="cellinfo"></div>
-  <div id="hint">Земля — два нижних ряда, ластик пробивает ямы насквозь. Жижа на дне ям, батуты, сыпучие мосты, пилы, летуны/прыгуны/щитоносцы (стомп не берёт — бей плюшкой). HP вождя — рядом с фоном. «↑/↓» — порядок уровней. Публикация — внизу.</div>
+  <div id="hint">Земля — два нижних ряда, ластик пробивает ямы насквозь. Жижа на дне ям, батуты, сыпучие мосты, пилы, летуны/прыгуны/щитоносцы (стомп не берёт — бей плюшкой). HP вождя — рядом с фоном. «↑/↓» — порядок уровней. Щипок двумя пальцами по карте — зум и сдвиг. Публикация — внизу (панель внизу можно свернуть ручкой).</div>
 </div>
 
 <!-- ================= РАЗГОВОРЫ ================= -->
@@ -458,6 +475,10 @@
 </div>
 
 <div id="actionbar">
+  <button id="bar-handle" type="button" title="Свернуть/развернуть панель — чтобы не перекрывала карту">
+    <span class="grab"></span>
+    <span id="bar-label">СКРЫТЬ ПАНЕЛЬ</span><b id="bar-chev">▼</b>
+  </button>
   <div class="row">
     <button class="act big" id="btn-publish">🚀 ОПУБЛИКОВАТЬ ДЛЯ ВСЕХ</button>
     <button class="act gray" id="btn-test">▶ Тест</button>
@@ -494,6 +515,6 @@
 <script src="js/config.js"></script>
 <script src="js/levels.js"></script>
 <script src="js/dialogs.js"></script>
-<script src="admin.js?v=6"></script>
+<script src="admin.js?v=7"></script>
 </body>
 </html>

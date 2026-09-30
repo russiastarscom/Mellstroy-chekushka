@@ -488,10 +488,11 @@ function fitZoom() {
   const w = curEd().cells[0].length;
   const availW = $('canvaswrap').clientWidth - 30;
   const top = $('canvaswrap').getBoundingClientRect().top;
-  const availH = Math.max(240, window.innerHeight - top - 84);
   const csW = Math.floor(availW / w);
-  const csH = Math.floor((availH - 14) / ROWS);
-  zoom.cs = Math.max(10, Math.min(36, Math.min(csW, csH)));
+  const barEl = $('actionbar');
+  const barH = (barEl && !barEl.classList.contains('collapsed')) ? (barEl.offsetHeight + 18) : 58;
+  const availH = Math.max(240, window.innerHeight - top - barH);
+  zoom.cs = Math.max(10, Math.min(36, Math.min(csW, Math.floor((availH - 14) / ROWS))));
   $('zoom-val').textContent = zoom.cs + 'px';
 }
 function draw() {
@@ -633,20 +634,61 @@ function applyTool(c, r) {
   }
   draw(); buildMapTabs(); saveDrafts(); setStatus();
 }
+// щипок двумя пальцами = зум карты (кисть при этом выключается)
+const pinchPts = new Map();
+const pinch = { active: false, startDist: 1, startCs: 26, lastMid: null };
+function pinchMetrics() {
+  const p = [...pinchPts.values()];
+  return {
+    dist: Math.hypot(p[0].x - p[1].x, p[0].y - p[1].y) || 1,
+    midX: (p[0].x + p[1].x) / 2,
+    midY: (p[0].y + p[1].y) / 2,
+  };
+}
 cv.addEventListener('pointerdown', (ev) => {
   if (!curEd()) return;
+  pinchPts.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+  if (pinchPts.size >= 2) {
+    painting = false; // второй палец — прекращаем кисть, зумим/сдвигаем
+    const m = pinchMetrics();
+    pinch.startDist = m.dist;
+    pinch.startCs = zoom.cs;
+    pinch.lastMid = { x: m.midX, y: m.midY };
+    if (!pinch.active) { pinch.active = true; hover = null; draw(); }
+    return;
+  }
   const p = cellAt(ev); if (!p) return;
   pushUndo();
   painting = true;
-  cv.setPointerCapture(ev.pointerId);
+  try { cv.setPointerCapture(ev.pointerId); } catch (e) {}
   applyTool(p.c, p.r);
 });
 cv.addEventListener('pointermove', (ev) => {
+  if (pinchPts.has(ev.pointerId)) pinchPts.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+  if (pinch.active && pinchPts.size >= 2) {
+    const m = pinchMetrics();
+    setZoom(pinch.startCs * (m.dist / pinch.startDist), m.midX, m.midY);
+    // сдвиг двумя пальцами — панорама карты (кисть не красит)
+    if (pinch.lastMid) {
+      const wrap = $('canvaswrap');
+      wrap.scrollLeft -= m.midX - pinch.lastMid.x;
+      wrap.scrollTop -= m.midY - pinch.lastMid.y;
+    }
+    pinch.lastMid = { x: m.midX, y: m.midY };
+    return;
+  }
   const p = cellAt(ev);
   hover = p;
   if (painting && p) applyTool(p.c, p.r); else draw();
 });
-window.addEventListener('pointerup', () => { painting = false; });
+function pointerGone(ev) {
+  pinchPts.delete(ev.pointerId);
+  if (pinchPts.size < 2) pinch.active = false;
+  pinch.lastMid = null;
+  painting = false;
+}
+window.addEventListener('pointerup', pointerGone);
+window.addEventListener('pointercancel', pointerGone);
 cv.addEventListener('pointerleave', () => { hover = null; draw(); });
 
 document.querySelectorAll('.tool[data-tool]').forEach((b) => {
@@ -667,8 +709,49 @@ $('btn-undo').onclick = () => {
 document.addEventListener('keydown', (e) => {
   if ((e.ctrlKey || e.metaKey) && e.code === 'KeyZ') { e.preventDefault(); $('btn-undo').click(); }
 });
-$('zoom-in').onclick = () => { zoom.cs = Math.min(40, zoom.cs + 4); $('zoom-val').textContent = zoom.cs + 'px'; draw(); };
-$('zoom-out').onclick = () => { zoom.cs = Math.max(10, zoom.cs - 4); $('zoom-val').textContent = zoom.cs + 'px'; draw(); };
+// ---------- зум: кнопки + щипок, с якорем под пальцем/центром ----------
+function setZoom(cs, clientX, clientY) {
+  const st = curEd();
+  if (!st || st.isIndev) return;
+  cs = Math.max(10, Math.min(40, Math.round(cs)));
+  const old = zoom.cs;
+  if (cs === old) return;
+  const wrap = $('canvaswrap');
+  const rect = cv.getBoundingClientRect();
+  let ax, ay;
+  if (clientX == null) { // без якоря — зум к центру видимой области
+    const wr = wrap.getBoundingClientRect();
+    ax = wr.left + wr.width / 2 - rect.left;
+    ay = wr.top + wr.height / 2 - rect.top;
+  } else { ax = clientX - rect.left; ay = clientY - rect.top; }
+  const k = cs / old;
+  zoom.cs = cs;
+  $('zoom-val').textContent = cs + 'px';
+  draw();
+  wrap.scrollLeft += ax * (k - 1); // точка карты остаётся под якорем
+  wrap.scrollTop += ay * (k - 1);
+}
+$('zoom-in').onclick = () => setZoom(zoom.cs + 4);
+$('zoom-out').onclick = () => setZoom(zoom.cs - 4);
+
+// ---------- скрываемая нижняя панель (не перекрывает карту) ----------
+const BAR_KEY = 'adminBarCollapsed_v1';
+function applyBar() {
+  const collapsed = localStorage.getItem(BAR_KEY) === '1';
+  $('actionbar').classList.toggle('collapsed', collapsed);
+  document.body.classList.toggle('bar-collapsed', collapsed);
+  $('bar-chev').textContent = collapsed ? '▲' : '▼';
+  $('bar-label').textContent = collapsed ? 'ПОКАЗАТЬ ПАНЕЛЬ' : 'СКРЫТЬ ПАНЕЛЬ';
+}
+$('bar-handle').onclick = () => {
+  try { localStorage.setItem(BAR_KEY, localStorage.getItem(BAR_KEY) === '1' ? '0' : '1'); } catch (e) {}
+  applyBar();
+};
+if (localStorage.getItem(BAR_KEY) === null) {
+  // первый визит: на телефоне панель сразу свернём — чтобы не мешала карте
+  try { localStorage.setItem(BAR_KEY, window.matchMedia('(max-width: 760px)').matches ? '1' : '0'); } catch (e) {}
+}
+applyBar();
 $('lvlname').addEventListener('input', () => { curEd().name = $('lvlname').value; curEd().dirty = true; buildMapTabs(); saveDrafts(); setStatus(); });
 $('lvbg').addEventListener('change', () => { curEd().bg = $('lvbg').value; curEd().dirty = true; saveDrafts(); setStatus(); });
 $('bosshp').addEventListener('input', () => {

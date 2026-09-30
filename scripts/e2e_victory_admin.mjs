@@ -128,19 +128,31 @@ await ap.evaluate(() => { window.__dl = null; const orig = URL.createObjectURL; 
 await ap.waitForTimeout(300);
 ok('admin.exportBuildsPayload', await ap.evaluate(() => window.__dl > 5000));
 
-// моб. вид: actionbar не перекрывает контент, вкладки в одну строку
+// моб. вид: панель по умолчанию СВЁРНУТА (не перекрывает карту), вкладки в одну строку
 const mob = await ap.evaluate(() => {
   const ab = document.getElementById('actionbar').getBoundingClientRect();
   const modes = document.getElementById('modes');
   return {
     abFixedBottom: Math.abs(ab.bottom - window.innerHeight) < 3,
     modesScrollable: modes.scrollWidth >= modes.clientWidth - 4,
-    twoRows: ab.height > 90,
+    collapsedByDefault: document.getElementById('actionbar').classList.contains('collapsed'),
+    handleVisible: document.getElementById('bar-handle').getBoundingClientRect().height > 10,
+    lowProfile: ab.height < 60,
   };
 });
 ok('admin.mobile.actionbar', mob.abFixedBottom);
 ok('admin.mobile.modesScroll', mob.modesScrollable);
-ok('admin.mobile.twoRows', mob.twoRows);
+ok('admin.mobile.barCollapsedByDefault', mob.collapsedByDefault);
+ok('admin.mobile.handleVisible', mob.handleVisible);
+ok('admin.mobile.lowProfileWhenCollapsed', mob.lowProfile);
+// разворачиваем — появляются оба ряда кнопок (сначала закрываем модалку GitHub-инструкции от теста экспорта)
+await ap.evaluate(() => document.getElementById('gh-help').classList.remove('open'));
+await ap.click('#bar-handle');
+await ap.waitForTimeout(250);
+ok('admin.mobile.twoRows', await ap.evaluate(() => {
+  const ab = document.getElementById('actionbar').getBoundingClientRect();
+  return ab.height > 90 && !document.getElementById('actionbar').classList.contains('collapsed');
+}));
 
 console.log('\n==== ИТОГ ====');
 const fails = Object.entries(res).filter(([, v]) => v === false);
