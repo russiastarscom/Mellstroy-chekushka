@@ -109,6 +109,26 @@ html, body {
 .screen-title.success { color: var(--green); }
 .screen-text { font-size: clamp(13px, 2.4vmin, 20px); line-height: 1.5; color: #d8dbe8; margin-bottom: 2vmin; }
 
+/* ---------- Окно благодарности (при запуске) ---------- */
+.thanks-stamp { animation: win-stamp-pop .65s cubic-bezier(.2, 1.7, .35, 1) both; }
+.thanks-title {
+  color: #ffd23f;
+  animation: thanks-glow 1.4s ease-in-out infinite alternate;
+}
+@keyframes thanks-glow {
+  from { text-shadow: 4px 4px 0 #000, 0 0 12px #ffd23f44; }
+  to   { text-shadow: 4px 4px 0 #000, 0 0 34px #ffd23fcc, 0 0 72px #ff475766; }
+}
+.thanks-text b { color: #ffd23f; text-shadow: 2px 2px 0 #000; }
+.thanks-hint {
+  margin-top: 1.4vmin;
+  color: #8a8aa0;
+  font-size: clamp(10px, 1.8vmin, 14px);
+  letter-spacing: .6px;
+  animation: thanks-blink 1.6s ease-in-out infinite;
+}
+@keyframes thanks-blink { 0%, 100% { opacity: .45; } 50% { opacity: 1; } }
+
 /* ---------- Меню ---------- */
 #screen-menu {
   background:
@@ -472,6 +492,20 @@ html, body {
       <div id="dialogue-text"></div>
       <button id="dialogue-next">Далее ▶</button>
     </div>
+  </div>
+
+  <!-- Благодарность легенде (при запуске) -->
+  <div id="screen-thanks" class="screen hidden">
+    <div class="win-stamp thanks-stamp">
+      <div class="win-rays"></div>
+      <img class="win-bottle" src="image/checkushka.png" alt="">
+      <h2 class="screen-title thanks-title">СПАСИБО, ЛЕГЕНДА!</h2>
+    </div>
+    <p class="screen-text thanks-text">Мелстрой — не просто стритер,<br>но и <b>ЛЕГЕНДА</b>.<br>Эта игра — фанатское «спасибо» за движ.<br>Погнали возвращать заводы!</p>
+    <div class="menu-buttons">
+      <button id="btn-thanks-ok" class="big-btn">ПОГНАЛИ ▶</button>
+    </div>
+    <div class="thanks-hint">дальше — проверка 18+</div>
   </div>
 
   <!-- 18+ гейт -->
@@ -3192,7 +3226,7 @@ const UI = (() => {
   const $ = (id) => document.getElementById(id);
   const cb = {}; // колбэки от Game
 
-  const SCREENS = ['gate', 'menu', 'levels', 'pause', 'gameover', 'complete', 'ending', 'indev', 'tooyoung', 'sound'];
+  const SCREENS = ['thanks', 'gate', 'menu', 'levels', 'pause', 'gameover', 'complete', 'ending', 'indev', 'tooyoung', 'sound'];
   let currentScreen = 'menu';
   let soundReturn = 'menu'; // куда возвращаться с экрана звука (меню или пауза)
 
@@ -3487,6 +3521,7 @@ const UI = (() => {
     $('btn-play').addEventListener('click', () => { Audio8.resume(); Audio8.sfx.click(); cb.onPlay(); });
 
     // 18+ гейт
+    $('btn-thanks-ok').addEventListener('click', () => { Audio8.resume(); Audio8.sfx.click(); showScreen('gate'); });
     $('btn-gate-yes').addEventListener('click', () => { Audio8.resume(); Audio8.sfx.click(); showScreen('menu'); });
     $('btn-gate-no').addEventListener('click', () => { Audio8.resume(); Audio8.sfx.click(); showScreen('tooyoung'); });
     $('btn-tooyoung-back').addEventListener('click', () => { Audio8.sfx.click(); showScreen('gate'); });
@@ -4716,7 +4751,7 @@ const Game = (() => {
     UI.init(callbacks);
     bindInput();
     registerSW();
-    UI.showScreen('gate'); // сначала 18+
+    UI.showScreen('thanks'); // сначала «СПАСИБО, ЛЕГЕНДА!», потом 18+
     state = 'menu';
     // отладочный хук (можно дёргать из консоли)
     window.GameDebug = {

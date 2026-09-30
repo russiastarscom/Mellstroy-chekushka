@@ -93,6 +93,26 @@ html, body {
 .screen-title.success { color: var(--green); }
 .screen-text { font-size: clamp(13px, 2.4vmin, 20px); line-height: 1.5; color: #d8dbe8; margin-bottom: 2vmin; }
 
+/* ---------- Окно благодарности (при запуске) ---------- */
+.thanks-stamp { animation: win-stamp-pop .65s cubic-bezier(.2, 1.7, .35, 1) both; }
+.thanks-title {
+  color: #ffd23f;
+  animation: thanks-glow 1.4s ease-in-out infinite alternate;
+}
+@keyframes thanks-glow {
+  from { text-shadow: 4px 4px 0 #000, 0 0 12px #ffd23f44; }
+  to   { text-shadow: 4px 4px 0 #000, 0 0 34px #ffd23fcc, 0 0 72px #ff475766; }
+}
+.thanks-text b { color: #ffd23f; text-shadow: 2px 2px 0 #000; }
+.thanks-hint {
+  margin-top: 1.4vmin;
+  color: #8a8aa0;
+  font-size: clamp(10px, 1.8vmin, 14px);
+  letter-spacing: .6px;
+  animation: thanks-blink 1.6s ease-in-out infinite;
+}
+@keyframes thanks-blink { 0%, 100% { opacity: .45; } 50% { opacity: 1; } }
+
 /* ---------- Меню ---------- */
 #screen-menu {
   background:

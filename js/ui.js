@@ -5,7 +5,7 @@ const UI = (() => {
   const $ = (id) => document.getElementById(id);
   const cb = {}; // колбэки от Game
 
-  const SCREENS = ['gate', 'menu', 'levels', 'pause', 'gameover', 'complete', 'ending', 'indev', 'tooyoung', 'sound'];
+  const SCREENS = ['thanks', 'gate', 'menu', 'levels', 'pause', 'gameover', 'complete', 'ending', 'indev', 'tooyoung', 'sound'];
   let currentScreen = 'menu';
   let soundReturn = 'menu'; // куда возвращаться с экрана звука (меню или пауза)
 
@@ -300,6 +300,7 @@ const UI = (() => {
     $('btn-play').addEventListener('click', () => { Audio8.resume(); Audio8.sfx.click(); cb.onPlay(); });
 
     // 18+ гейт
+    $('btn-thanks-ok').addEventListener('click', () => { Audio8.resume(); Audio8.sfx.click(); showScreen('gate'); });
     $('btn-gate-yes').addEventListener('click', () => { Audio8.resume(); Audio8.sfx.click(); showScreen('menu'); });
     $('btn-gate-no').addEventListener('click', () => { Audio8.resume(); Audio8.sfx.click(); showScreen('tooyoung'); });
     $('btn-tooyoung-back').addEventListener('click', () => { Audio8.sfx.click(); showScreen('gate'); });
