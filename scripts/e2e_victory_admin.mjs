@@ -91,6 +91,7 @@ const a = await ap.evaluate(() => ({
   githubBtn: !!document.getElementById('btn-github'),
   dlgIntroLines: document.querySelectorAll('#dlg-intro .line').length,
   dlgIntroFirst: (document.querySelector('#dlg-intro .line textarea') || {}).value || '',
+  gameIntroFirst: (window.GAME_DIALOGS && GAME_DIALOGS.common.intro[0] && GAME_DIALOGS.common.intro[0].text) || '',
   exportBtn: !!document.getElementById('btn-export'),
 }));
 ok('admin.noJsErrors', aerr.length === 0);
@@ -101,7 +102,7 @@ ok('admin.canvas', a.canvasReady);
 ok('admin.lvlTabs65', a.lvlTabs >= 60);
 ok('admin.importPresent', a.importBtn);
 ok('admin.githubPresent', a.githubBtn);
-ok('admin.dialogsFromDialogsJs', a.dlgIntroLines > 0 && /Город Буримовка/.test(a.dlgIntroFirst));
+ok('admin.dialogsFromDialogsJs', a.dlgIntroLines > 0 && !!a.dlgIntroFirst && a.dlgIntroFirst === a.gameIntroFirst);
 
 // вкладки переключаются
 for (const m of ['dialogs', 'textures', 'objects', 'music', 'socials', 'quake', 'maps']) {
