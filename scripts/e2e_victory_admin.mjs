@@ -27,7 +27,7 @@ const th = await page.evaluate(() => {
 });
 ok('thanks.shownAtLaunch', th.visible && th.gateHidden);
 ok('thanks.title', /СПАСИБО, ЛЕГЕНДА/i.test(th.title));
-ok('thanks.legendText', /не просто стритер/i.test(th.text) && /ЛЕГЕНДА/i.test(th.text));
+ok('thanks.legendText', /не просто стример/i.test(th.text) && /ЛЕГЕНДА/i.test(th.text));
 ok('thanks.bottleAndBtn', th.hasBottle && th.hasBtn);
 await page.click('#btn-thanks-ok');
 await sleep(250);
